@@ -5703,6 +5703,8 @@ static drflac_bool32 drflac__read_and_decode_next_flac_frame(drflac* pFlac)
         if (result != DRFLAC_SUCCESS) {
             if (result == DRFLAC_CRC_MISMATCH) {
                 continue;   /* CRC mismatch. Skip to the next frame. */
+            } else if (result == DRFLAC_ERROR) {
+                continue;   /* Frame parsing error. Skip to the next frame. */
             } else {
                 return DRFLAC_FALSE;
             }
