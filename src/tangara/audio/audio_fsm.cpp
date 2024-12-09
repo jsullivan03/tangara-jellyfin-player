@@ -283,6 +283,8 @@ void AudioState::react(const system_fsm::BluetoothEvent& ev) {
         auto bt = sServices->bluetooth();
         if (bt.connectionState() !=
             drivers::Bluetooth::ConnectionState::kConnected) {
+          // If BT Disconnected, move to standby state
+          transit<states::Standby>();
           return;
         }
         auto dev = sServices->bluetooth().pairedDevice();
