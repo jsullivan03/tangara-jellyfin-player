@@ -396,7 +396,7 @@ auto BluetoothState::pairedDevice() -> std::optional<MacAndName> {
 auto BluetoothState::pairedDevice(std::optional<MacAndName> dev) -> void {
   auto cur = sPairedWith_;
   if (dev && cur && dev->mac == cur->mac) {
-    return;
+    ESP_LOGI(kTag, "Paired device updated with same value");
   }
   if (dev) {
     ESP_LOGI(kTag, "pairing with '%s' (%u%u%u%u%u%u)", dev->name.c_str(),
