@@ -304,7 +304,10 @@ auto TrackQueue::next(Reason r) -> void {
       position_ = shuffle_->current();
     } else {
       if (position_ + 1 < totalSize()) {
-        position_++;
+        position_++;  // Next track
+      }
+      else {
+        position_ = 0; // Go to beginning
       }
     }
 
@@ -326,6 +329,9 @@ auto TrackQueue::previous() -> void {
     } else {
       if (position_ > 0) {
         position_--;
+      }
+      else {
+        position_ = totalSize();
       }
     }
     goTo(position_);
