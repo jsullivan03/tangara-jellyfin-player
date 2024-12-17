@@ -292,9 +292,8 @@ auto Database::setTrackData(TrackId id, const TrackData& data) -> void {
 auto Database::getIndexes() -> std::vector<IndexInfo> {
   // TODO(jacqueline): This probably needs to be async? When we have runtime
   // configurable indexes, they will need to come from somewhere.
-  return {
-      kAllTracks, kAllAlbums, kAlbumsByArtist, kTracksByGenre, kPodcasts, kAudiobooks
-  };
+  return {kAllTracks,     kAllAlbums, kAlbumsByArtist,
+          kTracksByGenre, kPodcasts,  kAudiobooks};
 }
 
 Database::UpdateTracker::UpdateTracker()
@@ -565,6 +564,23 @@ auto Database::calculateMediaType(TrackTags& tags, std::string_view path)
   // know what kind of media this track is at this point. If there's any genres
   // at all, then guess that it's probably some kind of music.
   if (!genres.empty()) {
+    return MediaType::kMusic;
+  }
+
+  auto dir_exists = [&](auto path) {
+    FF_DIR dir;
+    bool res = f_opendir(&dir, path);
+    if (res == FR_OK) {
+      f_closedir(&dir);
+    }
+    return res == FR_OK;
+  };
+
+  // As a special case, if no media-specific paths exist at all, then assume
+  // the user doesn't really care about alternate media types and just wants to
+  // use the device for music.
+  if (!dir_exists(kMusicMediaPath) && !dir_exists(kPodcastMediaPath) &&
+      !dir_exists(kAudiobookMediaPath)) {
     return MediaType::kMusic;
   }
 
