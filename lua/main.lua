@@ -70,6 +70,18 @@ local function init_ui()
         end
       end
     end),
+    controls.scheme:bind(function()
+      -- Set up a shortcut for jumping straight to the 'now playing' screen.
+      -- Implemented as a binding so that the shortcut is still applied even if
+      -- the control scheme is changed at runtime.
+      local hooks = controls.hooks()
+      local input_method = hooks.wheel or hooks.dpad
+      if input_method and input_method.right then
+        input_method.right.long_press = function()
+          require("playing"):push_if_not_shown()
+        end
+      end
+    end),
     sd_card.mounted:bind(function(mounted)
       backstack.reset(main_menu:new())
     end),
