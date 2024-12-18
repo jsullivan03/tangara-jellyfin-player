@@ -7,6 +7,7 @@
 --- @field scheme Property The currently configured control scheme
 --- @field scroll_sensitivity Property How much rotational motion is required on the touchwheel per scroll tick.
 --- @field lock_switch Property  The current state of the device's lock switch.
+--- @field hooks funtion Returns a table containing the inputs and actions associated with the current control scheme.
 local controls = {}
 
 return controls
