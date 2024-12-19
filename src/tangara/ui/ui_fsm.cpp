@@ -210,20 +210,15 @@ lua::Property UiState::sQueuePosition{0, [](const lua::LuaValue& val){
                                       return sServices->track_queue().currentPosition(new_val-1);
                                     }};
 lua::Property UiState::sQueueSize{0};
-lua::Property UiState::sQueueRepeat{false, [](const lua::LuaValue& val) {
-                                      if (!std::holds_alternative<bool>(val)) {
+lua::Property UiState::sQueueRepeatMode{0, [](const lua::LuaValue& val) {
+                                      if (!std::holds_alternative<int>(val)) {
                                         return false;
                                       }
-                                      bool new_val = std::get<bool>(val);
-                                      sServices->track_queue().repeat(new_val);
-                                      return true;
-                                    }};
-lua::Property UiState::sQueueReplay{false, [](const lua::LuaValue& val) {
-                                      if (!std::holds_alternative<bool>(val)) {
+                                      int new_val = std::get<int>(val);
+                                      if (new_val < 0 || new_val >= 3) {
                                         return false;
                                       }
-                                      bool new_val = std::get<bool>(val);
-                                      sServices->track_queue().replay(new_val);
+                                      sServices->track_queue().repeatMode(static_cast<audio::TrackQueue::RepeatMode>(new_val));
                                       return true;
                                     }};
 lua::Property UiState::sQueueRandom{false, [](const lua::LuaValue& val) {
@@ -450,8 +445,7 @@ void UiState::react(const audio::QueueUpdate& update) {
   }
   sQueuePosition.setDirect(current_pos);
   sQueueRandom.setDirect(queue.random());
-  sQueueRepeat.setDirect(queue.repeat());
-  sQueueReplay.setDirect(queue.replay());
+  sQueueRepeatMode.setDirect(queue.repeatMode());
 
   if (update.reason == audio::QueueUpdate::Reason::kBulkLoadingUpdate) {
     sQueueLoading.setDirect(true);
@@ -654,8 +648,7 @@ void Lua::entry() {
             {"previous", [&](lua_State* s) { return QueuePrevious(s); }},
             {"position", &sQueuePosition},
             {"size", &sQueueSize},
-            {"replay", &sQueueReplay},
-            {"repeat_track", &sQueueRepeat},
+            {"repeat_mode", &sQueueRepeatMode},
             {"random", &sQueueRandom},
             {"loading", &sQueueLoading},
         });
@@ -850,23 +843,15 @@ auto Lua::SetRandom(const lua::LuaValue& val) -> bool {
   return true;
 }
 
-auto Lua::SetRepeat(const lua::LuaValue& val) -> bool {
-  if (!std::holds_alternative<bool>(val)) {
+auto Lua::SetRepeatMode(const lua::LuaValue& val) -> bool {
+  if (!std::holds_alternative<int>(val)) {
     return false;
   }
-  bool b = std::get<bool>(val);
-  sServices->track_queue().repeat(b);
+  int mode = std::get<int>(val);
+  sServices->track_queue().repeatMode(static_cast<audio::TrackQueue::RepeatMode>(mode));
   return true;
 }
 
-auto Lua::SetReplay(const lua::LuaValue& val) -> bool {
-  if (!std::holds_alternative<bool>(val)) {
-    return false;
-  }
-  bool b = std::get<bool>(val);
-  sServices->track_queue().replay(b);
-  return true;
-}
 
 void Lua::exit() {
   lv_group_set_default(NULL);

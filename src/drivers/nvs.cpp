@@ -41,6 +41,7 @@ static constexpr char kKeyDisplayRows[] = "disprows";
 static constexpr char kKeyHapticMotorType[] = "hapticmtype";
 static constexpr char kKeyLraCalibration[] = "lra_cali";
 static constexpr char kKeyDbAutoIndex[] = "dbautoindex";
+static constexpr char kKeyQueueRepeatMode[] = "queue_rpt";
 static constexpr char kKeyFastCharge[] = "fastchg";
 
 static auto nvs_get_string(nvs_handle_t nvs, const char* key)
@@ -278,6 +279,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       bt_preferred_(kKeyBluetoothPreferred),
       bt_names_(kKeyBluetoothNames),
       db_auto_index_(kKeyDbAutoIndex),
+      queue_repeat_mode_(kKeyQueueRepeatMode),
       bt_volumes_(),
       bt_volumes_dirty_(false) {}
 
@@ -304,6 +306,7 @@ auto NvsStorage::Read() -> void {
   bt_preferred_.read(handle_);
   bt_names_.read(handle_);
   db_auto_index_.read(handle_);
+  queue_repeat_mode_.read(handle_);
   readBtVolumes();
 }
 
@@ -325,6 +328,7 @@ auto NvsStorage::Write() -> bool {
   bt_preferred_.write(handle_);
   bt_names_.write(handle_);
   db_auto_index_.write(handle_);
+  queue_repeat_mode_.write(handle_);
   writeBtVolumes();
   return nvs_commit(handle_) == ESP_OK;
 }
@@ -564,6 +568,16 @@ auto NvsStorage::PrimaryInput() -> InputModes {
 auto NvsStorage::PrimaryInput(InputModes mode) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   input_mode_.set(static_cast<uint8_t>(mode));
+}
+
+auto NvsStorage::QueueRepeatMode() -> uint8_t {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return queue_repeat_mode_.get().value_or(0);
+}
+
+auto NvsStorage::QueueRepeatMode(uint8_t mode) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  queue_repeat_mode_.set(mode);
 }
 
 auto NvsStorage::DbAutoIndex() -> bool {

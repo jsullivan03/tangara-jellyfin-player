@@ -176,9 +176,9 @@ return screen:new {
 
     local repeat_btn = controls:Button {}
     repeat_btn:onClicked(function()
-      queue.repeat_track:set(not queue.repeat_track:get())
+      queue.repeat_mode:set((queue.repeat_mode:get() + 1) % 3)
     end)
-    local repeat_img = repeat_btn:Image { src = img.repeat_src }
+    local repeat_img = repeat_btn:Image { src = img.repeat_off }
     theme.set_subject(repeat_btn, icon_enabled_class)
     local repeat_desc = widgets.Description(repeat_btn)
 
@@ -197,6 +197,10 @@ return screen:new {
 
     local play_pause_btn = controls:Button {}
     play_pause_btn:onClicked(function()
+      if (not playback.track:get()) then
+        -- Restart the last played track
+        queue.position:set(queue.position:get())
+      end
       playback.playing:set(not playback.playing:get())
     end)
     play_pause_btn:focus()
@@ -238,7 +242,10 @@ return screen:new {
             text = format_time(pos)
           }
           local track = playback.track:get()
-          if not track then return end
+          if not track then 
+            scrubber:set{value = 0}
+            return
+          end
           if not track.duration then return end
           scrubber:set { value = pos / track.duration * 100 }
         end
@@ -247,13 +254,7 @@ return screen:new {
         if not track then
           if queue.loading:get() then
             title:set { text = "Loading..." }
-          else
-            title:set { text = "" }
           end
-          artist:set { text = "" }
-          cur_time:set { text = format_time(0) }
-          end_time:set { text = format_time(0) }
-          scrubber:set { value = 0 }
           return
         end
         if track.duration then
@@ -268,7 +269,7 @@ return screen:new {
         if not pos then return end
         playlist_pos:set { text = tostring(pos) }
 
-        local can_next = pos < queue.size:get() or queue.random:get()
+        local can_next = pos < queue.size:get() or queue.random:get() or queue.repeat_mode:get() == queue.RepeatMode.REPEAT_QUEUE
         theme.set_subject(
           next_btn, can_next and icon_enabled_class or icon_disabled_class
         )
@@ -283,14 +284,16 @@ return screen:new {
           shuffle_desc:set { text = "Enable shuffle" }
         end
       end),
-      queue.repeat_track:bind(function(en)
-        theme.set_subject(repeat_btn, en and icon_enabled_class or icon_disabled_class)
-        if en then
-          repeat_img:set_src(img.repeat_src)
-          repeat_desc:set { text = "Disable track repeat" }
-        else
+      queue.repeat_mode:bind(function(mode)
+        if mode == queue.RepeatMode.OFF then
           repeat_img:set_src(img.repeat_off)
-          repeat_desc:set { text = "Enable track repeat" }
+          repeat_desc:set { text = "Repeat off" }
+        elseif mode == queue.RepeatMode.REPEAT_TRACK then
+          repeat_img:set_src(img.repeat_track)
+          repeat_desc:set { text = "Repeat track" }
+        elseif mode == queue.RepeatMode.REPEAT_QUEUE then
+          repeat_img:set_src(img.repeat_queue)
+          repeat_desc:set { text = "Repeat queue" }
         end
       end),
       queue.size:bind(function(num)

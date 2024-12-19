@@ -101,6 +101,24 @@ static const struct luaL_Reg kQueueFuncs[] = {
 
 static auto lua_queue(lua_State* state) -> int {
   luaL_newlib(state, kQueueFuncs);
+
+  // Repeat Mode Enum
+  lua_pushliteral(state, "RepeatMode");
+  lua_newtable(state);
+
+  lua_pushliteral(state, "OFF");
+  lua_pushinteger(state, (int)audio::TrackQueue::RepeatMode::OFF);
+  lua_rawset(state, -3);
+
+  lua_pushliteral(state, "REPEAT_TRACK");
+  lua_pushinteger(state, (int)audio::TrackQueue::RepeatMode::REPEAT_TRACK);
+  lua_rawset(state, -3);
+
+  lua_pushliteral(state, "REPEAT_QUEUE");
+  lua_pushinteger(state, (int)audio::TrackQueue::RepeatMode::REPEAT_QUEUE);
+  lua_rawset(state, -3);
+
+  lua_rawset(state, -3);
   return 1;
 }
 

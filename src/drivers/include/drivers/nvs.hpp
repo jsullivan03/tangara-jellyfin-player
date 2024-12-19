@@ -138,6 +138,9 @@ class NvsStorage {
   auto PrimaryInput() -> InputModes;
   auto PrimaryInput(InputModes) -> void;
 
+  auto QueueRepeatMode() -> uint8_t;
+  auto QueueRepeatMode(uint8_t) -> void;
+
   auto DbAutoIndex() -> bool;
   auto DbAutoIndex(bool) -> void;
 
@@ -172,6 +175,8 @@ class NvsStorage {
   Setting<std::vector<bluetooth::MacAndName>> bt_names_;
 
   Setting<uint8_t> db_auto_index_;
+
+  Setting<uint8_t> queue_repeat_mode_;
 
   util::LruCache<10, bluetooth::mac_addr_t, uint8_t> bt_volumes_;
   bool bt_volumes_dirty_;

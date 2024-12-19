@@ -38,25 +38,26 @@ namespace audio {
 using Reason = QueueUpdate::Reason;
 
 RandomIterator::RandomIterator()
-    : seed_(0), pos_(0), size_(0), replay_(false) {}
+    : seed_(0), pos_(0), size_(0) {}
 
 RandomIterator::RandomIterator(size_t size)
-    : seed_(), pos_(0), size_(size), replay_(false) {
+    : seed_(), pos_(0), size_(size) {
   esp_fill_random(&seed_, sizeof(seed_));
 }
 
 auto RandomIterator::current() const -> size_t {
-  if (pos_ < size_ || replay_) {
-    return MillerShuffle(pos_, seed_, size_);
-  }
-  return size_;
+  return MillerShuffle(pos_, seed_, size_);
 }
 
-auto RandomIterator::next() -> void {
+auto RandomIterator::next(bool repeat) -> bool {
   // MillerShuffle behaves well with pos > size, returning different
   // permutations each 'cycle'. We therefore don't need to worry about wrapping
   // this value.
-  pos_++;
+  if (pos_ < size_ - 1 || repeat) {
+    pos_++;
+    return true;
+  }
+  return false;
 }
 
 auto RandomIterator::prev() -> void {
@@ -70,10 +71,6 @@ auto RandomIterator::resize(size_t s) -> void {
   // Changing size will yield a different current position anyway, so reset pos
   // to ensure we yield a full sweep of both new and old indexes.
   pos_ = 0;
-}
-
-auto RandomIterator::replay(bool r) -> void {
-  replay_ = r;
 }
 
 auto notifyChanged(bool current_changed, Reason reason) -> void {
@@ -95,15 +92,15 @@ auto notifyPlayFrom(uint32_t start_from_position) -> void {
   events::Audio().Dispatch(ev);
 }
 
-TrackQueue::TrackQueue(tasks::WorkerPool& bg_worker, database::Handle db)
+TrackQueue::TrackQueue(tasks::WorkerPool& bg_worker, database::Handle db, drivers::NvsStorage& nvs)
     : mutex_(),
       bg_worker_(bg_worker),
       db_(db),
+      nvs_(nvs),
       playlist_(".queue.playlist"),
       position_(0),
       shuffle_(),
-      repeat_(false),
-      replay_(false) {}
+      repeatMode_(static_cast<RepeatMode>(nvs.QueueRepeatMode())) {}
 
 auto TrackQueue::current() const -> TrackItem {
   const std::shared_lock<std::shared_mutex> lock(mutex_);
@@ -293,26 +290,25 @@ auto TrackQueue::goTo(size_t position) -> void {
 }
 
 auto TrackQueue::next(Reason r) -> void {
-  bool changed = true;
+  bool changed = false;
 
   {
     const std::unique_lock<std::shared_mutex> lock(mutex_);
-    auto pos = position_;
 
     if (shuffle_) {
-      shuffle_->next();
+      changed = shuffle_->next(repeatMode_ == RepeatMode::REPEAT_QUEUE);
       position_ = shuffle_->current();
     } else {
       if (position_ + 1 < totalSize()) {
         position_++;  // Next track
-      }
-      else {
+        changed = true;
+      } else if (repeatMode_ == RepeatMode::REPEAT_QUEUE) {
         position_ = 0; // Go to beginning
+        changed = true;
       }
     }
 
     goTo(position_);
-    changed = pos != position_;
   }
 
   notifyChanged(changed, r);
@@ -329,9 +325,8 @@ auto TrackQueue::previous() -> void {
     } else {
       if (position_ > 0) {
         position_--;
-      }
-      else {
-        position_ = totalSize();
+      } else if (repeatMode_ == RepeatMode::REPEAT_QUEUE) {
+        position_ = totalSize()-1; // Go to the end of the queue
       }
     }
     goTo(position_);
@@ -341,7 +336,7 @@ auto TrackQueue::previous() -> void {
 }
 
 auto TrackQueue::finish() -> void {
-  if (repeat_) {
+  if (repeatMode_ == RepeatMode::REPEAT_TRACK) {
     notifyChanged(true, Reason::kRepeatingLastTrack);
   } else {
     next(Reason::kTrackFinished);
@@ -367,7 +362,6 @@ auto TrackQueue::random(bool en) -> void {
     const std::unique_lock<std::shared_mutex> lock(mutex_);
     if (en) {
       shuffle_.emplace(totalSize());
-      shuffle_->replay(replay_);
     } else {
       shuffle_.reset();
     }
@@ -382,34 +376,14 @@ auto TrackQueue::random() const -> bool {
   return shuffle_.has_value();
 }
 
-auto TrackQueue::repeat(bool en) -> void {
-  {
-    const std::unique_lock<std::shared_mutex> lock(mutex_);
-    repeat_ = en;
-  }
-
+auto TrackQueue::repeatMode(RepeatMode mode) -> void {
+  repeatMode_ = mode;
+  nvs_.QueueRepeatMode(repeatMode_);
   notifyChanged(false, Reason::kExplicitUpdate);
 }
 
-auto TrackQueue::repeat() const -> bool {
-  const std::shared_lock<std::shared_mutex> lock(mutex_);
-  return repeat_;
-}
-
-auto TrackQueue::replay(bool en) -> void {
-  {
-    const std::unique_lock<std::shared_mutex> lock(mutex_);
-    replay_ = en;
-    if (shuffle_) {
-      shuffle_->replay(en);
-    }
-  }
-  notifyChanged(false, Reason::kExplicitUpdate);
-}
-
-auto TrackQueue::replay() const -> bool {
-  const std::shared_lock<std::shared_mutex> lock(mutex_);
-  return replay_;
+auto TrackQueue::repeatMode() const -> RepeatMode {
+  return repeatMode_;
 }
 
 auto TrackQueue::serialise() -> std::string {
@@ -417,9 +391,8 @@ auto TrackQueue::serialise() -> std::string {
   cppbor::Map encoded;
 
   cppbor::Array metadata{
-      cppbor::Bool{repeat_},
-      cppbor::Bool{replay_},
       cppbor::Uint{position_},
+      cppbor::Uint{repeatMode_},
   };
 
   if (opened_playlist_) {
@@ -471,26 +444,24 @@ cppbor::ParseClient* TrackQueue::QueueParseClient::item(
       i_ = 0;
     } else if (item->type() == cppbor::UINT) {
       auto val = item->asUint()->unsignedValue();
-      // Save the position so we can apply it later when we have finished
-      // serialising
-      position_to_set_ = val;
+      if (i_ == 0) {
+        // First value == position
+        // Save the position so we can apply it later when we have finished
+        // serialising
+        position_to_set_ = val;
+      } else if (i_ == 1) {
+        // Second value == repeat mode
+        queue_.repeatMode_ = static_cast<RepeatMode>(val);
+      }
+      i_++;
     } else if (item->type() == cppbor::TSTR) {
       auto val = item->asTstr();
       queue_.openPlaylist(val->value(), false);
-    } else if (item->type() == cppbor::SIMPLE) {
-      bool val = item->asBool()->value();
-      if (i_ == 0) {
-        queue_.repeat_ = val;
-      } else if (i_ == 1) {
-        queue_.replay_ = val;
-      }
-      i_++;
     }
   } else if (state_ == State::kShuffle) {
     if (item->type() == cppbor::ARRAY) {
       i_ = 0;
       queue_.shuffle_.emplace();
-      queue_.shuffle_->replay(queue_.replay_);
     } else if (item->type() == cppbor::UINT) {
       auto val = item->asUint()->unsignedValue();
       switch (i_) {

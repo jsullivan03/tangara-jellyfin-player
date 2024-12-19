@@ -32,12 +32,11 @@ class RandomIterator {
 
   auto current() const -> size_t;
 
-  auto next() -> void;
+  auto next(bool repeat) -> bool;
   auto prev() -> void;
 
   // Note resizing has the side-effect of restarting iteration.
   auto resize(size_t) -> void;
-  auto replay(bool) -> void;
 
   auto seed() -> size_t& { return seed_; }
   auto pos() -> size_t& { return pos_; }
@@ -47,7 +46,6 @@ class RandomIterator {
   size_t seed_;
   size_t pos_;
   size_t size_;
-  bool replay_;
 };
 
 /*
@@ -65,7 +63,7 @@ class RandomIterator {
  */
 class TrackQueue {
  public:
-  TrackQueue(tasks::WorkerPool& bg_worker, database::Handle db);
+  TrackQueue(tasks::WorkerPool& bg_worker, database::Handle db, drivers::NvsStorage& nvs);
 
   /* Returns the currently playing track. */
   using TrackItem =
@@ -107,11 +105,14 @@ class TrackQueue {
   auto random(bool) -> void;
   auto random() const -> bool;
 
-  auto repeat(bool) -> void;
-  auto repeat() const -> bool;
+  enum RepeatMode {
+    OFF = 0,
+    REPEAT_TRACK = 1,
+    REPEAT_QUEUE = 2,
+  };
 
-  auto replay(bool) -> void;
-  auto replay() const -> bool;
+  auto repeatMode(RepeatMode mode) -> void;
+  auto repeatMode() const -> RepeatMode;
 
   auto serialise() -> std::string;
   auto deserialise(const std::string&) -> void;
@@ -129,6 +130,7 @@ class TrackQueue {
 
   tasks::WorkerPool& bg_worker_;
   database::Handle db_;
+  drivers::NvsStorage& nvs_;
 
   MutablePlaylist playlist_;
   std::optional<Playlist> opened_playlist_;
@@ -136,8 +138,7 @@ class TrackQueue {
   size_t position_;
 
   std::optional<RandomIterator> shuffle_;
-  bool repeat_;
-  bool replay_;
+  RepeatMode repeatMode_;
 
   class QueueParseClient : public cppbor::ParseClient {
    public:
