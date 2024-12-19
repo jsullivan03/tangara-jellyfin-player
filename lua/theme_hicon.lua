@@ -1,9 +1,6 @@
 local lvgl = require("lvgl")
 local font = require("font")
 
--- local background_color = "#000000"
--- local text_color = "#33b5e5"
-
 local text_color = "#000000"
 local background_color = "#FFFFFF"
 
