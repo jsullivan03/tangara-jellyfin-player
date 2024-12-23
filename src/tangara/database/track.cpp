@@ -94,6 +94,50 @@ auto tagToString(const TagValue& val) -> std::string {
   return "";
 }
 
+/*
+ * Utility for taking a string containing delimited tags, and splitting it out
+ * into a vector of individual tags.
+ */
+auto parseDelimitedTags(const std::string_view s,
+                        const char* delimiters,
+                        std::pmr::vector<std::pmr::string>& out) -> void {
+  out.clear();
+  std::string src = {s.data(), s.size()};
+  char* token = std::strtok(src.data(), delimiters);
+
+  auto trim_and_add = [&](std::string_view s) {
+    std::string copy = {s.data(), s.size()};
+
+    // Trim the left
+    copy.erase(copy.begin(),
+               std::find_if(copy.begin(), copy.end(), [](unsigned char ch) {
+                 return !std::isspace(ch);
+               }));
+
+    // Trim the right
+    copy.erase(std::find_if(copy.rbegin(), copy.rend(),
+                            [](unsigned char ch) { return !std::isspace(ch); })
+                   .base(),
+               copy.end());
+
+    // Ignore empty strings.
+    if (!copy.empty()) {
+      out.push_back({copy.data(), copy.size()});
+    }
+  };
+
+  if (token == NULL) {
+    // No delimiters found in the input. Treat this as a single result.
+    trim_and_add(s);
+  } else {
+    while (token != NULL) {
+      // Add tokens until no more delimiters found.
+      trim_and_add(token);
+      token = std::strtok(NULL, delimiters);
+    }
+  }
+}
+
 auto TrackTags::create() -> std::shared_ptr<TrackTags> {
   return std::allocate_shared<TrackTags,
                               std::pmr::polymorphic_allocator<TrackTags>>(
@@ -203,41 +247,7 @@ auto TrackTags::allArtists() const -> std::span<const std::pmr::string> {
 }
 
 auto TrackTags::allArtists(const std::string_view s) -> void {
-  allArtists_.clear();
-  std::string src = {s.data(), s.size()};
-  char* token = std::strtok(src.data(), kAllArtistDelimiters);
-
-  auto trim_and_add = [this](std::string_view s) {
-    std::string copy = {s.data(), s.size()};
-
-    // Trim the left
-    copy.erase(copy.begin(),
-               std::find_if(copy.begin(), copy.end(), [](unsigned char ch) {
-                 return !std::isspace(ch);
-               }));
-
-    // Trim the right
-    copy.erase(std::find_if(copy.rbegin(), copy.rend(),
-                            [](unsigned char ch) { return !std::isspace(ch); })
-                   .base(),
-               copy.end());
-
-    // Ignore empty strings.
-    if (!copy.empty()) {
-      allArtists_.push_back({copy.data(), copy.size()});
-    }
-  };
-
-  if (token == NULL) {
-    // No delimiters found in the input. Treat this as a single artist.
-    trim_and_add(s);
-  } else {
-    while (token != NULL) {
-      // Add tokens until no more delimiters found.
-      trim_and_add(token);
-      token = std::strtok(NULL, kAllArtistDelimiters);
-    }
-  }
+  parseDelimitedTags(s, kAllArtistDelimiters, allArtists_);
 }
 
 auto TrackTags::album() const -> const std::optional<std::pmr::string>& {
@@ -281,41 +291,7 @@ auto TrackTags::genres() const -> std::span<const std::pmr::string> {
 }
 
 auto TrackTags::genres(const std::string_view s) -> void {
-  genres_.clear();
-  std::string src = {s.data(), s.size()};
-  char* token = std::strtok(src.data(), kGenreDelimiters);
-
-  auto trim_and_add = [this](std::string_view s) {
-    std::string copy = {s.data(), s.size()};
-
-    // Trim the left
-    copy.erase(copy.begin(),
-               std::find_if(copy.begin(), copy.end(), [](unsigned char ch) {
-                 return !std::isspace(ch);
-               }));
-
-    // Trim the right
-    copy.erase(std::find_if(copy.rbegin(), copy.rend(),
-                            [](unsigned char ch) { return !std::isspace(ch); })
-                   .base(),
-               copy.end());
-
-    // Ignore empty strings.
-    if (!copy.empty()) {
-      genres_.push_back({copy.data(), copy.size()});
-    }
-  };
-
-  if (token == NULL) {
-    // No delimiters found in the input. Treat this as a single genre.
-    trim_and_add(s);
-  } else {
-    while (token != NULL) {
-      // Add tokens until no more delimiters found.
-      trim_and_add(token);
-      token = std::strtok(NULL, kGenreDelimiters);
-    }
-  }
+  parseDelimitedTags(s, kGenreDelimiters, genres_);
 }
 
 /*
