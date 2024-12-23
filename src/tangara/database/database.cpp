@@ -532,28 +532,34 @@ static constexpr char kAudiobookMediaPath[] = "/Audiobooks/";
 
 auto Database::calculateMediaType(TrackTags& tags, std::string_view path)
     -> MediaType {
+
+  auto equalsIgnoreCase = [&](char lhs, char rhs) {
+    return std::tolower(lhs) == std::tolower(rhs);
+  };
+
   // Use the filepath first, since it's the most explicit way for the user to
   // tell us what this track is.
-  if (path.starts_with(kMusicMediaPath)) {
+  auto checkPathPrefix = [&](std::string_view path, std::string prefix) {
+    auto res = std::mismatch(prefix.begin(), prefix.end(), path.begin(), path.end(), equalsIgnoreCase);
+    return res.first == prefix.end();
+  };
+
+  if (checkPathPrefix(path, kMusicMediaPath)) {
     return MediaType::kMusic;
   }
-  if (path.starts_with(kPodcastMediaPath)) {
+  if (checkPathPrefix(path, kPodcastMediaPath)) {
     return MediaType::kPodcast;
   }
-  if (path.starts_with(kAudiobookMediaPath)) {
+  if (checkPathPrefix(path, kAudiobookMediaPath)) {
     return MediaType::kAudiobook;
   }
 
   // Podcasts may (rarely!) have a genre tag that tells us what they are. Look
   // for it.
-  auto equalsIgnoreCase = [&](char lhs, char rhs) {
-    // NB: not really safe across languages, but genre tags tend to be in
-    // English anyway.
-    return std::tolower(lhs) == std::tolower(rhs);
-  };
-
   auto genres = tags.genres();
   for (const auto& genre : genres) {
+    // NB: not really safe across languages, but genre tags tend to be in
+    // English anyway.
     if (std::ranges::equal(genre, "podcast", equalsIgnoreCase)) {
       return MediaType::kPodcast;
     }
