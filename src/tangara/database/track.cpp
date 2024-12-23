@@ -20,6 +20,7 @@
 
 namespace database {
 
+static constexpr char kAllArtistDelimiters[] = ";";
 static constexpr char kGenreDelimiters[] = ",;";
 
 auto tagName(Tag t) -> std::string {
@@ -28,6 +29,8 @@ auto tagName(Tag t) -> std::string {
       return "title";
     case Tag::kArtist:
       return "artist";
+    case Tag::kAllArtists:
+      return "all_artists";
     case Tag::kAlbum:
       return "album";
     case Tag::kAlbumArtist:
@@ -111,6 +114,8 @@ auto TrackTags::get(Tag t) const -> TagValue {
       return valueOrMonostate(title_);
     case Tag::kArtist:
       return valueOrMonostate(artist_);
+    case Tag::kAllArtists:
+      return allArtists_;
     case Tag::kAlbum:
       return valueOrMonostate(album_);
     case Tag::kAlbumArtist:
@@ -134,6 +139,9 @@ auto TrackTags::set(Tag t, std::string_view v) -> void {
       break;
     case Tag::kArtist:
       artist(v);
+      break;
+    case Tag::kAllArtists:
+      allArtists(v);
       break;
     case Tag::kAlbum:
       album(v);
@@ -165,6 +173,7 @@ auto TrackTags::allPresent() const -> std::vector<Tag> {
   };
   add_if_present(Tag::kTitle, title_);
   add_if_present(Tag::kArtist, artist_);
+  add_if_present(Tag::kAllArtists, !allArtists_.empty());
   add_if_present(Tag::kAlbum, album_);
   add_if_present(Tag::kAlbumArtist, album_artist_);
   add_if_present(Tag::kDisc, disc_);
@@ -187,6 +196,48 @@ auto TrackTags::artist() const -> const std::optional<std::pmr::string>& {
 
 auto TrackTags::artist(std::string_view s) -> void {
   artist_ = s;
+}
+
+auto TrackTags::allArtists() const -> std::span<const std::pmr::string> {
+  return allArtists_;
+}
+
+auto TrackTags::allArtists(const std::string_view s) -> void {
+  allArtists_.clear();
+  std::string src = {s.data(), s.size()};
+  char* token = std::strtok(src.data(), kAllArtistDelimiters);
+
+  auto trim_and_add = [this](std::string_view s) {
+    std::string copy = {s.data(), s.size()};
+
+    // Trim the left
+    copy.erase(copy.begin(),
+               std::find_if(copy.begin(), copy.end(), [](unsigned char ch) {
+                 return !std::isspace(ch);
+               }));
+
+    // Trim the right
+    copy.erase(std::find_if(copy.rbegin(), copy.rend(),
+                            [](unsigned char ch) { return !std::isspace(ch); })
+                   .base(),
+               copy.end());
+
+    // Ignore empty strings.
+    if (!copy.empty()) {
+      allArtists_.push_back({copy.data(), copy.size()});
+    }
+  };
+
+  if (token == NULL) {
+    // No delimiters found in the input. Treat this as a single artist.
+    trim_and_add(s);
+  } else {
+    while (token != NULL) {
+      // Add tokens until no more delimiters found.
+      trim_and_add(token);
+      token = std::strtok(NULL, kAllArtistDelimiters);
+    }
+  }
 }
 
 auto TrackTags::album() const -> const std::optional<std::pmr::string>& {

@@ -170,6 +170,7 @@ OggTagParser::OggTagParser() {
   nameToTag_["TITLE"] = Tag::kTitle;
   nameToTag_["ALBUM"] = Tag::kAlbum;
   nameToTag_["ARTIST"] = Tag::kArtist;
+  nameToTag_["ARTISTS"] = Tag::kAllArtists;
   nameToTag_["ALBUMARTIST"] = Tag::kAlbumArtist;
   nameToTag_["TRACK"] = Tag::kTrack;
   nameToTag_["TRACKNUMBER"] = Tag::kTrack;

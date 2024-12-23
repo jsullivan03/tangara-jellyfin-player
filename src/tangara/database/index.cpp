@@ -56,6 +56,13 @@ const IndexInfo kAllAlbums{
     .components = {Tag::kAlbum, Tag::kAlbumOrder},
 };
 
+const IndexInfo kAllArtists{
+    .id = 7,
+    .type = MediaType::kMusic,
+    .name = "All Artists",
+    .components = {Tag::kAllArtists, Tag::kTitle},
+};
+
 const IndexInfo kPodcasts{
     .id = 5,
     .type = MediaType::kPodcast,
@@ -113,6 +120,8 @@ class Indexer {
       case Tag::kAlbum:
         return "Unknown Album";
       case Tag::kAlbumArtist:
+        return track_tags_.artist().value_or("Unknown Artist");
+      case Tag::kAllArtists:
         return track_tags_.artist().value_or("Unknown Artist");
       case Tag::kGenres:
         return std::pmr::vector<std::pmr::string>{};
