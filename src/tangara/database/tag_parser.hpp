@@ -55,6 +55,19 @@ class GenericTagParser : public ITagParser {
  public:
   auto ReadAndParseTags(std::string_view path)
       -> std::shared_ptr<TrackTags> override;
+
+ private:
+  // Supported file extensions for parsing tags, derived from the list of
+  // supported audio formats here:
+  // https://cooltech.zone/tangara/docs/music-library/
+  static constexpr std::string supported_exts[] = {
+    "flac",
+    "mp3",
+    "ogg",
+    "ogx",
+    "opus",
+    "wav"
+  };
 };
 
 }  // namespace database
