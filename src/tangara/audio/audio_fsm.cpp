@@ -270,6 +270,9 @@ void AudioState::react(const system_fsm::HasPhonesChanged& ev) {
     if (sServices->bluetooth().enabled()) {
       events::Audio().Dispatch(audio::OutputModeChanged{
           .set_to = drivers::NvsStorage::Output::kBluetooth});
+    } else {
+      // Nothing connected
+      transit<states::Standby>();
     }
   }
 }
