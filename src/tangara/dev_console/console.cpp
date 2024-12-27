@@ -73,7 +73,8 @@ void RegisterLogLevel() {
       .command = "loglevel",
       .help =
           "Sets the log level to one of \"VERBOSE\", \"DEBUG\", \"INFO\", "
-          "\"WARN\", \"ERROR\", \"NONE\"",
+          "\"WARN\", \"ERROR\", \"NONE\". NOTE: Some log levels aren't available "
+          "on release builds.",
       .hint = "level",
       .func = &CmdLogLevel,
       .argtable = NULL};
