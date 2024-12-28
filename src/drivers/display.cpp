@@ -194,6 +194,10 @@ auto Display::SetDisplayOn(bool enabled) -> void {
 }
 
 auto Display::SetBrightness(uint_fast8_t percent) -> void {
+  // Set a lower limit of 7%, below this the backlight turns off.
+  // See https://codeberg.org/cool-tech-zone/tangara-fw/issues/158
+  if (percent < 7)
+    percent = 7;
   brightness_ =
       std::pow(static_cast<double>(percent) / 100.0, 2.8) * 1024.0 + 0.5;
   if (first_flush_finished_ && display_on_) {
