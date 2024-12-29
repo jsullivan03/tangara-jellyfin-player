@@ -1,5 +1,13 @@
 # Building and flashing
 
+NOTE: The development environment for Linux requires running external pre-compiled binaries linked against GLIBC. This means they will not run on Linux distros that use alternative libc (e.g. musl).
+
+0. For Linux, the following packages are needed to run the development env. Note that package names are from Debian, and may vary on other distros.
+
+- cmake
+- libusb-1.0
+- python3-venv
+
 1. Make sure you've got all of the submodules in this repo correctly initialised:
 
 ```
