@@ -290,7 +290,7 @@ settings.DisplaySettings = SettingsScreen:new {
 
     local brightness = self.content:Slider {
       w = lvgl.PCT(100),
-      range = { min = 0, max = 100 },
+      range = { min = 20, max = 100 },
       value = display.brightness:get(),
     }
     brightness:onevent(lvgl.EVENT.VALUE_CHANGED, function()
