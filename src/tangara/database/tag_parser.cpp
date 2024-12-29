@@ -171,9 +171,11 @@ OggTagParser::OggTagParser() {
   nameToTag_["ALBUM"] = Tag::kAlbum;
   nameToTag_["ARTIST"] = Tag::kArtist;
   nameToTag_["ALBUMARTIST"] = Tag::kAlbumArtist;
+  nameToTag_["TRACK"] = Tag::kTrack;
   nameToTag_["TRACKNUMBER"] = Tag::kTrack;
   nameToTag_["GENRE"] = Tag::kGenres;
   nameToTag_["DISC"] = Tag::kDisc;
+  nameToTag_["DISCNUMBER"] = Tag::kDisc;
 }
 
 auto OggTagParser::ReadAndParseTags(std::string_view p)
