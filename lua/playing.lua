@@ -67,6 +67,14 @@ return screen:new {
       text_align = 2,
     }
 
+    local album = info:Label {
+      w = lvgl.PCT(100),
+      h = lvgl.SIZE_CONTENT,
+      text = "",
+      text_font = font.fusion_10,
+      text_align = 2,
+    }
+
     local title = info:Label {
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
@@ -263,6 +271,7 @@ return screen:new {
           end_time:set { text = format_time(playback.position:get()) }
         end
         title:set { text = track.title }
+        album:set { text = string.sub(track.album, 1, 58) }
         artist:set { text = track.artist }
       end),
       queue.position:bind(function(pos)
