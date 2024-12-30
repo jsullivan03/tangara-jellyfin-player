@@ -11,6 +11,7 @@ static const struct {
 	{"album", Talbum},
 	{"title", Ttitle},
 	{"artist", Tartist},
+	{"artists", Tmultiartists},
 	{"albumartist", Talbumartist},
 	{"tracknumber", Ttrack},
 	{"date", Tdate},
