@@ -13,6 +13,7 @@ local usb = require("usb")
 local font = require("font")
 local main_menu = require("main_menu")
 local img = require("images")
+local nvs = require("nvs")
 
 local settings = {}
 
@@ -33,6 +34,9 @@ local SettingsScreen = widgets.MenuScreen:new {
       pad_left = 4,
       pad_right = 4,
     }
+  end,
+  on_hide = function(self)
+    nvs.write();
   end
 }
 
@@ -290,7 +294,7 @@ settings.DisplaySettings = SettingsScreen:new {
 
     local brightness = self.content:Slider {
       w = lvgl.PCT(100),
-      range = { min = 0, max = 100 },
+      range = { min = 20, max = 100 },
       value = display.brightness:get(),
     }
     brightness:onevent(lvgl.EVENT.VALUE_CHANGED, function()

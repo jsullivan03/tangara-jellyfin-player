@@ -171,9 +171,11 @@ OggTagParser::OggTagParser() {
   nameToTag_["ALBUM"] = Tag::kAlbum;
   nameToTag_["ARTIST"] = Tag::kArtist;
   nameToTag_["ALBUMARTIST"] = Tag::kAlbumArtist;
+  nameToTag_["TRACK"] = Tag::kTrack;
   nameToTag_["TRACKNUMBER"] = Tag::kTrack;
   nameToTag_["GENRE"] = Tag::kGenres;
   nameToTag_["DISC"] = Tag::kDisc;
+  nameToTag_["DISCNUMBER"] = Tag::kDisc;
 }
 
 auto OggTagParser::ReadAndParseTags(std::string_view p)
@@ -310,6 +312,23 @@ auto GenericTagParser::ReadAndParseTags(std::string_view p)
     -> std::shared_ptr<TrackTags> {
   std::string path{p};
   libtags::Aux aux;
+
+  // Fail fast if trying to parse a file that doesn't appear to be a supported audio format
+  // For context, see: https://codeberg.org/cool-tech-zone/tangara-fw/issues/149
+  bool found = false;
+  for (const auto& ext : supported_exts) {
+    // Case-insensitive file extension check
+    if (std::equal(ext.rbegin(), ext.rend(), path.rbegin(),
+                   [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+      found=true;
+      break;
+    }
+  }
+  if (!found) {
+    ESP_LOGD(kTag, "skipping unsupported file: %s", path.c_str());
+    return {};
+  }
+
   auto out = TrackTags::create();
   aux.tags = out.get();
 
