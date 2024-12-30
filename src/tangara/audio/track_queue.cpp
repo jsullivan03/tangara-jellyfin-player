@@ -46,6 +46,9 @@ RandomIterator::RandomIterator(size_t size)
 }
 
 auto RandomIterator::current() const -> size_t {
+  if (size_ == 0) {
+    return 0;
+  }
   return MillerShuffle(pos_, seed_, size_);
 }
 
@@ -191,7 +194,7 @@ auto TrackQueue::append(Item i) -> void {
   bool current_changed;
   {
     const std::shared_lock<std::shared_mutex> lock(mutex_);
-    was_queue_empty = playlist_.currentPosition() >= playlist_.size();
+    was_queue_empty = currentPosition() >= totalSize();
     current_changed = was_queue_empty;  // Dont support inserts yet
   }
 
