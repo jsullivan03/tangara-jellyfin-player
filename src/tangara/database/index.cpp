@@ -116,13 +116,12 @@ class Indexer {
       case Tag::kTitle:
         return titleOrFilename(track_data_, track_tags_);
       case Tag::kArtist:
+      case Tag::kAlbumArtist:
         return "Unknown Artist";
       case Tag::kAlbum:
         return "Unknown Album";
-      case Tag::kAlbumArtist:
-        return track_tags_.artist().value_or("Unknown Artist");
       case Tag::kAllArtists:
-        return track_tags_.artist().value_or("Unknown Artist");
+        return std::pmr::vector<std::pmr::string>{};
       case Tag::kGenres:
         return std::pmr::vector<std::pmr::string>{};
       case Tag::kDisc:

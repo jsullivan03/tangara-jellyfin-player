@@ -144,6 +144,8 @@ class TrackTags {
   auto Hash() const -> uint64_t;
 
  private:
+  auto maybeSynthesizeAllArtists() -> void;
+
   Container encoding_;
 
   std::optional<std::pmr::string> title_;
