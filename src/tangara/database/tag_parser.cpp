@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <memory>
 #include <mutex>
+#include <optional>
 
 #include "database/track.hpp"
 #include "debug.hpp"
@@ -45,6 +46,29 @@ static auto convert_tag(int tag) -> std::optional<Tag> {
     default:
       return {};
   }
+}
+
+static std::unordered_map<std::string, Tag> sVorbisNameToTag{
+    {"TITLE", Tag::kTitle},
+    {"ALBUM", Tag::kAlbum},
+    {"ARTIST", Tag::kArtist},
+    {"ARTISTS", Tag::kAllArtists},
+    {"ALBUMARTIST", Tag::kAlbumArtist},
+    {"TRACK", Tag::kTrack},
+    {"TRACKNUMBER", Tag::kTrack},
+    {"GENRE", Tag::kGenres},
+    {"DISC", Tag::kDisc},
+    {"DISCNUMBER", Tag::kDisc},
+};
+
+static auto convert_vorbis_tag(const std::string_view name)
+    -> std::optional<Tag> {
+  std::string name_upper{name};
+  std::transform(name.begin(), name.end(), name_upper.begin(), ::toupper);
+  if (sVorbisNameToTag.contains(name_upper)) {
+    return sVorbisNameToTag[name_upper];
+  }
+  return {};
 }
 
 namespace libtags {
@@ -96,7 +120,14 @@ static void tag(Tagctx* ctx,
                 int size,
                 Tagread f) {
   Aux* aux = reinterpret_cast<Aux*>(ctx->aux);
-  auto tag = convert_tag(t);
+  std::optional<Tag> tag;
+  if (t == Tunknown && k && v) {
+    // Sometimes 'unknown' tags are vorbis comments shoved into a generic tag
+    // name in other containers.
+    tag = convert_vorbis_tag(k);
+  } else {
+    tag = convert_tag(t);
+  }
   if (!tag) {
     return;
   }
@@ -168,18 +199,7 @@ auto TagParserImpl::ReadAndParseTags(std::string_view path)
   return tags;
 }
 
-OggTagParser::OggTagParser() {
-  nameToTag_["TITLE"] = Tag::kTitle;
-  nameToTag_["ALBUM"] = Tag::kAlbum;
-  nameToTag_["ARTIST"] = Tag::kArtist;
-  nameToTag_["ARTISTS"] = Tag::kAllArtists;
-  nameToTag_["ALBUMARTIST"] = Tag::kAlbumArtist;
-  nameToTag_["TRACK"] = Tag::kTrack;
-  nameToTag_["TRACKNUMBER"] = Tag::kTrack;
-  nameToTag_["GENRE"] = Tag::kGenres;
-  nameToTag_["DISC"] = Tag::kDisc;
-  nameToTag_["DISCNUMBER"] = Tag::kDisc;
-}
+OggTagParser::OggTagParser() {}
 
 auto OggTagParser::ReadAndParseTags(std::string_view p)
     -> std::shared_ptr<TrackTags> {
@@ -295,8 +315,9 @@ auto OggTagParser::parseComments(TrackTags& res, std::span<unsigned char> data)
       std::string key_upper{key};
       std::transform(key.begin(), key.end(), key_upper.begin(), ::toupper);
 
-      if (nameToTag_.contains(key_upper) && !val.empty()) {
-        res.set(nameToTag_[key_upper], val);
+      auto tag = convert_vorbis_tag(key);
+      if (tag && !val.empty()) {
+        res.set(*tag, val);
       }
     }
 
@@ -316,14 +337,16 @@ auto GenericTagParser::ReadAndParseTags(std::string_view p)
   std::string path{p};
   libtags::Aux aux;
 
-  // Fail fast if trying to parse a file that doesn't appear to be a supported audio format
-  // For context, see: https://codeberg.org/cool-tech-zone/tangara-fw/issues/149
+  // Fail fast if trying to parse a file that doesn't appear to be a supported
+  // audio format For context, see:
+  // https://codeberg.org/cool-tech-zone/tangara-fw/issues/149
   bool found = false;
   for (const auto& ext : supported_exts) {
     // Case-insensitive file extension check
-    if (std::equal(ext.rbegin(), ext.rend(), path.rbegin(),
-                   [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
-      found=true;
+    if (std::equal(ext.rbegin(), ext.rend(), path.rbegin(), [](char a, char b) {
+          return std::tolower(a) == std::tolower(b);
+        })) {
+      found = true;
       break;
     }
   }

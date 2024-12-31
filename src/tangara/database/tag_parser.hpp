@@ -47,8 +47,6 @@ class OggTagParser : public ITagParser {
  private:
   auto parseComments(TrackTags&, std::span<unsigned char> data) -> void;
   auto parseLength(std::span<unsigned char> data) -> uint64_t;
-
-  std::unordered_map<std::string, Tag> nameToTag_;
 };
 
 class GenericTagParser : public ITagParser {
