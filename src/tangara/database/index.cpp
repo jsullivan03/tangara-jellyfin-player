@@ -57,21 +57,21 @@ const IndexInfo kAllAlbums{
 };
 
 const IndexInfo kAllArtists{
-    .id = 7,
+    .id = 5,
     .type = MediaType::kMusic,
     .name = "All Artists",
     .components = {Tag::kAllArtists, Tag::kTitle},
 };
 
 const IndexInfo kPodcasts{
-    .id = 5,
+    .id = 6,
     .type = MediaType::kPodcast,
     .name = "Podcasts",
     .components = {Tag::kAlbum, Tag::kTitle},
 };
 
 const IndexInfo kAudiobooks{
-    .id = 6,
+    .id = 7,
     .type = MediaType::kAudiobook,
     .name = "Audiobooks",
     .components = {Tag::kAlbum, Tag::kAlbumOrder},
