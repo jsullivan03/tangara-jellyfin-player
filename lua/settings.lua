@@ -239,7 +239,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       value = 0,
     }
     balance:onevent(lvgl.EVENT.VALUE_CHANGED, function()
-      volume.left_bias:set(balance:value())
+      volume.left_bias:set(-balance:value())
     end)
 
     local balance_label = self.content:Label {}
@@ -254,7 +254,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       end),
       volume.left_bias:bind(function(bias)
         balance:set {
-          value = bias
+          value = -bias
         }
         if bias < 0 then
           balance_label:set {
