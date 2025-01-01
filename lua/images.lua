@@ -23,6 +23,7 @@ local img = {
   usb = lvgl.ImgData("//lua/img/usb.png"),
   listened = lvgl.ImgData("//lua/img/listened.png"),
   unlistened = lvgl.ImgData("//lua/img/unlistened.png"),
+  info = lvgl.ImgData("//lua/img/info.png"),
 }
 
 return img
