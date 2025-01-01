@@ -265,6 +265,22 @@ static void pushTrack(lua_State* L, const audio::TrackInfo& track) {
   lua_pushliteral(L, "encoding");
   lua_pushstring(L, codecs::StreamTypeToString(track.encoding).c_str());
   lua_settable(L, -3);
+
+  lua_pushliteral(L, "uri");
+  lua_pushstring(L, track.uri.c_str());
+  lua_settable(L, -3);
+
+  lua_pushliteral(L, "sample_rate");
+  lua_pushinteger(L, track.format.sample_rate);
+  lua_settable(L, -3);
+
+  lua_pushliteral(L, "num_channels");
+  lua_pushinteger(L, track.format.num_channels);
+  lua_settable(L, -3);
+
+  lua_pushliteral(L, "bits_per_sample");
+  lua_pushinteger(L, track.format.bits_per_sample);
+  lua_settable(L, -3);
 }
 
 static void pushDevice(lua_State* L,
