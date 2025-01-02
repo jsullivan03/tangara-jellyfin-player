@@ -78,6 +78,7 @@ extern const IndexInfo kAlbumsByArtist;
 extern const IndexInfo kTracksByGenre;
 extern const IndexInfo kAllTracks;
 extern const IndexInfo kAllAlbums;
+extern const IndexInfo kAllArtists;
 extern const IndexInfo kPodcasts;
 extern const IndexInfo kAudiobooks;
 

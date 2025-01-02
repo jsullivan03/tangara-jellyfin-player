@@ -10,6 +10,7 @@ enum
 {
 	Tunknown = -1,
 	Tartist,
+	Tmultiartists,
 	Talbumartist,
 	Talbum,
 	Ttitle,

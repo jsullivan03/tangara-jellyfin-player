@@ -292,7 +292,7 @@ auto Database::setTrackData(TrackId id, const TrackData& data) -> void {
 auto Database::getIndexes() -> std::vector<IndexInfo> {
   // TODO(jacqueline): This probably needs to be async? When we have runtime
   // configurable indexes, they will need to come from somewhere.
-  return {kAllTracks,     kAllAlbums, kAlbumsByArtist,
+  return {kAllTracks,     kAllAlbums, kAllArtists, kAlbumsByArtist,
           kTracksByGenre, kPodcasts,  kAudiobooks};
 }
 
