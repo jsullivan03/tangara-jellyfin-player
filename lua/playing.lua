@@ -271,7 +271,12 @@ return screen:new {
           end_time:set { text = format_time(playback.position:get()) }
         end
         title:set { text = track.title }
-        album:set { text = string.sub(track.album, 1, 58) }
+        if track.album then
+          album:set { text = string.sub(track.album, 1, 58) }
+          album:clear_flag(lvgl.FLAG.HIDDEN)
+        else
+          album:add_flag(lvgl.FLAG.HIDDEN)
+        end
         artist:set { text = track.artist }
       end),
       queue.position:bind(function(pos)
