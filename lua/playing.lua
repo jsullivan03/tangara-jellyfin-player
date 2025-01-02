@@ -6,6 +6,7 @@ local playback = require("playback")
 local queue = require("queue")
 local screen = require("screen")
 local theme = require("theme")
+local track_info = require("track_info")
 
 local img = require("images")
 
@@ -176,7 +177,7 @@ return screen:new {
       },
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
-      pad_column = 8,
+      pad_column = 6,
       pad_all = 2,
     }
 
@@ -229,6 +230,14 @@ return screen:new {
     local shuffle_img = shuffle_btn:Image { src = img.shuffle }
     theme.set_subject(shuffle_btn, icon_enabled_class)
     local shuffle_desc = widgets.Description(shuffle_btn)
+
+    local info_btn = controls:Button {}
+    info_btn:onClicked(function()
+      backstack.push(track_info:new())
+    end)
+    local info_img = info_btn:Image { src = img.info }
+    theme.set_subject(info_btn, icon_enabled_class)
+    local info_desc = widgets.Description(info_btn, "Track info")
 
     controls:Object({ flex_grow = 1, h = 1 }) -- spacer
 
