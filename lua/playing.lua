@@ -177,7 +177,7 @@ return screen:new {
       },
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
-      pad_column = 6,
+      pad_column = 5,
       pad_all = 2,
     }
 

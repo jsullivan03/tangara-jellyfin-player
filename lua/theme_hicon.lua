@@ -101,6 +101,7 @@ local theme_hicon = {
     }},
     {lvgl.PART.KNOB, lvgl.Style {
       radius = 32767, -- LV_RADIUS_CIRCLE = 0x7fff
+      pad_all = 1,
       bg_color = background_color,
       border_color = text_color,
       border_width = 1,
@@ -144,7 +145,7 @@ local theme_hicon = {
       pad_all = 1,
     }},
     {lvgl.PART.KNOB | lvgl.STATE.EDITED, lvgl.Style {
-      pad_all = 4,
+      pad_all = 2,
     }},
     {lvgl.PART.INDICATOR | lvgl.STATE.CHECKED, lvgl.Style {
       bg_color = text_color,
