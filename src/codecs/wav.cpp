@@ -216,7 +216,8 @@ auto WavDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
 
   output_format_ = {.num_channels = (uint8_t)num_channels_,
                     .sample_rate_hz = samples_per_second,
-                    .total_samples = number_of_samples};
+                    .total_samples = number_of_samples,
+                    .bitrate_kbps = samples_per_second * num_channels_ * bytes_per_sample_ * 8 / 1024};
 
   return output_format_;
 }

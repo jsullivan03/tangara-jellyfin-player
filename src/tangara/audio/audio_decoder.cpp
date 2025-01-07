@@ -160,7 +160,7 @@ auto Decoder::prepareDecode(std::shared_ptr<TaggedStream> stream) -> void {
       .uri = stream->Filepath(),
       .duration = {},
       .start_offset = stream->Offset(),
-      .bitrate_kbps = {},
+      .bitrate_kbps = open_res->bitrate_kbps,
       .encoding = stream->type(),
       .format =
           {

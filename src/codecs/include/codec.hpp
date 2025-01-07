@@ -106,6 +106,7 @@ class ICodec {
     uint8_t num_channels;
     uint32_t sample_rate_hz;
     std::optional<uint32_t> total_samples;
+    std::optional<uint32_t> bitrate_kbps;
 
     bool operator==(const OutputFormat&) const = default;
   };

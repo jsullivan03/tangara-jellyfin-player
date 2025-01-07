@@ -63,7 +63,7 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
     -> cpp::result<OutputFormat, ICodec::Error> {
   input_ = input;
 
-  SkipID3Tags(*input);
+  auto id3size = SkipID3Tags(*input);
 
   // To get the output format for MP3 streams, we simply need to decode the
   // first frame header.
@@ -114,6 +114,14 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
   } else if (input->Size() && header.bitrate > 0) {
     cbr_length = (input->Size().value() * 8) / header.bitrate;
     output.total_samples = cbr_length * output.sample_rate_hz * channels;
+  }
+
+  // header.bitrate is only for CBR, but we've calculated total samples for VBR
+  // and CBR, so we can use that to calculate sample size and therefore bitrate.
+  if (id3size && input->Size()) {
+    auto data_size = input->Size().value() - id3size.value();
+    double sample_size = data_size * 8.0 / output.total_samples.value();
+    output.bitrate_kbps = static_cast<uint32_t>(output.sample_rate_hz * channels * sample_size / 1024);
   }
 
   if (offset > 1 && cbr_length > 0) {
@@ -263,15 +271,15 @@ auto MadMp3Decoder::DecodeTo(std::span<sample::Sample> output)
                     .is_stream_finished = is_eos_};
 }
 
-auto MadMp3Decoder::SkipID3Tags(IStream& stream) -> void {
+auto MadMp3Decoder::SkipID3Tags(IStream& stream) -> std::optional<uint32_t> {
   // First check that the file actually does start with ID3 tags.
   std::array<std::byte, 3> magic_buf{};
   if (stream.Read(magic_buf) != 3) {
-    return;
+    return {};
   }
   if (std::memcmp(magic_buf.data(), "ID3", 3) != 0) {
     stream.SeekTo(0, IStream::SeekFrom::kStartOfStream);
-    return;
+    return {};
   }
 
   // The size of the tags (*not* including the 10-byte header) is located 6
@@ -279,14 +287,17 @@ auto MadMp3Decoder::SkipID3Tags(IStream& stream) -> void {
   std::array<std::byte, 4> size_buf{};
   stream.SeekTo(6, IStream::SeekFrom::kStartOfStream);
   if (stream.Read(size_buf) != 4) {
-    return;
+    return {};
   }
   // Size is encoded with 7-bit ints for some reason.
   uint32_t tags_size = (static_cast<uint32_t>(size_buf[0]) << (7 * 3)) |
                        (static_cast<uint32_t>(size_buf[1]) << (7 * 2)) |
                        (static_cast<uint32_t>(size_buf[2]) << 7) |
                        static_cast<uint32_t>(size_buf[3]);
-  stream.SeekTo(10 + tags_size, IStream::SeekFrom::kStartOfStream);
+
+  auto skip_bytes = 10 + tags_size;
+  stream.SeekTo(skip_bytes, IStream::SeekFrom::kStartOfStream);
+  return skip_bytes;
 }
 
 /*

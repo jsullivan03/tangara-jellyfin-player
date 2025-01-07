@@ -36,7 +36,7 @@ class MadMp3Decoder : public ICodec {
   MadMp3Decoder& operator=(const MadMp3Decoder&) = delete;
 
  private:
-  auto SkipID3Tags(IStream& stream) -> void;
+  auto SkipID3Tags(IStream& stream) -> std::optional<uint32_t>;
 
   struct VbrInfo {
     uint32_t length;
