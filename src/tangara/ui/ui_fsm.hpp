@@ -122,6 +122,7 @@ class UiState : public tinyfsm::Fsm<UiState> {
   static lua::Property sQueueRepeatMode;
   static lua::Property sQueueRandom;
   static lua::Property sQueueLoading;
+  static lua::Property sQueueReady;
 
   static lua::Property sVolumeCurrentPct;
   static lua::Property sVolumeCurrentDb;

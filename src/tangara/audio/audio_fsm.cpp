@@ -150,6 +150,7 @@ void AudioState::react(const SetTrack& ev) {
   if (std::holds_alternative<std::monostate>(ev.new_track)) {
     ESP_LOGI(kTag, "playback finished, awaiting drain");
     sDecoder->open({});
+    sStreamCues.clear();
     return;
   }
 

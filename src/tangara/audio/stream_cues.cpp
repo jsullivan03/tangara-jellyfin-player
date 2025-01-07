@@ -43,6 +43,11 @@ auto StreamCues::addCue(std::shared_ptr<TrackInfo> track, uint32_t sample)
   }
 }
 
+auto StreamCues::clear() -> void {
+  upcoming_.clear();
+  current_ = {};
+}
+
 auto StreamCues::current() -> std::pair<std::shared_ptr<TrackInfo>, uint32_t> {
   if (!current_) {
     return {};

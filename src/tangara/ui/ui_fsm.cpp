@@ -230,6 +230,7 @@ lua::Property UiState::sQueueRandom{false, [](const lua::LuaValue& val) {
                                       return true;
                                     }};
 lua::Property UiState::sQueueLoading{false};
+lua::Property UiState::sQueueReady{false};
 
 lua::Property UiState::sVolumeCurrentPct{
     0, [](const lua::LuaValue& val) {
@@ -446,12 +447,8 @@ void UiState::react(const audio::QueueUpdate& update) {
   sQueuePosition.setDirect(current_pos);
   sQueueRandom.setDirect(queue.random());
   sQueueRepeatMode.setDirect(queue.repeatMode());
-
-  if (update.reason == audio::QueueUpdate::Reason::kBulkLoadingUpdate) {
-    sQueueLoading.setDirect(true);
-  } else {
-    sQueueLoading.setDirect(false);
-  }
+  sQueueLoading.setDirect(queue.isLoading());
+  sQueueReady.setDirect(queue.isReady());
 }
 
 void UiState::react(const audio::PlaybackUpdate& ev) {
@@ -651,6 +648,7 @@ void Lua::entry() {
             {"repeat_mode", &sQueueRepeatMode},
             {"random", &sQueueRandom},
             {"loading", &sQueueLoading},
+            {"ready", &sQueueReady},
         });
     registry.AddPropertyModule("volume",
                                {

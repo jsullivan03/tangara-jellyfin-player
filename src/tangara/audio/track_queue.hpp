@@ -114,6 +114,9 @@ class TrackQueue {
   auto repeatMode(RepeatMode mode) -> void;
   auto repeatMode() const -> RepeatMode;
 
+  auto isLoading() const -> bool;
+  auto isReady() const -> bool;
+
   auto serialise() -> std::string;
   auto deserialise(const std::string&) -> void;
 
@@ -125,6 +128,7 @@ class TrackQueue {
   auto next(QueueUpdate::Reason r) -> void;
   auto goTo(size_t position) -> void;
   auto getFilepath(database::TrackId id) -> std::optional<std::string>;
+  auto appendAsync(database::TrackIterator i, bool was_empty) -> void;
 
   mutable std::shared_mutex mutex_;
 
@@ -139,6 +143,13 @@ class TrackQueue {
 
   std::optional<RandomIterator> shuffle_;
   RepeatMode repeatMode_;
+
+  std::atomic<bool> cancel_appending_async_;
+  std::atomic<bool> appending_async_;
+  std::list<database::TrackIterator> pending_async_iterators_;
+
+  bool loading_;
+  bool ready_;
 
   class QueueParseClient : public cppbor::ParseClient {
    public:

@@ -267,11 +267,15 @@ return screen:new {
           scrubber:set { value = pos / track.duration * 100 }
         end
       end),
+      queue.ready:bind(function(ready)
+        if not ready then
+          title:set { text = "Loading..." }
+          album:set{text=""}
+          artist:set{text=""}
+        end
+      end),
       playback.track:bind(function(track)
         if not track then
-          if queue.loading:get() then
-            title:set { text = "Loading..." }
-          end
           return
         end
         if track.duration then

@@ -259,6 +259,7 @@ class TrackIterator {
 
   TrackIterator(const TrackIterator&) = default;
   TrackIterator& operator=(TrackIterator&& other) = default;
+  TrackIterator& operator=(const TrackIterator& other) = default;
 
   auto value() const -> std::optional<TrackId>;
   std::optional<TrackId> operator*() const { return value(); }
