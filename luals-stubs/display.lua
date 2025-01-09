@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+--
+-- SPDX-License-Identifier: GPL-3.0-only
+
 --- @meta
 
 --- The `display` module contains Properties relating to the device's physical

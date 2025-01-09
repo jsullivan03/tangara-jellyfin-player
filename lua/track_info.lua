@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2024 jacqueline <me@jacqueline.id.au>
+--
+-- SPDX-License-Identifier: GPL-3.0-only
+
 local backstack = require("backstack")
 local font = require("font")
 local lvgl = require("lvgl")

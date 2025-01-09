@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 SDKCONFIG=$PROJ_PATH/sdkconfig
 SDKCONFIG_COMMON=$PROJ_PATH/sdkconfig.common
 if [ ! -f "$SDKCONFIG" ]; then

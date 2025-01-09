@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+--
+-- SPDX-License-Identifier: GPL-3.0-only
+
 --- @meta 
 
 --- The `alerts` module contains functions for showing transient popups over

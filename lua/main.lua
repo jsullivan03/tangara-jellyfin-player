@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+--
+-- SPDX-License-Identifier: GPL-3.0-only
+
 -- Load fonts first, since they're parsed asynchronously and we can do much of
 -- the other UI setup in parallel.
 local font = require("font")
