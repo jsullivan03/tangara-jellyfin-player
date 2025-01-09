@@ -7,6 +7,7 @@ local widgets = require("widgets")
 local font = require("font")
 local styles = require("styles")
 local screen = require("screen")
+local lvgl = require("lvgl")
 
 local function show_license(text)
   backstack.push(widgets.MenuScreen:new {
@@ -14,12 +15,22 @@ local function show_license(text)
     title = "Licenses",
     create_ui = function(self)
       widgets.MenuScreen.create_ui(self)
-      self.root:Label {
-        w = lvgl.PCT(100),
-        h = lvgl.SIZE_CONTENT,
-        text_font = font.fusion_10,
-        text = text,
-      }
+      -- Licenses are all longer than one screen, so we need to be able to
+      -- scroll to read all the text.  Break up the content by line, and
+      -- insert an object after each line that the user can scroll to.
+      for line in text:gmatch("[^\r\n]+") do
+        self.root:Label {
+          w = lvgl.PCT(100),
+          h = lvgl.SIZE_CONTENT,
+          text_font = font.fusion_10,
+          text = line,
+        }
+        local scroller = self.root:Object { w = 1, h = 1 }
+        scroller:onevent(lvgl.EVENT.FOCUSED, function()
+          scroller:scroll_to_view(1)
+        end)
+        lvgl.group.get_default():add_obj(scroller)
+      end
     end
   })
 end
