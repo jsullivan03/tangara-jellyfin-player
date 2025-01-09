@@ -118,6 +118,12 @@ auto TremorVorbisDecoder::OpenStream(std::shared_ptr<IStream> input,
     length = l * info->channels;
   }
 
+  auto b = ov_bitrate(vorbis_.get(), -1);
+  std::optional<uint32_t> bitrate_kbps;
+  if (b > 0) {
+    bitrate_kbps = b / 1024;
+  }
+
   if (offset && ov_time_seek(vorbis_.get(), offset * 1000) != 0) {
     return cpp::fail(Error::kInternalError);
   }
@@ -126,6 +132,7 @@ auto TremorVorbisDecoder::OpenStream(std::shared_ptr<IStream> input,
       .num_channels = static_cast<uint8_t>(info->channels),
       .sample_rate_hz = static_cast<uint32_t>(info->rate),
       .total_samples = length,
+      .bitrate_kbps = bitrate_kbps,
   };
 }
 

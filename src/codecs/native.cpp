@@ -30,6 +30,8 @@ auto NativeDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       .num_channels = 1,
       .sample_rate_hz = 48000,
       .total_samples = {},
+      // sample rate * channels * bits per sample / bits per kb
+      .bitrate_kbps = 48000 * 1 * 16 / 1024,
   };
 }
 

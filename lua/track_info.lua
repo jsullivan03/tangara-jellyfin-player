@@ -50,6 +50,7 @@ return screen:new {
     local disc = label("")
     local tracknum = label("")
     local encoding = label("")
+    local bitrate_kbps = label("")
     local sample_rate = label("")
     local num_channels = label("")
     local bits_per_sample = label("")
@@ -75,6 +76,7 @@ return screen:new {
         disc:set { text = "Disc: " .. (track.disc or "") }
         tracknum:set { text = "Track: " .. (track.track or "") }
         encoding:set { text = "Encoding: " .. (track.encoding or "") }
+        bitrate_kbps:set { text = "Bitrate (kbps): " .. (track.bitrate_kbps or "") }
         sample_rate:set { text = "Sample rate: " .. (track.sample_rate or "") }
         num_channels:set { text = "Channels: " .. (track.num_channels or "") }
         bits_per_sample:set { text = "Bits per sample: " .. (track.bits_per_sample or "") }

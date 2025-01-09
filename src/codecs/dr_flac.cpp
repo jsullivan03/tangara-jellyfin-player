@@ -97,6 +97,13 @@ auto DrFlacDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       .sample_rate_hz = static_cast<uint32_t>(flac_->sampleRate),
       .total_samples = flac_->totalPCMFrameCount * flac_->channels,
   };
+
+  if (input->Size() && format.total_samples) {
+    double sample_size = *(input->Size()) * 8.0 / *(format.total_samples);
+    format.bitrate_kbps = static_cast<uint32_t>(
+        flac_->sampleRate * flac_->channels * sample_size / 1024);
+  }
+
   return format;
 }
 

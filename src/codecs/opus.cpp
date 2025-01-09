@@ -129,6 +129,12 @@ auto XiphOpusDecoder::OpenStream(std::shared_ptr<IStream> input,
     length = l * 2;
   }
 
+  auto b = op_bitrate(opus_, -1);
+  std::optional<uint32_t> bitrate_kbps;
+  if (b > 0) {
+    bitrate_kbps = b / 1024;
+  }
+
   if (offset && op_pcm_seek(opus_, offset * 48000) != 0) {
     return cpp::fail(Error::kInternalError);
   }
@@ -137,6 +143,7 @@ auto XiphOpusDecoder::OpenStream(std::shared_ptr<IStream> input,
       .num_channels = 2,
       .sample_rate_hz = 48000,
       .total_samples = length,
+      .bitrate_kbps = bitrate_kbps,
   };
 }
 
