@@ -23,7 +23,7 @@ namespace system_fsm {
 namespace states {
 
 [[maybe_unused]] static const char kTag[] = "IDLE";
-static const TickType_t kTicksBeforeSleep = pdMS_TO_TICKS(10000);
+static const TickType_t kTicksBeforeSleep = pdMS_TO_TICKS(120000);
 
 static void timer_callback(TimerHandle_t timer) {
   events::System().Dispatch(internal::IdleTimeout{});
