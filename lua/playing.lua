@@ -290,7 +290,7 @@ return screen:new {
         else
           album:add_flag(lvgl.FLAG.HIDDEN)
         end
-        artist:set { text = track.artist }
+        artist:set { text = track.artist or "Unknown Artist" }
       end),
       queue.position:bind(function(pos)
         if not pos then return end
