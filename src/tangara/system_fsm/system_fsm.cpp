@@ -24,7 +24,8 @@ std::unique_ptr<drivers::SdStorage> SystemState::sStorage;
 console::AppConsole* SystemState::sAppConsole;
 
 void check_interrupts_cb(TimerHandle_t timer) {
-  if (!gpio_get_level(GPIO_NUM_34)) {
+  ServiceLocator* services = reinterpret_cast<ServiceLocator*>(pvTimerGetTimerID(timer));
+  if (services->gpios().ShouldRead()) {
     events::System().Dispatch(internal::GpioInterrupt{});
   }
   if (!gpio_get_level(GPIO_NUM_35)) {

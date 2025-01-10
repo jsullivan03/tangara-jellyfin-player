@@ -179,6 +179,9 @@ auto Display::SetDisplayOn(bool enabled) -> void {
     return;
   }
 
+  spi_device_acquire_bus(handle_, portMAX_DELAY);
+  gpio_.SdMuxEnable(false);
+
   if (display_on_) {
     SendCommandWithData(displays::ST77XX_DISPON, nullptr, 0);
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -191,6 +194,9 @@ auto Display::SetDisplayOn(bool enabled) -> void {
     vTaskDelay(pdMS_TO_TICKS(100));
     SendCommandWithData(displays::ST77XX_DISPOFF, nullptr, 0);
   }
+
+  gpio_.SdMuxEnable(true);
+  spi_device_release_bus(handle_);
 }
 
 auto Display::SetBrightness(uint_fast8_t percent) -> void {
@@ -222,6 +228,7 @@ void Display::SendInitialisationSequence(const uint8_t* data) {
   // finished may be increased by doing this, but a short boot with no feedback
   // feels worse than a longer boot that doesn't tell you anything.
   spi_device_acquire_bus(handle_, portMAX_DELAY);
+  gpio_.SdMuxEnable(false);
 
   // First byte of the data is the number of commands.
   for (int i = *(data++); i > 0; i--) {
@@ -243,6 +250,7 @@ void Display::SendInitialisationSequence(const uint8_t* data) {
     }
   }
 
+  gpio_.SdMuxEnable(true);
   spi_device_release_bus(handle_);
 }
 
@@ -250,24 +258,14 @@ IRAM_ATTR
 void Display::SendCommandWithData(uint8_t command,
                                   const uint8_t* data,
                                   size_t length) {
-  SendCmd(&command, 1);
-  SendData(data, length);
-}
-
-IRAM_ATTR
-void Display::SendCmd(const uint8_t* data, size_t length) {
-  SendTransaction(COMMAND, data, length);
-}
-
-IRAM_ATTR
-void Display::SendData(const uint8_t* data, size_t length) {
+  SendTransaction(COMMAND, &command, 1);
   SendTransaction(DATA, data, length);
 }
 
 IRAM_ATTR
 void Display::SendTransaction(TransactionType type,
-                                        const uint8_t* data,
-                                        size_t length) {
+                              const uint8_t* data,
+                              size_t length) {
   // TODO(jacqueline): What's sending this?
   if (length == 0) {
     return;
@@ -306,6 +304,7 @@ void Display::OnLvglFlush(const lv_area_t* area, uint8_t* color_map) {
   lv_draw_sw_rgb565_swap(color_map, size);
 
   spi_device_acquire_bus(handle_, portMAX_DELAY);
+  gpio_.SdMuxEnable(false);
 
   // First we need to specify the rectangle of the display we're writing into.
   uint16_t data[2] = {0, 0};
@@ -324,6 +323,7 @@ void Display::OnLvglFlush(const lv_area_t* area, uint8_t* color_map) {
   SendCommandWithData(displays::ST77XX_RAMWR,
                       reinterpret_cast<uint8_t*>(color_map), size * 2);
 
+  gpio_.SdMuxEnable(true);
   spi_device_release_bus(handle_);
 
   if (!first_flush_finished_ && lv_disp_flush_is_last(display_)) {

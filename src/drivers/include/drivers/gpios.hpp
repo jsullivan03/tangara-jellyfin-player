@@ -61,7 +61,7 @@ class IGpios {
   };
 
   /* Nicer value names for use with kSdMuxSwitch. */
-  enum SdController {
+  enum SdTarget {
     SD_MUX_ESP = 0,
     SD_MUX_SAMD = 1,
   };
@@ -80,6 +80,15 @@ class IGpios {
   virtual auto Get(Pin) const -> bool = 0;
 
   virtual auto IsLocked() const -> bool = 0;
+
+  /*
+   * Enables or disable the SD mux. When the mux is disabled, the SD card is
+   * isolated from the rest of the SPI bus.
+   */
+  virtual auto SdMuxEnable(bool en) -> void = 0;
+
+  /* Switches whether the SD card is connected to the ESP32 or SAMD21. */
+  virtual auto SdMuxTarget(SdTarget target) -> void = 0;
 };
 
 class Gpios : public IGpios {
@@ -95,6 +104,8 @@ class Gpios : public IGpios {
    * is made.
    */
   auto WriteSync(Pin, bool) -> bool override;
+
+  auto ShouldRead() -> bool;
 
   virtual auto WriteBuffered(Pin, bool) -> void;
 
@@ -114,6 +125,11 @@ class Gpios : public IGpios {
    */
   auto Read(void) -> bool;
 
+  auto SdMuxEnable(bool en) -> void override;
+  auto SdMuxTarget(SdTarget target) -> void override;
+
+  auto SdMuxTarget() -> SdTarget;
+
   // Not copyable or movable. There should usually only ever be once instance
   // of this class, and that instance will likely have a static lifetime.
   Gpios(const Gpios&) = delete;
@@ -125,6 +141,10 @@ class Gpios : public IGpios {
   std::atomic<uint16_t> ports_;
   std::atomic<uint16_t> inputs_;
   const bool invert_lock_switch_;
+  bool has_written_;
+
+  std::mutex mux_mutex_;
+  bool mux_en_;
 };
 
 }  // namespace drivers

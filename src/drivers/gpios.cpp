@@ -95,6 +95,14 @@ auto Gpios::WriteSync(Pin pin, bool value) -> bool {
   return Flush();
 }
 
+auto Gpios::ShouldRead() -> bool {
+  if (!gpio_get_level(GPIO_NUM_34) || has_written_) {
+    has_written_ = false;
+    return true;
+  }
+  return false;
+}
+
 auto Gpios::Flush() -> bool {
   std::pair<uint8_t, uint8_t> ports_ab = unpack(ports_);
 
@@ -104,6 +112,7 @@ auto Gpios::Flush() -> bool {
       .write_ack(ports_ab.first, ports_ab.second)
       .stop();
 
+  has_written_ = true;
   return transaction.Execute() == ESP_OK;
 }
 
@@ -136,6 +145,34 @@ auto Gpios::Read() -> bool {
   }
   inputs_ = pack(input_a, input_b);
   return true;
+}
+
+auto Gpios::SdMuxEnable(bool en) -> void {
+  std::unique_lock<std::mutex> lock(mux_mutex_);
+  mux_en_ = en;
+  if (SdMuxTarget() == SD_MUX_ESP) {
+    WriteSync(Pin::kSdMuxDisable, !en);
+  }
+  // Don't touch the mux if it's pointed at the SAMD21. We'll write the new
+  // value when the mux points back at us again.
+}
+
+auto Gpios::SdMuxTarget(SdTarget target) -> void {
+  std::unique_lock<std::mutex> lock(mux_mutex_);
+  WriteBuffered(Pin::kSdMuxSwitch, target);
+  if (target == SD_MUX_ESP) {
+    WriteBuffered(Pin::kSdMuxDisable, !mux_en_);
+  } else {
+    // Mux is always enabled when it's pointing at the SAMD21, since it's the
+    // only thing on that SPI bus.
+    WriteBuffered(Pin::kSdMuxDisable, 0);
+  }
+  Flush();
+}
+
+auto Gpios::SdMuxTarget() -> SdTarget {
+  return static_cast<SdTarget>(
+      (ports_ & (1 << static_cast<int>(Pin::kSdMuxSwitch))) > 0);
 }
 
 }  // namespace drivers

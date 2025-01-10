@@ -35,8 +35,8 @@ const char* kStoragePath = "/sd";
 
 auto SdStorage::Create(IGpios& gpio) -> cpp::result<SdStorage*, Error> {
   gpio.WriteSync(IGpios::Pin::kSdPowerEnable, 1);
-  gpio.WriteSync(IGpios::Pin::kSdMuxSwitch, IGpios::SD_MUX_ESP);
-  gpio.WriteSync(IGpios::Pin::kSdMuxDisable, 0);
+  gpio.SdMuxTarget(IGpios::SD_MUX_ESP);
+  gpio.SdMuxEnable(true);
 
   sdspi_dev_handle_t handle;
   FATFS* fs = nullptr;
@@ -119,7 +119,7 @@ SdStorage::~SdStorage() {
   sdspi_host_remove_device(this->handle_);
   sdspi_host_deinit();
 
-  gpio_.WriteSync(IGpios::Pin::kSdMuxDisable, 1);
+  gpio_.SdMuxEnable(false);
   gpio_.WriteSync(IGpios::Pin::kSdPowerEnable, 0);
 }
 

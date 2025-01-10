@@ -65,8 +65,6 @@ class Display {
   void SendInitialisationSequence(const uint8_t* data);
 
   void SendCommandWithData(uint8_t command, const uint8_t* data, size_t length);
-  void SendCmd(const uint8_t* data, size_t length);
-  void SendData(const uint8_t* data, size_t length);
 
   void SendTransaction(TransactionType type,
                        const uint8_t* data,

@@ -121,7 +121,7 @@ auto Booting::exit() -> void {
   });
 
   TimerHandle_t timer = xTimerCreate("INTERRUPTS", kInterruptCheckPeriod, true,
-                                     NULL, check_interrupts_cb);
+                                     sServices.get(), check_interrupts_cb);
   xTimerStart(timer, portMAX_DELAY);
 }
 

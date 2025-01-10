@@ -99,9 +99,7 @@ void Running::react(const SamdUsbMscChanged& ev) {
     // Set up the SD card for usage by the samd21.
     auto& gpios = sServices->gpios();
     gpios.WriteSync(drivers::IGpios::Pin::kSdPowerEnable, 1);
-    gpios.WriteSync(drivers::IGpios::Pin::kSdMuxSwitch,
-                    drivers::IGpios::SD_MUX_SAMD);
-    gpios.WriteSync(drivers::IGpios::Pin::kSdMuxDisable, 0);
+    gpios.SdMuxTarget(drivers::IGpios::SD_MUX_SAMD);
 
     // Off you go!
     sServices->samd().UsbMassStorage(true);
@@ -113,7 +111,7 @@ void Running::react(const SamdUsbMscChanged& ev) {
 
     auto& gpios = sServices->gpios();
     // No more writing, please!
-    gpios.WriteSync(drivers::IGpios::Pin::kSdMuxDisable, 1);
+    gpios.SdMuxTarget(drivers::IGpios::SD_MUX_ESP);
     vTaskDelay(pdMS_TO_TICKS(100));
 
     // Reboot the SD card so that it comes up in a consistent state.
