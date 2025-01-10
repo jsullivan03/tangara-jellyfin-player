@@ -805,24 +805,42 @@ settings.Root = widgets.MenuScreen:new {
       flex_grow = 1,
     }
 
+    -- Creates a section header, not selectable.
+    -- The return value can be passed into submenu() if scrolling behavior
+    -- needs special treatment.
     local function section(name)
       local elem = list:Label {
         text = name,
         pad_left = 4,
       }
       theme.set_subject(elem, "settings_title")
+      return elem
     end
 
-    local function submenu(name, class)
+    -- Creates a selectable menu item that opens the screen given by 'class'.
+    -- If 'section_label' is given, will scroll that section header label into
+    -- view when this item is selected; this helps with the very top section,
+    -- which normally has nothing scrolling it into view.
+    local function submenu(name, class, section_label)
       local item = list:add_btn(nil, name)
       item:onClicked(function()
         backstack.push(class:new())
       end)
+      if section_label then
+         -- Make sure item is visible, and, ideally, the section header.
+         item:onevent(lvgl.EVENT.FOCUSED, function()
+           -- Scroll to section in case it's off the top of the screen.
+           -- (0 for no animation; doesn't work if both scroll with animation.)
+           section_label:scroll_to_view(0);
+           -- Scroll to item in case it's off the bottom of the screen.
+           item:scroll_to_view(1);
+         end)
+      end
       item:add_style(styles.list_item)
     end
 
-    section("Audio")
-    submenu("Bluetooth", settings.BluetoothSettings)
+    local audio_section = section("Audio")
+    submenu("Bluetooth", settings.BluetoothSettings, audio_section)
     submenu("Headphones", settings.HeadphonesSettings)
 
     section("Interface")
