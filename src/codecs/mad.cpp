@@ -107,10 +107,10 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       .sample_rate_hz = header.samplerate,
   };
 
-  auto vbr_info = GetVbrInfo(header);
+  auto mp3_info = GetMp3Info(header);
   uint64_t cbr_length = 0;
-  if (vbr_info) {
-    output.total_samples = vbr_info->length * channels;
+  if (mp3_info) {
+    output.total_samples = mp3_info->length * channels;
   } else if (input->Size() && header.bitrate > 0) {
     cbr_length = (input->Size().value() * 8) / header.bitrate;
     output.total_samples = cbr_length * output.sample_rate_hz * channels;
@@ -130,22 +130,22 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
     input->SeekTo(skip_bytes, IStream::SeekFrom::kCurrentPosition);
     // Reset the offset so the next part will seek to the next second
     offset = 1;
-  } else if (offset > 1 && vbr_info && vbr_info->toc && vbr_info->bytes) {
+  } else if (offset > 1 && mp3_info && mp3_info->toc && mp3_info->bytes) {
     // VBR seeking
     double percent =
-        ((offset - 1) * output.sample_rate_hz) / (double)vbr_info->length * 100;
+        ((offset - 1) * output.sample_rate_hz) / (double)mp3_info->length * 100;
     percent = std::clamp(percent, 0., 100.);
     int index = (int)percent;
     if (index > 99)
       index = 99;
-    uint8_t first_val = (*vbr_info->toc)[index];
+    uint8_t first_val = (*mp3_info->toc)[index];
     uint8_t second_val = 255;
     if (index < 99) {
-      second_val = (*vbr_info->toc)[index + 1];
+      second_val = (*mp3_info->toc)[index + 1];
     }
     double interp = first_val + (second_val - first_val) * (percent - index);
     uint32_t bytes_to_skip =
-        (uint32_t)((1.0 / 255.0) * interp * vbr_info->bytes.value());
+        (uint32_t)((1.0 / 255.0) * interp * mp3_info->bytes.value());
     input->SeekTo(bytes_to_skip, IStream::SeekFrom::kCurrentPosition);
     offset = 1;
   }
@@ -304,8 +304,8 @@ auto MadMp3Decoder::SkipID3Tags(IStream& stream) -> std::optional<uint32_t> {
  * Implementation taken from SDL_mixer and modified. Original is
  * zlib-licensed, copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
  */
-auto MadMp3Decoder::GetVbrInfo(const mad_header& header)
-    -> std::optional<VbrInfo> {
+auto MadMp3Decoder::GetMp3Info(const mad_header& header)
+    -> std::optional<Mp3Info> {
   if (!stream_->this_frame || !stream_->next_frame ||
       stream_->next_frame <= stream_->this_frame ||
       (stream_->next_frame - stream_->this_frame) < 48) {
@@ -383,7 +383,7 @@ auto MadMp3Decoder::GetVbrInfo(const mad_header& header)
     }
   }
 
-  return VbrInfo{
+  return Mp3Info{
       .length = (frames_count * samples_per_frame),
       .bytes = bytes,
       .toc = toc,

@@ -38,13 +38,13 @@ class MadMp3Decoder : public ICodec {
  private:
   auto SkipID3Tags(IStream& stream) -> std::optional<uint32_t>;
 
-  struct VbrInfo {
+  struct Mp3Info {
     uint32_t length;
     std::optional<uint32_t> bytes;
     std::optional<std::span<const unsigned char, 100>> toc;
   };
 
-  auto GetVbrInfo(const mad_header& header) -> std::optional<VbrInfo>;
+  auto GetMp3Info(const mad_header& header) -> std::optional<Mp3Info>;
   
   auto GetBytesUsed() -> std::size_t;
 
