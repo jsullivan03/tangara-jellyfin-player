@@ -367,20 +367,26 @@ auto MadMp3Decoder::GetMp3Info(const mad_header& header)
     uint32_t flags = ((uint32_t)flags_raw[0] << 24) +
                      ((uint32_t)flags_raw[1] << 16) +
                      ((uint32_t)flags_raw[2] << 8) + ((uint32_t)flags_raw[3]);
+    auto toc_offset = 8;
+    auto bytes_offset = 8;
+    if (flags & 1) {
+      // Frames field is present
+      toc_offset += 4;
+      bytes_offset += 4;
+    }
+    if (flags & 2) {
+      // Bytes field is present
+      toc_offset += 4;
+    }
     if (flags & 4) {
       // TOC flag is set
-      auto toc_offset = 8;
-      if (flags & 1) {
-        toc_offset += 4;
-      }
       if (flags & 2) {
         // Bytes field
-        unsigned char const* bytes_raw = stream_->this_frame + xing_offset + 12;
+        unsigned char const* bytes_raw = stream_->this_frame + xing_offset + bytes_offset;
         uint32_t num_bytes =
             ((uint32_t)bytes_raw[0] << 24) + ((uint32_t)bytes_raw[1] << 16) +
             ((uint32_t)bytes_raw[2] << 8) + ((uint32_t)bytes_raw[3]);
         bytes.emplace(num_bytes);
-        toc_offset += 4;
       }
       // Read the table of contents in
       toc.emplace((stream_->this_frame + xing_offset + toc_offset), 100);
