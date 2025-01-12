@@ -336,15 +336,19 @@ auto MadMp3Decoder::GetMp3Info(const mad_header& header)
 
   unsigned char const* frames_count_raw;
   uint32_t frames_count = 0;
-  if (std::memcmp(stream_->this_frame + xing_offset, "Xing", 4) == 0 ||
-      std::memcmp(stream_->this_frame + xing_offset, "Info", 4) == 0) {
+
+  bool xing_vbr = std::memcmp(stream_->this_frame + xing_offset, "Xing", 4) == 0;
+  bool xing_cbr = std::memcmp(stream_->this_frame + xing_offset, "Info", 4) == 0;
+  bool vbri = std::memcmp(stream_->this_frame + xing_offset, "VBRI", 4) == 0;
+
+  if ( xing_vbr || xing_cbr) {
     /* Xing header to get the count of frames for VBR */
     frames_count_raw = stream_->this_frame + xing_offset + 8;
     frames_count = ((uint32_t)frames_count_raw[0] << 24) +
                    ((uint32_t)frames_count_raw[1] << 16) +
                    ((uint32_t)frames_count_raw[2] << 8) +
                    ((uint32_t)frames_count_raw[3]);
-  } else if (std::memcmp(stream_->this_frame + xing_offset, "VBRI", 4) == 0) {
+  } else if (vbri) {
     /* VBRI header to get the count of frames for VBR */
     frames_count_raw = stream_->this_frame + xing_offset + 14;
     frames_count = ((uint32_t)frames_count_raw[0] << 24) +
@@ -358,7 +362,7 @@ auto MadMp3Decoder::GetMp3Info(const mad_header& header)
   // Check TOC and bytes in the bitstream (used for VBR seeking)
   std::optional<std::span<const unsigned char, 100>> toc;
   std::optional<uint32_t> bytes;
-  if (std::memcmp(stream_->this_frame + xing_offset, "Xing", 4) == 0) {
+  if (xing_vbr || xing_cbr) {
     unsigned char const* flags_raw = stream_->this_frame + xing_offset + 4;
     uint32_t flags = ((uint32_t)flags_raw[0] << 24) +
                      ((uint32_t)flags_raw[1] << 16) +
