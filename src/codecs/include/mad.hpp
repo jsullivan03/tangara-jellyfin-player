@@ -39,6 +39,7 @@ class MadMp3Decoder : public ICodec {
   auto SkipID3Tags(IStream& stream) -> std::optional<uint32_t>;
 
   struct Mp3Info {
+    uint16_t starting_sample;
     uint32_t length;
     std::optional<uint32_t> bytes;
     std::optional<std::span<const unsigned char, 100>> toc;

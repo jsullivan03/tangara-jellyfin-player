@@ -360,26 +360,34 @@ auto MadMp3Decoder::GetMp3Info(const mad_header& header)
   }
 
   // Check TOC and bytes in the bitstream (used for VBR seeking)
+  // Also get gapless playback info: encoder delay and padding
   std::optional<std::span<const unsigned char, 100>> toc;
   std::optional<uint32_t> bytes;
+  auto lame_offset = xing_offset;
+  uint16_t starting_sample = 0;
+  uint16_t encoder_padding = 0;
   if (xing_vbr || xing_cbr) {
     unsigned char const* flags_raw = stream_->this_frame + xing_offset + 4;
     uint32_t flags = ((uint32_t)flags_raw[0] << 24) +
                      ((uint32_t)flags_raw[1] << 16) +
                      ((uint32_t)flags_raw[2] << 8) + ((uint32_t)flags_raw[3]);
+    lame_offset += 8;
     auto toc_offset = 8;
     auto bytes_offset = 8;
     if (flags & 1) {
       // Frames field is present
+      lame_offset += 4;
       toc_offset += 4;
       bytes_offset += 4;
     }
     if (flags & 2) {
       // Bytes field is present
+      lame_offset += 4;
       toc_offset += 4;
     }
     if (flags & 4) {
       // TOC flag is set
+      lame_offset += 100;
       if (flags & 2) {
         // Bytes field
         unsigned char const* bytes_raw = stream_->this_frame + xing_offset + bytes_offset;
@@ -391,10 +399,24 @@ auto MadMp3Decoder::GetMp3Info(const mad_header& header)
       // Read the table of contents in
       toc.emplace((stream_->this_frame + xing_offset + toc_offset), 100);
     }
+    if (flags & 8) {
+      lame_offset += 4;
+    }
+
+    if (std::memcmp(stream_->this_frame + lame_offset, "LAME", 4) == 0) {
+        unsigned char const* delay_addr = stream_->this_frame + lame_offset + 21;
+        uint32_t delay_raw =
+            ((uint32_t)delay_addr[0] << 16) +
+            ((uint32_t)delay_addr[1] << 8) +
+            ((uint32_t)delay_addr[2]);
+        starting_sample = (delay_raw >> 12) & 0xFFF;
+        encoder_padding = delay_raw & 0xFFF;
+    }
   }
 
   return Mp3Info{
-      .length = (frames_count * samples_per_frame),
+      .starting_sample = starting_sample,
+      .length = (frames_count * samples_per_frame - starting_sample - encoder_padding),
       .bytes = bytes,
       .toc = toc,
   };
