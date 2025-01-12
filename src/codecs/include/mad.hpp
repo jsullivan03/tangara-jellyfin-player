@@ -56,7 +56,14 @@ class MadMp3Decoder : public ICodec {
   std::unique_ptr<mad_frame> frame_;
   std::unique_ptr<mad_synth> synth_;
 
-  int current_sample_;
+  // Count of samples processed in the current frame (channels combined)
+  int current_frame_sample_;
+  // Count of samples processed in the current stream (channels separate, i.e. usually x2)
+  int current_stream_sample_;
+  // How many samples in the current stream (channels separate) with encoder delay/padding removed
+  int total_samples_;
+  // Encoder delay, i.e. how many samples to skip at the start of the stream
+  int skip_samples_;
   bool is_eof_;
   bool is_eos_;
 };

@@ -37,7 +37,10 @@ MadMp3Decoder::MadMp3Decoder()
       synth_(reinterpret_cast<mad_synth*>(
           heap_caps_malloc(sizeof(mad_synth),
                            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT))),
-      current_sample_(-1),
+      current_frame_sample_(-1),
+      current_stream_sample_(0),
+      total_samples_(0),
+      skip_samples_(0),
       is_eof_(false),
       is_eos_(false) {
   mad_stream_init(stream_.get());
@@ -62,6 +65,8 @@ auto MadMp3Decoder::GetBytesUsed() -> std::size_t {
 auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
     -> cpp::result<OutputFormat, ICodec::Error> {
   input_ = input;
+
+  current_stream_sample_ = 0;
 
   auto id3size = SkipID3Tags(*input);
 
@@ -115,6 +120,7 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
     cbr_length = (input->Size().value() * 8) / header.bitrate;
     output.total_samples = cbr_length * output.sample_rate_hz * channels;
   }
+  total_samples_ = output.total_samples.value();
 
   // header.bitrate is only for CBR, but we've calculated total samples for VBR
   // and CBR, so we can use that to calculate sample size and therefore bitrate.
@@ -122,6 +128,11 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
     auto data_size = input->Size().value() - id3size.value();
     double sample_size = data_size * 8.0 / output.total_samples.value();
     output.bitrate_kbps = static_cast<uint32_t>(output.sample_rate_hz * channels * sample_size / 1024);
+  }
+
+  // For gapless MP3s, save samples to skip
+  if (mp3_info) {
+    skip_samples_ = mp3_info->starting_sample;
   }
 
   if (offset > 1 && cbr_length > 0) {
@@ -199,7 +210,7 @@ auto MadMp3Decoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
 
 auto MadMp3Decoder::DecodeTo(std::span<sample::Sample> output)
     -> cpp::result<OutputInfo, Error> {
-  if (current_sample_ < 0 && !is_eos_) {
+  if (current_frame_sample_ < 0 && !is_eos_) {
     if (!is_eof_) {
       is_eof_ = buffer_.Refill(input_.get());
       if (is_eof_) {
@@ -243,14 +254,21 @@ auto MadMp3Decoder::DecodeTo(std::span<sample::Sample> output)
       // We've successfully decoded a frame! Now synthesize samples to write
       // out.
       mad_synth_frame(synth_.get(), frame_.get());
-      current_sample_ = 0;
+      current_frame_sample_ = 0;
       return GetBytesUsed();
     });
   }
 
   size_t output_sample = 0;
-  if (current_sample_ >= 0) {
-    while (current_sample_ < synth_->pcm.length) {
+  if (current_frame_sample_ >= 0) {
+    // Skip any gap samples indicated by the headers
+    while (skip_samples_ > 0) {
+      skip_samples_--;
+      current_frame_sample_++;
+    }
+
+    // Process samples until we hit the end of the frame or stream
+    while (current_frame_sample_ < synth_->pcm.length && current_stream_sample_ <= total_samples_) {
       if (output_sample + synth_->pcm.channels >= output.size()) {
         // We can't fit the next full frame into the buffer.
         return OutputInfo{.samples_written = output_sample,
@@ -259,14 +277,18 @@ auto MadMp3Decoder::DecodeTo(std::span<sample::Sample> output)
 
       for (int channel = 0; channel < synth_->pcm.channels; channel++) {
         output[output_sample++] =
-            sample::FromMad(synth_->pcm.samples[channel][current_sample_]);
+            sample::FromMad(synth_->pcm.samples[channel][current_frame_sample_]);
       }
-      current_sample_++;
+      current_frame_sample_++;
+      current_stream_sample_ += synth_->pcm.channels;
+    }
+    if (current_stream_sample_ > total_samples_) {
+      is_eos_ = true;
     }
   }
 
   // We wrote everything! Reset, ready for the next frame.
-  current_sample_ = -1;
+  current_frame_sample_ = -1;
   return OutputInfo{.samples_written = output_sample,
                     .is_stream_finished = is_eos_};
 }
