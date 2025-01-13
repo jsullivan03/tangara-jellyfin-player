@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+--
+-- SPDX-License-Identifier: GPL-3.0-only
+
 --- @meta
 
 --- Module for interacting with playback volume. The Bluetooth and wired outputs store their current volume separately; this API only allows interacting with the volume of the currently used output device.

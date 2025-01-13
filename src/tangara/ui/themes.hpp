@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 ailurux <ailuruxx@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 #pragma once
 
 #include <map>

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 # To install this tool:
 # npm i lv_font_conv -g
 fusion_12() {

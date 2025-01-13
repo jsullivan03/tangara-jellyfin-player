@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+--
+-- SPDX-License-Identifier: GPL-3.0-only
+
 --- @meta
 
 --- A distinct full-screen UI. Each screen has an associated LVGL UI tree and

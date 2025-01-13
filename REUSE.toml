@@ -1,0 +1,206 @@
+version = 1
+SPDX-PackageName = "Tangara"
+SPDX-PackageSupplier = "jacqueline <me@jacqueline.id.au>"
+SPDX-PackageDownloadLocation = "cooltech.zone"
+
+# Project files that can't have license comments inside
+
+[[annotations]]
+path = [
+   ".env.ps1",
+   ".luarc.json",
+   "BUILDING.md",
+   "README.md",
+   "TESTING.md",
+   "dependencies.lock",
+   "partitions.csv",
+   "sdkconfig.common",
+   "tools/collate/Generic.LC_COLLATE",
+   "tools/collate/README.md",
+   "tools/luals-gendoc/README.md",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2023-2024 jacqueline <me@jacqueline.id.au>"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "lua/img/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2023-2024 ailurux"
+SPDX-License-Identifier = "CC0-1.0"
+
+# Dependencies
+
+[[annotations]]
+path = "lib/bt/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2015-2023 Espressif Systems (Shanghai) CO LTD"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "lib/catch2/include/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2022 Two Blue Cubes Ltd."
+SPDX-License-Identifier = "BSL-1.0"
+
+[[annotations]]
+path = "lib/cbor/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2017 Intel Corporation"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/console/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2016-2021 Espressif Systems (Shanghai) CO LTD"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "lib/drflac/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2023 David Reid"
+SPDX-License-Identifier = "Unlicense"
+
+[[annotations]]
+path = "lib/esp-idf-lua/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["1994-2028 Lua.org, PUC-Rio", "2019 Ruslan V. Uss"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/fatfs/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2021-2022 Espressif Systems (Shanghai) CO LTD"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "lib/komihash/include/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2021-2022 Aleksey Vaneev"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/leveldb/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2011 The LevelDB Authors"
+SPDX-License-Identifier = "LicenseRef-LevelDB"
+
+[[annotations]]
+path = "lib/libcppbor/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2019 Google LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "lib/libmad/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2000-2004 Underbit Technologies, Inc."
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "lib/libtags/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2013-2020 Sigrid Solveig Haflínudóttir"
+SPDX-License-Identifier = "LicenseRef-libtags"
+
+[[annotations]]
+path = "lib/lua-linenoise/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2011-2015 Rob Hoelz"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/lua-repl/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2011-2015 Rob Hoelz"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/lua-term/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2009 Rob Hoelz"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/luavgl/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2022 Neo Xu"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/lvgl/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2021 LVGL Kft"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/millershuffle/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2022 Ronald R. Miller"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "lib/ogg/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2002 \tXiph.org Foundation"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "lib/opus/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2001-2011 Xiph.Org, Skype Limited, Octasic,", "Jean-Marc Valin, Timothy B. Terriberry,", "CSIRO, Gregory Maxwell, Mark Borgerding,", "Erik de Castro Lopo"]
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "lib/opusfile/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "1994-2013 Xiph.Org Foundation and contributors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "lib/result/include/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2017-2021 Matthew Rodusek"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/speexdsp/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2002-2008 \tXiph.org Foundation", "2002-2008 \tJean-Marc Valin", "2005-2007\tAnalog Devices Inc.", "2005-2008\tCommonwealth Scientific and Industrial Research Organisation (CSIRO)", "1993, 2002, 2006 David Rowe", "2003 \t\tEpicGames", "1992-1994\tJutta Degener, Carsten Bormann"]
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "lib/tinyfsm/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2012-2022 Axel Burri"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "lib/tremor/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2002, Xiph.org Foundation"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "lua/fonts/fusion*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2022 TakWolf"
+SPDX-License-Identifier = "OFL-1.1-RFN"
+
+[[annotations]]
+path = ["src/locale/priv_include/weight.h", "src/locale/strxfrm_l.c"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "1996-2018 Free Software Foundation, Inc."
+SPDX-License-Identifier = "LGPL-2.1-or-later"
+
+[[annotations]]
+path = "tools/fonts/fusion/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2022 TakWolf"
+SPDX-License-Identifier = "OFL-1.1-RFN"
+
+[[annotations]]
+path = "tools/luals-gendoc/json.lua"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2020 rxi"
+SPDX-License-Identifier = "MIT"

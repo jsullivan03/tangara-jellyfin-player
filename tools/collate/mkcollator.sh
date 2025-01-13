@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 set -eu
 
 if [ -z "${2:-}" ]; then
