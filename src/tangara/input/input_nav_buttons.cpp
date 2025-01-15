@@ -17,11 +17,20 @@ namespace input {
 NavButtons::NavButtons(drivers::IGpios& gpios)
     : gpios_(gpios),
       up_("upper", {}, actions::scrollUp(), actions::select(), {}),
-      down_("lower", {}, actions::scrollDown(), actions::select(), {}) {}
+      down_("lower", {}, actions::scrollDown(), actions::select(), {}),
+      locked_(false) {}
 
 auto NavButtons::read(lv_indev_data_t* data) -> void {
-  up_.update(!gpios_.Get(drivers::IGpios::Pin::kKeyUp), data);
-  down_.update(!gpios_.Get(drivers::IGpios::Pin::kKeyDown), data);
+  bool up = !gpios_.Get(drivers::IGpios::Pin::kKeyUp);
+  bool down = !gpios_.Get(drivers::IGpios::Pin::kKeyDown);
+
+  if ((up && down) || locked_) {
+    up = false;
+    down = false;
+  }
+
+  up_.update(up, data);
+  down_.update(down, data);
 }
 
 auto NavButtons::name() -> std::string {
@@ -31,6 +40,14 @@ auto NavButtons::name() -> std::string {
 auto NavButtons::triggers()
     -> std::vector<std::reference_wrapper<TriggerHooks>> {
   return {up_, down_};
+}
+
+auto NavButtons::onLock() -> void {
+  locked_ = true;
+}
+
+auto NavButtons::onUnlock() -> void {
+  locked_ = false;
 }
 
 }  // namespace input

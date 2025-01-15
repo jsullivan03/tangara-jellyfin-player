@@ -25,9 +25,14 @@ TouchDPad::TouchDPad(drivers::TouchWheel& wheel)
       up_("up", actions::scrollUp(), {}, {}, actions::scrollUp()),
       right_("right", actions::select(), {}, {}, {}),
       down_("down", actions::scrollDown(), {}, {}, actions::scrollDown()),
-      left_("left", actions::goBack(), {}, {}, {}) {}
+      left_("left", actions::goBack(), {}, {}, {}),
+      locked_(false) {}
 
 auto TouchDPad::read(lv_indev_data_t* data) -> void {
+  if (locked_) {
+    return;
+  }
+
   wheel_.Update();
   auto wheel_data = wheel_.GetTouchWheelData();
 
@@ -58,6 +63,17 @@ auto TouchDPad::name() -> std::string {
 auto TouchDPad::triggers()
     -> std::vector<std::reference_wrapper<TriggerHooks>> {
   return {centre_, up_, right_, down_, left_};
+}
+
+auto TouchDPad::onLock() -> void {
+  wheel_.LowPowerMode(true);
+  locked_ = true;
+}
+
+auto TouchDPad::onUnlock() -> void {
+  wheel_.LowPowerMode(false);
+  wheel_.Recalibrate();
+  locked_ = false;
 }
 
 }  // namespace input

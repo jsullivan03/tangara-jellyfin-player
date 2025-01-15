@@ -27,11 +27,16 @@ class VolumeButtons : public IInputDevice {
   auto name() -> std::string override;
   auto triggers() -> std::vector<std::reference_wrapper<TriggerHooks>> override;
 
+  auto onLock() -> void override;
+  auto onUnlock() -> void override;
+
  private:
   drivers::IGpios& gpios_;
 
   TriggerHooks up_;
   TriggerHooks down_;
+
+  bool locked_;
 };
 
 }  // namespace input
