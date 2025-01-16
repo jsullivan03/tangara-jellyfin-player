@@ -215,6 +215,8 @@ auto LvglInputDriver::pushHooks(lua_State* L) -> int {
   for (auto& dev : inputs_) {
     auto triggers = dev->triggers();
     if (triggers.empty()) {
+      // Some devices, e.g. hard reset, have no triggers. Don't include them
+      // in the hooks table.
       continue;
     }
 
