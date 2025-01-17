@@ -11,10 +11,10 @@
 #include "indev/lv_indev.h"
 
 #include "drivers/haptics.hpp"
+#include "drivers/touchwheel.hpp"
 #include "input/input_device.hpp"
 #include "input/input_hook.hpp"
 #include "input/input_trigger.hpp"
-#include "drivers/touchwheel.hpp"
 
 namespace input {
 
@@ -27,6 +27,9 @@ class TouchDPad : public IInputDevice {
   auto name() -> std::string override;
   auto triggers() -> std::vector<std::reference_wrapper<TriggerHooks>> override;
 
+  auto onLock() -> void override;
+  auto onUnlock() -> void override;
+
  private:
   drivers::TouchWheel& wheel_;
 
@@ -35,6 +38,8 @@ class TouchDPad : public IInputDevice {
   TriggerHooks right_;
   TriggerHooks down_;
   TriggerHooks left_;
+
+  bool locked_;
 };
 
 }  // namespace input

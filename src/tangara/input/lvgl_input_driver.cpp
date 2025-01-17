@@ -114,11 +114,6 @@ auto LvglInputDriver::setGroup(lv_group_t* g) -> void {
 }
 
 auto LvglInputDriver::read(lv_indev_data_t* data) -> void {
-  // TODO: we should pass lock state on to the individual devices, since they
-  // may wish to either ignore the lock state, or power down until unlock.
-  if (is_locked_) {
-    return;
-  }
   for (auto&& device : inputs_) {
     device->read(data);
   }
@@ -218,10 +213,17 @@ auto LvglInputDriver::pushHooks(lua_State* L) -> int {
   lua_newtable(L);
 
   for (auto& dev : inputs_) {
+    auto triggers = dev->triggers();
+    if (triggers.empty()) {
+      // Some devices, e.g. hard reset, have no triggers. Don't include them
+      // in the hooks table.
+      continue;
+    }
+
     lua_pushlstring(L, dev->name().data(), dev->name().size());
     lua_newtable(L);
 
-    for (auto& trigger : dev->triggers()) {
+    for (auto& trigger : triggers) {
       lua_pushlstring(L, trigger.get().name().data(),
                       trigger.get().name().size());
       LuaTrigger** lua_obj = reinterpret_cast<LuaTrigger**>(

@@ -48,12 +48,17 @@ TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
             actions::scrollToBottom(),
             actions::scrollToBottom()),
       left_("left", {}, {}, actions::goBack(), {}),
+      locked_(false),
       is_scrolling_(false),
       threshold_(calculateThreshold(nvs.ScrollSensitivity())),
       is_first_read_(true),
       last_angle_(0) {}
 
 auto TouchWheel::read(lv_indev_data_t* data) -> void {
+  if (locked_) {
+    return;
+  }
+
   wheel_.Update();
   auto wheel_data = wheel_.GetTouchWheelData();
   int8_t ticks = calculateTicks(wheel_data);
@@ -110,11 +115,13 @@ auto TouchWheel::triggers()
 
 auto TouchWheel::onLock() -> void {
   wheel_.LowPowerMode(true);
+  locked_ = true;
 }
 
 auto TouchWheel::onUnlock() -> void {
   wheel_.LowPowerMode(false);
   wheel_.Recalibrate();
+  locked_ = false;
 }
 
 auto TouchWheel::sensitivity() -> lua::Property& {

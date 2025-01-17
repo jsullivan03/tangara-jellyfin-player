@@ -11,6 +11,7 @@
 #include "input/feedback_haptics.hpp"
 #include "input/feedback_tts.hpp"
 #include "input/input_device.hpp"
+#include "input/input_hard_reset.hpp"
 #include "input/input_nav_buttons.hpp"
 #include "input/input_touch_dpad.hpp"
 #include "input/input_touch_wheel.hpp"
@@ -48,6 +49,7 @@ auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
       }
       break;
   }
+  ret.push_back(std::make_shared<HardReset>(services_->gpios()));
   return ret;
 }
 

@@ -50,6 +50,7 @@ class TouchWheel : public IInputDevice {
   TriggerHooks down_;
   TriggerHooks left_;
 
+  bool locked_;
   bool is_scrolling_;
   uint8_t threshold_;
   bool is_first_read_;
