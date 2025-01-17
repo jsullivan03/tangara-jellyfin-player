@@ -131,8 +131,23 @@ return screen:new {
 
     self.bindings = self.bindings + {
       playback.track:bind(function(track)
+        if not track then
+          artist_btn:add_flag(lvgl.FLAG.HIDDEN)
+          album_btn:add_flag(lvgl.FLAG.HIDDEN)
+          return
+        end
         current_artist = track.artist
+        if not current_artist then
+          artist_btn:add_flag(lvgl.FLAG.HIDDEN)
+        else
+          artist_btn:clear_flag(lvgl.FLAG.HIDDEN)
+        end
         current_album = track.album
+        if not current_album then
+          album_btn:add_flag(lvgl.FLAG.HIDDEN)
+        else
+          album_btn:clear_flag(lvgl.FLAG.HIDDEN)
+        end
         album_artist = track.album_artist
       end),
     }
