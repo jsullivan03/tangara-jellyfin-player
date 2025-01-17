@@ -406,6 +406,31 @@ static auto lua_database(lua_State* state) -> int {
   lua_rawset(state, -3);
 
 
+  lua_pushliteral(state, "IndexTypes");
+  lua_newtable(state);
+  lua_pushliteral(state, "ALBUMS_BY_ARTIST");
+  lua_pushinteger(state, (int)database::kAlbumsByArtist.id);
+  lua_rawset(state, -3);
+  lua_pushliteral(state, "TRACKS_BY_GENRE");
+  lua_pushinteger(state, (int)database::kTracksByGenre.id);
+  lua_rawset(state, -3);
+  lua_pushliteral(state, "ALL_TRACKS");
+  lua_pushinteger(state, (int)database::kAllTracks.id);
+  lua_rawset(state, -3);
+  lua_pushliteral(state, "ALL_ALBUMS");
+  lua_pushinteger(state, (int)database::kAllAlbums.id);
+  lua_rawset(state, -3);
+  lua_pushliteral(state, "ALL_ARTISTS");
+  lua_pushinteger(state, (int)database::kAllArtists.id);
+  lua_rawset(state, -3);
+  lua_pushliteral(state, "PODCASTS");
+  lua_pushinteger(state, (int)database::kPodcasts.id);
+  lua_rawset(state, -3);
+  lua_pushliteral(state, "AUDIOBOOKS");
+  lua_pushinteger(state, (int)database::kAudiobooks.id);
+  lua_rawset(state, -3);
+  lua_rawset(state, -3);
+
   return 1;
 }
 

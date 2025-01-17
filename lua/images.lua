@@ -28,6 +28,7 @@ local img = {
   listened = lvgl.ImgData("//lua/img/listened.png"),
   unlistened = lvgl.ImgData("//lua/img/unlistened.png"),
   info = lvgl.ImgData("//lua/img/info.png"),
+  menu = lvgl.ImgData("//lua/img/menu.png"),
 }
 
 return img

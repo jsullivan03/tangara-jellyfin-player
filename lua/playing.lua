@@ -10,7 +10,7 @@ local playback = require("playback")
 local queue = require("queue")
 local screen = require("screen")
 local theme = require("theme")
-local track_info = require("track_info")
+local playing_menu = require("playing_menu")
 
 local img = require("images")
 
@@ -235,13 +235,13 @@ return screen:new {
     theme.set_subject(shuffle_btn, icon_enabled_class)
     local shuffle_desc = widgets.Description(shuffle_btn)
 
-    local info_btn = controls:Button {}
-    info_btn:onClicked(function()
-      backstack.push(track_info:new())
+    local menu_btn = controls:Button {}
+    menu_btn:onClicked(function()
+      backstack.push(playing_menu:new())
     end)
-    local info_img = info_btn:Image { src = img.info }
-    theme.set_subject(info_btn, icon_enabled_class)
-    local info_desc = widgets.Description(info_btn, "Track info")
+    local menu_img = menu_btn:Image { src = img.menu }
+    theme.set_subject(menu_btn, icon_enabled_class)
+    local menu_desc = widgets.Description(menu_btn, "Track info")
 
     controls:Object({ flex_grow = 1, h = 1 }) -- spacer
 
@@ -273,9 +273,15 @@ return screen:new {
       end),
       queue.ready:bind(function(ready)
         if not ready then
-          title:set { text = "Loading..." }
+          if queue.loading:get() then
+            title:set { text = "Loading..." }
+          else
+            title:set{text=""}
+          end
           album:set{text=""}
           artist:set{text=""}
+          cur_time:set { text = format_time(0) }
+          end_time:set { text = format_time(0) }
         end
       end),
       playback.track:bind(function(track)
