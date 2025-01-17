@@ -132,6 +132,7 @@ auto TrackQueue::playFromPosition(const std::string& filepath,
   {
     const std::unique_lock<std::shared_mutex> lock(mutex_);
     playlist_.append(filepath);
+    ready_ = true;
     updateShuffler(true);
   }
   notifyPlayFrom(position);
