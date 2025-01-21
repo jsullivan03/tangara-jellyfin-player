@@ -71,6 +71,10 @@ v2cb(Tagctx *ctx, char *k, char *v)
 	}else if(strcmp(k, "XXX") == 0){
 		k = v;
 		v += strlen(v) + 1;
+		// Strip leading UTF-8 BOM if present
+		if (v[0] == 0xef && v[1] == 0xbb && v[2] == 0xbf) {
+			v += 3;
+		}
 		txtcb(ctx, Tunknown, k, v);
 	}else{
 		txtcb(ctx, Tunknown, k-1, v);
