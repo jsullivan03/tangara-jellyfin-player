@@ -83,11 +83,17 @@ auto tagToString(const TagValue& val) -> std::string {
           return std::to_string(arg);
         } else if constexpr (std::is_same_v<
                                  T, std::span<const std::pmr::string>>) {
-          std::ostringstream builder{};
+          std::stringstream stream{};
+          bool first = true;
           for (const auto& str : arg) {
-            builder << std::string{str.data(), str.size()} << ",";
+            if (first) {
+              first = false;
+            } else {
+              stream << ";";
+            }
+            stream << std::string{str.data(), str.size()};
           }
-          return builder.str();
+          return stream.str();
         }
       },
       val);
@@ -101,7 +107,6 @@ auto tagToString(const TagValue& val) -> std::string {
 auto parseDelimitedTags(const std::string_view s,
                         const char* delimiters,
                         std::pmr::vector<std::pmr::string>& out) -> void {
-  out.clear();
   std::string src = {s.data(), s.size()};
   char* token = std::strtok(src.data(), delimiters);
 
@@ -240,7 +245,6 @@ auto TrackTags::artist() const -> const std::optional<std::pmr::string>& {
 
 auto TrackTags::artist(std::string_view s) -> void {
   artist_ = s;
-  maybeSynthesizeAllArtists();
 }
 
 auto TrackTags::allArtists() const -> std::span<const std::pmr::string> {
@@ -249,7 +253,10 @@ auto TrackTags::allArtists() const -> std::span<const std::pmr::string> {
 
 auto TrackTags::allArtists(const std::string_view s) -> void {
   parseDelimitedTags(s, kAllArtistDelimiters, allArtists_);
-  maybeSynthesizeAllArtists();
+}
+
+auto TrackTags::singleAllArtists(const std::string_view s) -> void {
+  allArtists_.emplace_back(s);
 }
 
 auto TrackTags::album() const -> const std::optional<std::pmr::string>& {
@@ -323,17 +330,6 @@ auto TrackTags::Hash() const -> uint64_t {
   add(tagHash(get(Tag::kAlbumOrder)));
 
   return komihash_stream_final(&stream);
-}
-
-/*
- * Adds the current 'artist' tag to 'allArtists' if needed. Many tracks lack a
- * fine-grained 'ARTISTS=' tag (or equivalent), but pushing down this nuance to
- * consumers of TrackTags adds a lot of complexity.
- */
-auto TrackTags::maybeSynthesizeAllArtists() -> void {
-  if (allArtists_.empty() && artist_) {
-    allArtists_.push_back(*artist_);
-  }
 }
 
 auto database::TrackData::clone() const -> std::shared_ptr<TrackData> {

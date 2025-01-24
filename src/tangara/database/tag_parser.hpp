@@ -19,6 +19,8 @@ class ITagParser {
   virtual ~ITagParser() {}
   virtual auto ReadAndParseTags(std::string_view path)
       -> std::shared_ptr<TrackTags> = 0;
+
+  virtual auto ClearCaches() -> void {}
 };
 
 class TagParserImpl : public ITagParser {
@@ -26,6 +28,8 @@ class TagParserImpl : public ITagParser {
   TagParserImpl();
   auto ReadAndParseTags(std::string_view path)
       -> std::shared_ptr<TrackTags> override;
+
+  auto ClearCaches() -> void override;
 
  private:
   std::vector<std::unique_ptr<ITagParser>> parsers_;
@@ -58,14 +62,8 @@ class GenericTagParser : public ITagParser {
   // Supported file extensions for parsing tags, derived from the list of
   // supported audio formats here:
   // https://cooltech.zone/tangara/docs/music-library/
-  static constexpr std::string supported_exts[] = {
-    "flac",
-    "mp3",
-    "ogg",
-    "ogx",
-    "opus",
-    "wav"
-  };
+  static constexpr std::string supported_exts[] = {"flac", "mp3",  "ogg",
+                                                   "ogx",  "opus", "wav"};
 };
 
 }  // namespace database

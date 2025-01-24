@@ -7,6 +7,7 @@
 #include "database/database.hpp"
 
 #include <bits/ranges_algo.h>
+#include <stdint.h>
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -21,6 +22,7 @@
 
 #include "cppbor.h"
 #include "cppbor_parse.h"
+#include "debug.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "ff.h"
@@ -66,8 +68,8 @@ static std::atomic<bool> sIsDbOpen(false);
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-static auto CreateNewDatabase(leveldb::Options& options, locale::ICollator& col)
-    -> leveldb::DB* {
+static auto CreateNewDatabase(leveldb::Options& options,
+                              locale::ICollator& col) -> leveldb::DB* {
   Database::Destroy();
   leveldb::DB* db;
   options.create_if_missing = true;
@@ -348,6 +350,8 @@ auto Database::updateIndexes() -> void {
   }
   update_tracker_ = std::make_unique<UpdateTracker>();
 
+  tag_parser_.ClearCaches();
+
   leveldb::ReadOptions read_options;
   read_options.fill_cache = false;
   read_options.verify_checksums = true;
@@ -373,21 +377,24 @@ auto Database::updateIndexes() -> void {
         continue;
       }
 
+      std::shared_ptr<TrackTags> tags;
       FILINFO info;
       FRESULT res = f_stat(track->filepath.c_str(), &info);
-
-      std::pair<uint16_t, uint16_t> modified_at{0, 0};
       if (res == FR_OK) {
-        modified_at = {info.fdate, info.ftime};
-      }
-      if (modified_at == track->modified_at) {
-        continue;
-      } else {
-        track->modified_at = modified_at;
+        std::pair<uint16_t, uint16_t> modified_at{info.fdate, info.ftime};
+        if (modified_at == track->modified_at) {
+          continue;
+        } else {
+          // Will be written out later; we make sure we update the track's
+          // modification time and tags in the same batch so that interrupted
+          // reindexes don't cause a big mess.
+          track->modified_at = modified_at;
+        }
+
+        tags = tag_parser_.ReadAndParseTags(
+            {track->filepath.data(), track->filepath.size()});
       }
 
-      std::shared_ptr<TrackTags> tags = tag_parser_.ReadAndParseTags(
-          {track->filepath.data(), track->filepath.size()});
       if (!tags || tags->encoding() == Container::kUnsupported) {
         // We couldn't read the tags for this track. Either they were
         // malformed, or perhaps the file is missing. Either way, tombstone
@@ -411,30 +418,24 @@ auto Database::updateIndexes() -> void {
       // At this point, we know that the track still exists in its original
       // location. All that's left to do is update any metadata about it.
 
-      auto new_type = calculateMediaType(*tags, track->filepath);
+      // Remove the old index records first so has to avoid dangling records.
+      dbRemoveIndexes(track);
+
+      // Atomically correct the hash + create the new index records.
+      leveldb::WriteBatch batch;
+
       uint64_t new_hash = tags->Hash();
-      if (new_hash != track->tags_hash || new_type != track->type) {
-        // This track's tags have changed. Since the filepath is exactly the
-        // same, we assume this is a legitimate correction. Update the
-        // database.
-        ESP_LOGI(kTag, "updating hash (%llx -> %llx)", track->tags_hash,
-                 new_hash);
-
-        // Again, we remove the old index records first so has to avoid
-        // dangling references.
-        dbRemoveIndexes(track);
-
-        // Atomically correct the hash + create the new index records.
-        leveldb::WriteBatch batch;
+      if (track->tags_hash != new_hash) {
         track->tags_hash = new_hash;
-        dbIngestTagHashes(*tags, track->individual_tag_hashes, batch);
-
-        track->type = new_type;
-        dbCreateIndexesForTrack(*track, *tags, batch);
-        batch.Put(EncodeDataKey(track->id), EncodeDataValue(*track));
         batch.Put(EncodeHashKey(new_hash), EncodeHashValue(track->id));
-        db_->Write(leveldb::WriteOptions(), &batch);
       }
+
+      track->type = calculateMediaType(*tags, track->filepath);
+      batch.Put(EncodeDataKey(track->id), EncodeDataValue(*track));
+
+      dbIngestTagHashes(*tags, track->individual_tag_hashes, batch);
+      dbCreateIndexesForTrack(*track, *tags, batch);
+      db_->Write(leveldb::WriteOptions(), &batch);
     }
   }
 
@@ -445,8 +446,8 @@ auto Database::updateIndexes() -> void {
   track_finder_.launch("");
 };
 
-auto Database::processCandidateCallback(FILINFO& info, std::string_view path)
-    -> void {
+auto Database::processCandidateCallback(FILINFO& info,
+                                        std::string_view path) -> void {
   leveldb::ReadOptions read_options;
   read_options.fill_cache = true;
   read_options.verify_checksums = false;
@@ -530,9 +531,8 @@ static constexpr char kMusicMediaPath[] = "/Music/";
 static constexpr char kPodcastMediaPath[] = "/Podcasts/";
 static constexpr char kAudiobookMediaPath[] = "/Audiobooks/";
 
-auto Database::calculateMediaType(TrackTags& tags, std::string_view path)
-    -> MediaType {
-
+auto Database::calculateMediaType(TrackTags& tags,
+                                  std::string_view path) -> MediaType {
   auto equalsIgnoreCase = [&](char lhs, char rhs) {
     return std::tolower(lhs) == std::tolower(rhs);
   };
@@ -540,7 +540,8 @@ auto Database::calculateMediaType(TrackTags& tags, std::string_view path)
   // Use the filepath first, since it's the most explicit way for the user to
   // tell us what this track is.
   auto checkPathPrefix = [&](std::string_view path, std::string prefix) {
-    auto res = std::mismatch(prefix.begin(), prefix.end(), path.begin(), path.end(), equalsIgnoreCase);
+    auto res = std::mismatch(prefix.begin(), prefix.end(), path.begin(),
+                             path.end(), equalsIgnoreCase);
     return res.first == prefix.end();
   };
 
@@ -634,8 +635,8 @@ auto Database::dbMintNewTrackId() -> TrackId {
   return next_track_id_++;
 }
 
-auto Database::dbGetTrackData(leveldb::ReadOptions options, TrackId id)
-    -> std::shared_ptr<TrackData> {
+auto Database::dbGetTrackData(leveldb::ReadOptions options,
+                              TrackId id) -> std::shared_ptr<TrackData> {
   std::string key = EncodeDataKey(id);
   std::string raw_val;
   if (!db_->Get(options, key, &raw_val).ok()) {
@@ -668,26 +669,55 @@ auto Database::dbRemoveIndexes(std::shared_ptr<TrackData> data) -> void {
   }
   for (const IndexInfo& index : getIndexes()) {
     auto entries = Index(collator_, index, *data, *tags);
+    std::optional<uint8_t> preserve_depth{};
+
+    // Iterate through the index records backwards, so that we start deleting
+    // records from the highest depth. This allows us to work out what depth to
+    // stop at as we go.
+    // e.g. if the last track of an album is being deleted, we need to delete
+    // the album index record at n-1 depth. But if there are still other tracks
+    // in the album, then we should only clear records at depth n.
     for (auto it = entries.rbegin(); it != entries.rend(); it++) {
+      if (preserve_depth) {
+        if (it->first.header.components_hash.size() < *preserve_depth) {
+          // Some records deeper than this were not removed, so don't try to
+          // remove this one.
+          continue;
+        }
+        // A record weren't removed, but the current record is either a
+        // sibling of that record, or a leaf belonging to a sibling of that
+        // record. Either way, we can start deleting records again.
+        // preserve_depth will be set to a new value if we start encountering
+        // siblings again.
+        preserve_depth.reset();
+      }
+
       auto key = EncodeIndexKey(it->first);
       auto status = db_->Delete(leveldb::WriteOptions{}, key);
       if (!status.ok()) {
         return;
       }
 
+      // Are any sibling records left at this depth? If two index records have
+      // matching headers, they are siblings (same depth, same selections at
+      // lower depths)
       std::unique_ptr<leveldb::Iterator> cursor{db_->NewIterator({})};
+
+      // Check the record before the one we just deleted.
       cursor->Seek(key);
       cursor->Prev();
-
       auto prev_key = ParseIndexKey(cursor->key());
       if (prev_key && prev_key->header == it->first.header) {
-        break;
+        preserve_depth = it->first.header.components_hash.size();
+        continue;
       }
 
+      // Check the record after.
       cursor->Next();
       auto next_key = ParseIndexKey(cursor->key());
       if (next_key && next_key->header == it->first.header) {
-        break;
+        preserve_depth = it->first.header.components_hash.size();
+        continue;
       }
     }
   }
@@ -809,8 +839,7 @@ Iterator::Iterator(std::shared_ptr<Database> db, IndexId idx)
     : Iterator(db,
                IndexKey::Header{
                    .id = idx,
-                   .depth = 0,
-                   .components_hash = 0,
+                   .components_hash = {},
                }) {}
 
 Iterator::Iterator(std::shared_ptr<Database> db, const IndexKey::Header& header)
@@ -883,8 +912,8 @@ auto TrackIterator::next() -> void {
 
     auto& cur = levels_.back().value();
     if (!cur) {
-      // The current top iterator is out of tracks. Pop it, and move the parent
-      // to the next item.
+      // The current top iterator is out of tracks. Pop it, and move the
+      // parent to the next item.
       levels_.pop_back();
     } else if (std::holds_alternative<IndexKey::Header>(cur->contents())) {
       // This record is a branch. Push a new iterator.

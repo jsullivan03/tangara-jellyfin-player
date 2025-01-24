@@ -117,6 +117,7 @@ class TrackTags {
 
   auto allArtists() const -> std::span<const std::pmr::string>;
   auto allArtists(const std::string_view) -> void;
+  auto singleAllArtists(const std::string_view) -> void;
 
   auto album() const -> const std::optional<std::pmr::string>&;
   auto album(std::string_view) -> void;
@@ -144,8 +145,6 @@ class TrackTags {
   auto Hash() const -> uint64_t;
 
  private:
-  auto maybeSynthesizeAllArtists() -> void;
-
   Container encoding_;
 
   std::optional<std::pmr::string> title_;
