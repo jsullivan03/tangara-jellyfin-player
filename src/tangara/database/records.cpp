@@ -181,11 +181,13 @@ auto EncodeAllIndexesPrefix() -> std::string {
 auto EncodeIndexPrefix(const IndexKey::Header& header) -> std::string {
   std::ostringstream out;
   out << makePrefix(kIndexPrefix);
-  cppbor::Array val{
-      cppbor::Uint{header.id},
-      cppbor::Uint{header.depth},
-      cppbor::Uint{header.components_hash},
-  };
+
+  cppbor::Array components{};
+  for (auto hash : header.components_hash) {
+    components.add(cppbor::Uint{hash});
+  }
+
+  cppbor::Array val{cppbor::Uint{header.id}, std::move(components)};
   out << val.toString() << kFieldSeparator;
   return out.str();
 }
@@ -210,8 +212,8 @@ auto EncodeIndexKey(const IndexKey& key) -> std::string {
   out << EncodeIndexPrefix(key.header);
 
   // The component should already be UTF-8 encoded, so just write it.
-  if (key.item) {
-    out << *key.item << kFieldSeparator;
+  if (!key.item.empty()) {
+    out << key.item << kFieldSeparator;
   }
 
   if (key.track) {
@@ -236,14 +238,16 @@ auto ParseIndexKey(const leveldb::Slice& slice) -> std::optional<IndexKey> {
     return {};
   }
   auto as_array = key->asArray();
-  if (as_array->size() != 3 || as_array->get(0)->type() != cppbor::UINT ||
-      as_array->get(1)->type() != cppbor::UINT ||
-      as_array->get(2)->type() != cppbor::UINT) {
+  if (as_array->size() != 2 || as_array->get(0)->type() != cppbor::UINT ||
+      as_array->get(1)->type() != cppbor::ARRAY) {
     return {};
   }
   result.header.id = as_array->get(0)->asUint()->unsignedValue();
-  result.header.depth = as_array->get(1)->asUint()->unsignedValue();
-  result.header.components_hash = as_array->get(2)->asUint()->unsignedValue();
+  auto components_array = as_array->get(1)->asArray();
+  for (int i = 0; i < components_array->size(); i++) {
+    result.header.components_hash.push_back(
+        components_array->get(i)->asUint()->unsignedValue());
+  }
 
   size_t header_length =
       reinterpret_cast<const char*>(end_of_key) - key_data.data();

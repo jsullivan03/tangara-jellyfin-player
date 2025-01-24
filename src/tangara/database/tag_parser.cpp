@@ -190,6 +190,12 @@ auto TagParserImpl::ReadAndParseTags(std::string_view path)
     }
   }
 
+  // There wasn't a fine-grained 'Artists' tag in the source. Synthesize a tag
+  // based on the singlet 'Artist' field.
+  if (tags->allArtists().empty() && tags->artist()) {
+    tags->singleAllArtists(tags->artist().value());
+  }
+
   // Store the result in the cache for later.
   {
     std::lock_guard<std::mutex> lock{cache_mutex_};
@@ -197,6 +203,11 @@ auto TagParserImpl::ReadAndParseTags(std::string_view path)
   }
 
   return tags;
+}
+
+auto TagParserImpl::ClearCaches() -> void {
+  std::lock_guard<std::mutex> lock{cache_mutex_};
+  cache_.Clear();
 }
 
 OggTagParser::OggTagParser() {}

@@ -190,35 +190,24 @@ static const struct luaL_Reg kDatabaseFuncs[] = {
     {"update", update},   {"track_by_id", track_by_id},
     {NULL, NULL}};
 
-/*
- * Struct to be used as userdata for the Lua representation of database records.
- * In order to push these large values into PSRAM as much as possible, memory
- * for these is allocated and managed by Lua. This struct must therefore be
- * trivially copyable.
- */
-struct LuaRecord {
-  std::variant<database::TrackId, database::IndexKey::Header> contents;
-  size_t text_size;
-  char text[];
-};
+static auto push_lua_record(lua_State* state,
+                            const database::Record& r) -> void {
+  database::Record** data = reinterpret_cast<database::Record**>(
+      lua_newuserdata(state, sizeof(uintptr_t)));
+  *data = new database::Record(r);
+  luaL_setmetatable(state, kDbRecordMetatable);
+}
 
-static_assert(std::is_trivially_destructible<LuaRecord>());
-static_assert(std::is_trivially_copy_assignable<LuaRecord>());
+auto db_check_record(lua_State* L, int stack_pos) -> database::Record* {
+  database::Record* rec = *reinterpret_cast<database::Record**>(
+      luaL_checkudata(L, stack_pos, kDbRecordMetatable));
+  return rec;
+}
 
-static auto push_lua_record(lua_State* L, const database::Record& r) -> void {
-  // Create and init the userdata.
-  LuaRecord* record = reinterpret_cast<LuaRecord*>(
-      lua_newuserdata(L, sizeof(LuaRecord) + r.text().size()));
-  luaL_setmetatable(L, kDbRecordMetatable);
-
-  // Init all the fields
-  *record = {
-      .contents = r.contents(),
-      .text_size = r.text().size(),
-  };
-
-  // Copy the string data across.
-  std::memcpy(record->text, r.text().data(), r.text().size());
+static auto db_record_gc(lua_State* state) -> int {
+  database::Record* rec = db_check_record(state, 1);
+  delete rec;
+  return 0;
 }
 
 auto db_check_iterator(lua_State* L, int stack_pos) -> database::Iterator* {
@@ -227,8 +216,8 @@ auto db_check_iterator(lua_State* L, int stack_pos) -> database::Iterator* {
   return it;
 }
 
-static auto push_iterator(lua_State* state, const database::Iterator& it)
-    -> void {
+static auto push_iterator(lua_State* state,
+                          const database::Iterator& it) -> void {
   database::Iterator** data = reinterpret_cast<database::Iterator**>(
       lua_newuserdata(state, sizeof(uintptr_t)));
   *data = new database::Iterator(it);
@@ -279,15 +268,13 @@ static const struct luaL_Reg kDbIteratorFuncs[] = {
     {"__gc", db_iterator_gc},     {NULL, NULL}};
 
 static auto record_text(lua_State* state) -> int {
-  LuaRecord* data = reinterpret_cast<LuaRecord*>(
-      luaL_checkudata(state, 1, kDbRecordMetatable));
-  lua_pushlstring(state, data->text, data->text_size);
+  database::Record* rec = db_check_record(state, 1);
+  lua_pushlstring(state, rec->text().data(), rec->text().size());
   return 1;
 }
 
 static auto record_contents(lua_State* state) -> int {
-  LuaRecord* data = reinterpret_cast<LuaRecord*>(
-      luaL_checkudata(state, 1, kDbRecordMetatable));
+  database::Record* rec = db_check_record(state, 1);
 
   std::visit(
       [&](auto&& arg) {
@@ -304,7 +291,7 @@ static auto record_contents(lua_State* state) -> int {
           }
         }
       },
-      data->contents);
+      rec->contents());
 
   return 1;
 }
@@ -312,6 +299,7 @@ static auto record_contents(lua_State* state) -> int {
 static const struct luaL_Reg kDbRecordFuncs[] = {{"title", record_text},
                                                  {"contents", record_contents},
                                                  {"__tostring", record_text},
+                                                 {"__gc", db_record_gc},
                                                  {NULL, NULL}};
 
 static auto index_name(lua_State* state) -> int {
@@ -404,7 +392,6 @@ static auto lua_database(lua_State* state) -> int {
   lua_pushinteger(state, (int)database::MediaType::kAudiobook);
   lua_rawset(state, -3);
   lua_rawset(state, -3);
-
 
   lua_pushliteral(state, "IndexTypes");
   lua_newtable(state);

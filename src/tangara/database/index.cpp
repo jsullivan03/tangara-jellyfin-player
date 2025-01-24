@@ -77,8 +77,8 @@ const IndexInfo kAudiobooks{
     .components = {Tag::kAlbum, Tag::kAlbumOrder},
 };
 
-static auto titleOrFilename(const TrackData& data, const TrackTags& tags)
-    -> std::pmr::string {
+static auto titleOrFilename(const TrackData& data,
+                            const TrackTags& tags) -> std::pmr::string {
   auto title = tags.title();
   if (title) {
     return *title;
@@ -147,8 +147,7 @@ auto Indexer::index() -> std::vector<std::pair<IndexKey, std::string>> {
 
   IndexKey::Header root_header{
       .id = index_.id,
-      .depth = 0,
-      .components_hash = 0,
+      .components_hash = {},
   };
   handleLevel(root_header, index_.components);
 
@@ -237,16 +236,10 @@ auto Index(locale::ICollator& collator,
 }
 
 auto ExpandHeader(const IndexKey::Header& header,
-                  const std::optional<std::pmr::string>& component)
-    -> IndexKey::Header {
+                  const std::pmr::string& component) -> IndexKey::Header {
   IndexKey::Header ret{header};
-  ret.depth++;
-  if (component) {
-    ret.components_hash =
-        komihash(component->data(), component->size(), ret.components_hash);
-  } else {
-    ret.components_hash = komihash(NULL, 0, ret.components_hash);
-  }
+  ret.components_hash.push_back(
+      komihash(component.data(), component.size(), 0));
   return ret;
 }
 
