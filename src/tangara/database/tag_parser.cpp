@@ -41,6 +41,8 @@ static auto convert_tag(int tag) -> std::optional<Tag> {
       return Tag::kAlbum;
     case Ttrack:
       return Tag::kTrack;
+    case Tdisc:
+      return Tag::kDisc;
     case Tgenre:
       return Tag::kGenres;
     default:

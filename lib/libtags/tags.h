@@ -16,6 +16,7 @@ enum
 	Ttitle,
 	Tdate, /* "2014", "2015/02/01", but the year goes first */
 	Ttrack, /* "1", "01", "1/4", but the track number goes first */
+	Tdisc,
 	Talbumgain,
 	Talbumpeak,
 	Ttrackgain,
