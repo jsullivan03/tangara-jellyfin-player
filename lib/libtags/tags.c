@@ -8,6 +8,7 @@ struct Getter
 	int format;
 };
 
+extern int tagape(Tagctx *ctx);
 extern int tagflac(Tagctx *ctx);
 extern int tagid3v1(Tagctx *ctx);
 extern int tagid3v2(Tagctx *ctx);
@@ -22,6 +23,7 @@ extern int tagmod(Tagctx *ctx);
 
 static const Getter g[] =
 {
+	{tagape, Funknown},
 	{tagid3v2, Fmp3},
 	{tagid3v1, Fmp3},
 	{tagvorbis, Fogg},
