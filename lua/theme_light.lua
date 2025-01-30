@@ -186,6 +186,7 @@ local theme_light = {
   },
   dropdown = {
     {lvgl.PART.MAIN, lvgl.Style{
+      bg_opa = lvgl.OPA(100),
       radius = 2, 
       pad_all = 2,
       bg_color = background_color,
@@ -196,7 +197,8 @@ local theme_light = {
       outline_width = 1,
     }},
     {lvgl.PART.MAIN | lvgl.STATE.FOCUSED, lvgl.Style {
-      border_color = highlight_color,
+      text_color = "#ffffff",
+      bg_color = highlight_color,
     }},
     {lvgl.PART.INDICATOR, lvgl.Style {
       image_recolor_opa = 255,
@@ -213,6 +215,7 @@ local theme_light = {
       bg_color = background_color
     }},
     {lvgl.PART.SELECTED | lvgl.STATE.CHECKED, lvgl.Style {
+      text_color = "#ffffff",
       bg_color = highlight_color,
     }},
   },
