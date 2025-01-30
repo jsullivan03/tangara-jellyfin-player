@@ -118,6 +118,7 @@ return screen:new {
     end
 
     widgets.InfiniteList(self.root, self.iterator, {
+      focus_first_item = true,
       get_icon = get_icon_func,
       callback = function(item)
         return function()
