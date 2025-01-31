@@ -172,9 +172,7 @@ auto Setting<std::vector<bluetooth::MacAndName>>::store(
 }
 
 template <>
-auto Setting<std::string>::store(
-    nvs_handle_t nvs,
-    std::string v) -> void {
+auto Setting<std::string>::store(nvs_handle_t nvs, std::string v) -> void {
   cppbor::Tstr cbor{v};
   auto encoded = cbor.encode();
   nvs_set_blob(nvs, name_, encoded.data(), encoded.size());
@@ -295,6 +293,7 @@ auto NvsStorage::Read() -> void {
   display_rows_.read(handle_);
   haptic_motor_type_.read(handle_);
   lra_calibration_.read(handle_);
+  fast_charge_.read(handle_);
   brightness_.read(handle_);
   sensitivity_.read(handle_);
   amp_max_vol_.read(handle_);
@@ -317,6 +316,7 @@ auto NvsStorage::Write() -> bool {
   display_rows_.write(handle_);
   haptic_motor_type_.write(handle_);
   lra_calibration_.write(handle_);
+  fast_charge_.write(handle_);
   brightness_.write(handle_);
   sensitivity_.write(handle_);
   amp_max_vol_.write(handle_);

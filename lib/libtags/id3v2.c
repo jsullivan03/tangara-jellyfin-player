@@ -68,6 +68,8 @@ v2cb(Tagctx *ctx, char *k, char *v)
 			return 0;
 	}else if(strcmp(k-1, "COM") == 0 || strcmp(k-1, "COMM") == 0){
 		txtcb(ctx, Tcomment, k-1, v);
+	}else if(strcmp(k, "POS") == 0){
+		txtcb(ctx, Tdisc, k-1, v);
 	}else if(strcmp(k, "XXX") == 0){
 		k = v;
 		v += strlen(v) + 1;

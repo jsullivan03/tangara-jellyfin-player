@@ -59,6 +59,7 @@ return screen:new {
     end
 
     widgets.InfiniteList(self.root, self.iterator, {
+      focus_first_item = true,
       callback = function(item)
         return function()
           local is_dir = item:is_directory()

@@ -14,6 +14,7 @@ static const struct {
 	{"artists", Tmultiartists},
 	{"albumartist", Talbumartist},
 	{"tracknumber", Ttrack},
+	{"discnumber", Tdisc},
 	{"date", Tdate},
 	{"replaygain_track_peak", Ttrackpeak},
 	{"replaygain_track_gain", Ttrackgain},
