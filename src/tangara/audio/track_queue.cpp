@@ -181,6 +181,7 @@ auto TrackQueue::openPlaylist(const std::string& playlist_file, bool notify)
   if (!res) {
     return false;
   }
+  ready_ = true;
   updateShuffler(true);
   if (notify) {
     notifyChanged(true, Reason::kExplicitUpdate);
