@@ -49,6 +49,8 @@ tagwav(Tagctx *ctx)
 			break;
 		sz -= 4+4;
 		csz = leuint(d+4);
+		if(csz % 2 == 1)
+			csz += 1;
 		if(sz < csz)
 			break;
 		sz -= csz;
