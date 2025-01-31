@@ -182,6 +182,12 @@ SPDX-FileCopyrightText = "2002, Xiph.org Foundation"
 SPDX-License-Identifier = "BSD-3-Clause"
 
 [[annotations]]
+path = "lib/wavpack/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "1998 - 2006 Conifer Software"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
 path = "lua/fonts/fusion*"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022 TakWolf"

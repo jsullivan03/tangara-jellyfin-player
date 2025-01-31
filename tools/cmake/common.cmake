@@ -37,6 +37,7 @@ list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/result")
 list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/speexdsp")
 list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/tinyfsm")
 list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/tremor")
+list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/wavpack")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
