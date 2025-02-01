@@ -93,6 +93,7 @@ settings.BluetoothSettings = SettingsScreen:new {
       local enabled = enable_sw:enabled()
       bluetooth.enabled:set(enabled)
     end)
+    enable_sw:focus()
 
     self.bindings = self.bindings + {
       bluetooth.enabled:bind(function(en)
@@ -232,6 +233,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       local selection = volume_chooser:get('selected') + 1
       volume.limit_db:set(limits[selection])
     end)
+    volume_chooser:focus()
 
     theme.set_subject(self.content:Label {
       text = "Left/Right balance",
@@ -304,6 +306,7 @@ settings.DisplaySettings = SettingsScreen:new {
     brightness:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       display.brightness:set(brightness:value())
     end)
+    brightness:focus()
 
     self.bindings = self.bindings + {
       display.brightness:bind(function(b)
@@ -372,6 +375,8 @@ settings.ThemeSettings = SettingsScreen:new {
         backstack.reset(main_menu:new())
       end
     end)
+
+    theme_chooser:focus()
   end
 }
 
@@ -418,6 +423,8 @@ settings.InputSettings = SettingsScreen:new {
       local scheme = option_to_scheme[option]
       controls.scheme:set(scheme)
     end)
+
+    controls_chooser:focus()
 
     theme.set_subject(self.content:Label {
       text = "Scroll Sensitivity",
@@ -483,6 +490,7 @@ settings.MassStorageSettings = SettingsScreen:new {
       end
       bind_switch()
     end)
+    enable_sw:focus()
 
     self.bindings = self.bindings + {
       usb.msc_enabled:bind(bind_switch),
@@ -560,6 +568,7 @@ settings.DatabaseSettings = SettingsScreen:new {
     update:onClicked(function()
       database.update()
     end)
+    update:focus()
 
     self.bindings = self.bindings + {
       database.auto_update:bind(function(en)
@@ -841,10 +850,11 @@ settings.Root = widgets.MenuScreen:new {
          end)
       end
       item:add_style(styles.list_item)
+      return item
     end
 
     local audio_section = section("Audio")
-    submenu("Bluetooth", settings.BluetoothSettings, audio_section)
+    local first_item = submenu("Bluetooth", settings.BluetoothSettings, audio_section)
     submenu("Headphones", settings.HeadphonesSettings)
 
     section("Interface")
@@ -863,6 +873,8 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Firmware", settings.FirmwareSettings)
     submenu("Licenses", settings.LicensesScreen)
     submenu("Regulatory", settings.RegulatoryScreen)
+
+    first_item:focus()
   end
 }
 
