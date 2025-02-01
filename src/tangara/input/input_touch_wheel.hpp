@@ -36,6 +36,8 @@ class TouchWheel : public IInputDevice {
   auto sensitivity() -> lua::Property&;
 
  private:
+  const int64_t SCROLL_TIMEOUT_US = 250000;  // 250ms
+
   auto calculateTicks(const drivers::TouchWheelData& data) -> int8_t;
   auto calculateThreshold(uint8_t sensitivity) -> uint8_t;
 
@@ -55,6 +57,7 @@ class TouchWheel : public IInputDevice {
   uint8_t threshold_;
   bool is_first_read_;
   uint8_t last_angle_;
+  int64_t last_wheel_touch_time_;
 };
 
 }  // namespace input
