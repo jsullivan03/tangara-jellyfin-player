@@ -39,7 +39,7 @@ auto VolumeButtons::triggers()
   return {up_, down_};
 }
 
-auto VolumeButtons::onLock() -> void {
+auto VolumeButtons::onLock(drivers::NvsStorage::LockedInputModes mode) -> void {
   locked_ = true;
 }
 

@@ -34,6 +34,7 @@ static constexpr char kKeyAmpMaxVolume[] = "hp_vol_max";
 static constexpr char kKeyAmpCurrentVolume[] = "hp_vol";
 static constexpr char kKeyAmpLeftBias[] = "hp_bias";
 static constexpr char kKeyPrimaryInput[] = "in_pri";
+static constexpr char kKeyLockedInput[] = "in_locked";
 static constexpr char kKeyScrollSensitivity[] = "scroll";
 static constexpr char kKeyLockPolarity[] = "lockpol";
 static constexpr char kKeyDisplayCols[] = "dispcols";
@@ -272,6 +273,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       amp_cur_vol_(kKeyAmpCurrentVolume),
       amp_left_bias_(kKeyAmpLeftBias),
       input_mode_(kKeyPrimaryInput),
+      locked_input_mode_(kKeyLockedInput),
       output_mode_(kKeyOutput),
       theme_{kKeyInterfaceTheme},
       bt_preferred_(kKeyBluetoothPreferred),
@@ -568,6 +570,21 @@ auto NvsStorage::PrimaryInput() -> InputModes {
 auto NvsStorage::PrimaryInput(InputModes mode) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   input_mode_.set(static_cast<uint8_t>(mode));
+}
+
+auto NvsStorage::LockedInput() -> LockedInputModes {
+  std::lock_guard<std::mutex> lock{mutex_};
+  switch (input_mode_.get().value_or(static_cast<uint8_t>(LockedInputModes::kDisabled))) {
+    case static_cast<uint8_t>(LockedInputModes::kDisabled):
+      return LockedInputModes::kDisabled;
+    default:
+      return LockedInputModes::kDisabled;
+  }
+}
+
+auto NvsStorage::LockedInput(LockedInputModes mode) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  locked_input_mode_.set(static_cast<uint8_t>(mode));
 }
 
 auto NvsStorage::QueueRepeatMode() -> uint8_t {

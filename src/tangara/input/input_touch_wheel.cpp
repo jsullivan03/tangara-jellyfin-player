@@ -113,7 +113,7 @@ auto TouchWheel::triggers()
   return {centre_, up_, right_, down_, left_};
 }
 
-auto TouchWheel::onLock() -> void {
+auto TouchWheel::onLock(drivers::NvsStorage::LockedInputModes mode) -> void {
   wheel_.LowPowerMode(true);
   locked_ = true;
 }

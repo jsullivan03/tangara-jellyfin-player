@@ -36,6 +36,7 @@ class LvglInputDriver {
   LvglInputDriver(drivers::NvsStorage& nvs, DeviceFactory&);
 
   auto mode() -> lua::Property& { return mode_; }
+  auto lockedMode() -> lua::Property& { return locked_mode_; }
 
   auto setGroup(lv_group_t*) -> void;
   auto read(lv_indev_data_t* data) -> void;
@@ -49,6 +50,7 @@ class LvglInputDriver {
   DeviceFactory& factory_;
 
   lua::Property mode_;
+  lua::Property locked_mode_;
   lv_indev_t* device_;
 
   std::vector<std::shared_ptr<IInputDevice>> inputs_;

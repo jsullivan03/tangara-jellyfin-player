@@ -42,7 +42,7 @@ auto NavButtons::triggers()
   return {up_, down_};
 }
 
-auto NavButtons::onLock() -> void {
+auto NavButtons::onLock(drivers::NvsStorage::LockedInputModes mode) -> void {
   locked_ = true;
 }
 
