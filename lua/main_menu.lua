@@ -131,6 +131,14 @@ return widgets.MenuScreen:new {
       })
     end
 
+    local playlist_btn = indexes_list:add_btn(nil, "Playlists")
+    playlist_btn:onClicked(function()
+      backstack.push(require("playlist_browser"):new {
+        title = "Playlists",
+      })
+    end)
+    playlist_btn:add_style(styles.list_item)
+
     local function show_no_indexes(msg)
       indexes_list:add_flag(lvgl.FLAG.HIDDEN)
       no_indexes_container:clear_flag(lvgl.FLAG.HIDDEN)

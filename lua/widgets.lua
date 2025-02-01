@@ -361,7 +361,7 @@ function widgets.InfiniteList(parent, iterator, opts)
   end
 
   for idx = 0, 8 do
-    local val = fwd_iterator()
+    local val = fwd_iterator:next()
     if not val then
       break
     end
