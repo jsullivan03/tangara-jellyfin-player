@@ -302,6 +302,7 @@ auto NvsStorage::Read() -> void {
   amp_cur_vol_.read(handle_);
   amp_left_bias_.read(handle_);
   input_mode_.read(handle_);
+  locked_input_mode_.read(handle_);
   output_mode_.read(handle_);
   theme_.read(handle_);
   bt_preferred_.read(handle_);
@@ -325,6 +326,7 @@ auto NvsStorage::Write() -> bool {
   amp_cur_vol_.write(handle_);
   amp_left_bias_.write(handle_);
   input_mode_.write(handle_);
+  locked_input_mode_.write(handle_);
   output_mode_.write(handle_);
   theme_.write(handle_);
   bt_preferred_.write(handle_);
