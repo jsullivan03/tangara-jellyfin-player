@@ -667,6 +667,7 @@ void Lua::entry() {
         "controls",
         {
             {"scheme", &sInput->mode()},
+            {"locked_scheme", &sInput->lockedMode()},
             {"lock_switch", &sLockSwitch},
             {"hooks", [&](lua_State* L) { return sInput->pushHooks(L); }},
         });

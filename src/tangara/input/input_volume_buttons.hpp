@@ -36,7 +36,8 @@ class VolumeButtons : public IInputDevice {
   TriggerHooks up_;
   TriggerHooks down_;
 
-  bool locked_;
+  // When locked, this contains the active mode
+  std::optional<drivers::NvsStorage::LockedInputModes> locked_;
 };
 
 }  // namespace input

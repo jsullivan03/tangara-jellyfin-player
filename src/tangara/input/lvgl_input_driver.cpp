@@ -74,6 +74,8 @@ auto intToLockedMode(int raw) -> std::optional<drivers::NvsStorage::LockedInputM
   switch (raw) {
     case 0:
       return drivers::NvsStorage::LockedInputModes::kDisabled;
+    case 1:
+      return drivers::NvsStorage::LockedInputModes::kVolumeOnly;
     default:
       return {};
   }

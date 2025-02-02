@@ -574,9 +574,11 @@ auto NvsStorage::PrimaryInput(InputModes mode) -> void {
 
 auto NvsStorage::LockedInput() -> LockedInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (input_mode_.get().value_or(static_cast<uint8_t>(LockedInputModes::kDisabled))) {
+  switch (locked_input_mode_.get().value_or(static_cast<uint8_t>(LockedInputModes::kDisabled))) {
     case static_cast<uint8_t>(LockedInputModes::kDisabled):
       return LockedInputModes::kDisabled;
+    case static_cast<uint8_t>(LockedInputModes::kVolumeOnly):
+      return LockedInputModes::kVolumeOnly;
     default:
       return LockedInputModes::kDisabled;
   }

@@ -140,6 +140,7 @@ class NvsStorage {
 
   enum class LockedInputModes : uint8_t {
     kDisabled = 0,
+    kVolumeOnly = 1,
   };
 
   auto LockedInput() -> LockedInputModes;
