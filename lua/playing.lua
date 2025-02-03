@@ -276,7 +276,7 @@ return screen:new {
           if queue.loading:get() then
             title:set { text = "Loading..." }
           else
-            title:set{text=""}
+            title:set{ text = "Not Playing" }
           end
           album:set{text=""}
           artist:set{text=""}
