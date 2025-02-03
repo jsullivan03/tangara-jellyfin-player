@@ -385,44 +385,58 @@ settings.InputSettings = SettingsScreen:new {
   create_ui = function(self)
     SettingsScreen.create_ui(self)
 
+    -- Use the control scheme enum lists to generate the relevant dropdowns
+    local make_scheme_control = function(self, scheme_list, control_scheme)
+        local option_to_scheme = {}
+        local scheme_to_option = {}
+        local option_idx = 0
+        local options = ""
+
+        -- Sort the keys to order the dropdowns the same as the enums
+        keys = {}
+        for i in pairs(scheme_list) do table.insert(keys, i) end
+        table.sort(keys)
+
+        for i, k in pairs(keys) do
+          v = scheme_list[k]
+
+          option_to_scheme[option_idx] = k
+          scheme_to_option[k] = option_idx
+          if option_idx > 0 then
+            options = options .. "\n"
+          end
+          options = options .. v
+          option_idx = option_idx + 1
+        end
+
+        local controls_chooser = self.content:Dropdown {
+          options = options,
+          symbol = img.chevron,
+        }
+
+        self.bindings = self.bindings + {
+          control_scheme:bind(function(s)
+            local option = scheme_to_option[s]
+            controls_chooser:set({ selected = option })
+          end)
+        }
+
+        controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+          local option = controls_chooser:get('selected')
+          local scheme = option_to_scheme[option]
+          control_scheme:set(scheme)
+        end)
+    end
+
     theme.set_subject(self.content:Label {
       text = "Control scheme",
     }, "settings_title")
+    make_scheme_control(self, controls.schemes(), controls.scheme)
 
-    local schemes = controls.schemes()
-    local option_to_scheme = {}
-    local scheme_to_option = {}
-
-    local option_idx = 0
-    local options = ""
-
-    for i, v in pairs(schemes) do
-      option_to_scheme[option_idx] = i
-      scheme_to_option[i] = option_idx
-      if option_idx > 0 then
-        options = options .. "\n"
-      end
-      options = options .. v
-      option_idx = option_idx + 1
-    end
-
-    local controls_chooser = self.content:Dropdown {
-      options = options,
-      symbol = img.chevron,
-    }
-
-    self.bindings = self.bindings + {
-      controls.scheme:bind(function(s)
-        local option = scheme_to_option[s]
-        controls_chooser:set({ selected = option })
-      end)
-    }
-
-    controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
-      local option = controls_chooser:get('selected')
-      local scheme = option_to_scheme[option]
-      controls.scheme:set(scheme)
-    end)
+    theme.set_subject(self.content:Label {
+      text = "Control scheme when locked",
+    }, "settings_title")
+    make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
 
     controls_chooser:focus()
 
