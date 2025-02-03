@@ -135,6 +135,7 @@ return widgets.MenuScreen:new {
     playlist_btn:onClicked(function()
       backstack.push(require("playlist_browser"):new {
         title = "Playlists",
+        iterator = filesystem.iterator("/Playlists")
       })
     end)
     playlist_btn:add_style(styles.list_item)

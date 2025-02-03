@@ -13,6 +13,7 @@ local theme = require("theme")
 local playback = require("playback")
 local queue = require("queue")
 local table_iterator = require("table_iterator")
+local img = require("images")
 
 
 return screen:new {
@@ -59,28 +60,49 @@ return screen:new {
       }
     end
 
-    local playlists = {}
-    -- Find playlists
-    local fs_iter = filesystem.iterator("")
-    for item in fs_iter do
-      if
-        item:filepath():match("%.playlist$") or
-        item:filepath():match("%.m3u8?$") then
-          table.insert(playlists, item)
+    local is_playlist = function(item)
+      return item:filepath():match("%.playlist$")
+          or item:filepath():match("%.m3u8?$")
+    end
+
+    local get_icon_func = function(item)
+      if item:is_directory() then
+        return img.files
+      else
+        return img.enqueue
       end
     end
 
-    widgets.InfiniteList(self.root, table_iterator:create(playlists), {
+    local playlists_and_dirs = {};
+    for item in self.iterator do
+      if
+          is_playlist(item) or
+          item:is_directory() then
+        table.insert(playlists_and_dirs, item)
+      end
+    end
+
+    widgets.InfiniteList(self.root, table_iterator:create(playlists_and_dirs), {
       focus_first_item = true,
+      get_icon = get_icon_func,
       callback = function(item)
         return function()
-          queue.open_playlist(item:filepath())
-          playback.playing:set(true)
-          backstack.push(playing:new())
+          if item:is_directory() then
+            backstack.push(
+              require("playlist_browser"):new {
+                title = self.title,
+                iterator = filesystem.iterator(item:filepath()),
+                breadcrumb = item:filepath()
+              })
+          elseif
+              is_playlist(item) then
+            -- TODO: playlist viewer
+            queue.open_playlist(item:filepath())
+            playback.playing:set(true)
+            backstack.push(playing:new())
+          end
         end
       end
     })
   end
 }
-
-
