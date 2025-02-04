@@ -54,7 +54,8 @@ TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
       is_scrolling_(false),
       threshold_(calculateThreshold(nvs.ScrollSensitivity())),
       is_first_read_(true),
-      last_angle_(0) {}
+      last_angle_(0),
+      last_wheel_touch_time_(0) {}
 
 auto TouchWheel::read(lv_indev_data_t* data) -> void {
   if (locked_) {
