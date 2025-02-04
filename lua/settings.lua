@@ -426,12 +426,14 @@ settings.InputSettings = SettingsScreen:new {
           local scheme = option_to_scheme[option]
           control_scheme:set(scheme)
         end)
+
+        return controls_chooser
     end
 
     theme.set_subject(self.content:Label {
       text = "Control scheme",
     }, "settings_title")
-    make_scheme_control(self, controls.schemes(), controls.scheme)
+    local controls_chooser = make_scheme_control(self, controls.schemes(), controls.scheme)
 
     theme.set_subject(self.content:Label {
       text = "Control scheme when locked",
