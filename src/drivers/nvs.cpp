@@ -34,6 +34,7 @@ static constexpr char kKeyAmpMaxVolume[] = "hp_vol_max";
 static constexpr char kKeyAmpCurrentVolume[] = "hp_vol";
 static constexpr char kKeyAmpLeftBias[] = "hp_bias";
 static constexpr char kKeyPrimaryInput[] = "in_pri";
+static constexpr char kKeyLockedInput[] = "in_locked";
 static constexpr char kKeyScrollSensitivity[] = "scroll";
 static constexpr char kKeyLockPolarity[] = "lockpol";
 static constexpr char kKeyDisplayCols[] = "dispcols";
@@ -272,6 +273,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       amp_cur_vol_(kKeyAmpCurrentVolume),
       amp_left_bias_(kKeyAmpLeftBias),
       input_mode_(kKeyPrimaryInput),
+      locked_input_mode_(kKeyLockedInput),
       output_mode_(kKeyOutput),
       theme_{kKeyInterfaceTheme},
       bt_preferred_(kKeyBluetoothPreferred),
@@ -300,6 +302,7 @@ auto NvsStorage::Read() -> void {
   amp_cur_vol_.read(handle_);
   amp_left_bias_.read(handle_);
   input_mode_.read(handle_);
+  locked_input_mode_.read(handle_);
   output_mode_.read(handle_);
   theme_.read(handle_);
   bt_preferred_.read(handle_);
@@ -323,6 +326,7 @@ auto NvsStorage::Write() -> bool {
   amp_cur_vol_.write(handle_);
   amp_left_bias_.write(handle_);
   input_mode_.write(handle_);
+  locked_input_mode_.write(handle_);
   output_mode_.write(handle_);
   theme_.write(handle_);
   bt_preferred_.write(handle_);
@@ -568,6 +572,23 @@ auto NvsStorage::PrimaryInput() -> InputModes {
 auto NvsStorage::PrimaryInput(InputModes mode) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   input_mode_.set(static_cast<uint8_t>(mode));
+}
+
+auto NvsStorage::LockedInput() -> LockedInputModes {
+  std::lock_guard<std::mutex> lock{mutex_};
+  switch (locked_input_mode_.get().value_or(static_cast<uint8_t>(LockedInputModes::kDisabled))) {
+    case static_cast<uint8_t>(LockedInputModes::kDisabled):
+      return LockedInputModes::kDisabled;
+    case static_cast<uint8_t>(LockedInputModes::kVolumeOnly):
+      return LockedInputModes::kVolumeOnly;
+    default:
+      return LockedInputModes::kDisabled;
+  }
+}
+
+auto NvsStorage::LockedInput(LockedInputModes mode) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  locked_input_mode_.set(static_cast<uint8_t>(mode));
 }
 
 auto NvsStorage::QueueRepeatMode() -> uint8_t {

@@ -53,6 +53,8 @@ static void focus_cb(lv_group_t* group) {
   instance->feedback(LV_EVENT_FOCUSED);
 }
 
+namespace {
+
 auto intToMode(int raw) -> std::optional<drivers::NvsStorage::InputModes> {
   switch (raw) {
     case 0:
@@ -67,6 +69,19 @@ auto intToMode(int raw) -> std::optional<drivers::NvsStorage::InputModes> {
       return {};
   }
 }
+
+auto intToLockedMode(int raw) -> std::optional<drivers::NvsStorage::LockedInputModes> {
+  switch (raw) {
+    case 0:
+      return drivers::NvsStorage::LockedInputModes::kDisabled;
+    case 1:
+      return drivers::NvsStorage::LockedInputModes::kVolumeOnly;
+    default:
+      return {};
+  }
+}
+
+} // namespace {}
 
 LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
                                  DeviceFactory& factory)
@@ -83,6 +98,18 @@ LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
               }
               nvs.PrimaryInput(*mode);
               inputs_ = factory.createInputs(*mode);
+              return true;
+            }),
+      locked_mode_(static_cast<int>(nvs.LockedInput()),
+            [&](const lua::LuaValue& val) {
+              if (!std::holds_alternative<int>(val)) {
+                return false;
+              }
+              auto mode = intToLockedMode(std::get<int>(val));
+              if (!mode) {
+                return false;
+              }
+              nvs.LockedInput(*mode);
               return true;
             }),
       inputs_(factory.createInputs(nvs.PrimaryInput())),
@@ -130,9 +157,11 @@ auto LvglInputDriver::feedback(uint8_t event) -> void {
 
 auto LvglInputDriver::lock(bool l) -> void {
   is_locked_ = l;
+  auto locked_input_mode = nvs_.LockedInput();
+
   for (auto&& device : inputs_) {
     if (l) {
-      device->onLock();
+      device->onLock(locked_input_mode);
     } else {
       device->onUnlock();
     }

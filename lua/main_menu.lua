@@ -55,7 +55,6 @@ return widgets.MenuScreen:new {
 
     now_playing:onClicked(function() backstack.push(playing:new()) end)
 
-    local has_focus = false
     local track_duration = nil
 
     self.bindings = self.bindings + {
@@ -71,7 +70,6 @@ return widgets.MenuScreen:new {
           now_playing:add_flag(lvgl.FLAG.HIDDEN)
           return
         else
-          has_focus = true
           now_playing:clear_flag(lvgl.FLAG.HIDDEN)
         end
         title:set { text = track.title }
@@ -148,6 +146,10 @@ return widgets.MenuScreen:new {
     local function hide_no_indexes()
       no_indexes_container:add_flag(lvgl.FLAG.HIDDEN)
       indexes_list:clear_flag(lvgl.FLAG.HIDDEN)
+
+      if indexes[1] then
+        indexes[1].object:focus()
+      end
     end
 
     local function hide_playlist_listing()
