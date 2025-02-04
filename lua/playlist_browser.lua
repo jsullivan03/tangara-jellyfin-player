@@ -12,7 +12,7 @@ local font = require("font")
 local theme = require("theme")
 local playback = require("playback")
 local queue = require("queue")
-local table_iterator = require("table_iterator")
+local playlist_iterator = require("playlist_iterator")
 local img = require("images")
 
 
@@ -60,11 +60,6 @@ return screen:new {
       }
     end
 
-    local is_playlist = function(item)
-      return item:filepath():match("%.playlist$")
-          or item:filepath():match("%.m3u8?$")
-    end
-
     local get_icon_func = function(item)
       if item:is_directory() then
         return img.files
@@ -73,16 +68,7 @@ return screen:new {
       end
     end
 
-    local playlists_and_dirs = {};
-    for item in self.iterator do
-      if
-          is_playlist(item) or
-          item:is_directory() then
-        table.insert(playlists_and_dirs, item)
-      end
-    end
-
-    widgets.InfiniteList(self.root, table_iterator:create(playlists_and_dirs), {
+    widgets.InfiniteList(self.root, playlist_iterator:create(self.iterator), {
       focus_first_item = true,
       get_icon = get_icon_func,
       callback = function(item)
@@ -95,7 +81,7 @@ return screen:new {
                 breadcrumb = item:filepath()
               })
           elseif
-              is_playlist(item) then
+              playlist_iterator:is_playlist(item) then
             -- TODO: playlist viewer
             queue.open_playlist(item:filepath())
             playback.playing:set(true)

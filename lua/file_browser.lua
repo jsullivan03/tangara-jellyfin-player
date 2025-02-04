@@ -8,11 +8,11 @@ local backstack = require("backstack")
 local font = require("font")
 local queue = require("queue")
 local playing = require("playing")
-local styles = require("styles")
 local playback = require("playback")
 local theme = require("theme")
 local screen = require("screen")
 local filesystem = require("filesystem")
+local playlist_iterator = require("playlist_iterator")
 
 return screen:new {
   create_ui = function(self)
@@ -70,8 +70,7 @@ return screen:new {
               breadcrumb = item:filepath()
             })
           elseif
-              item:filepath():match("%.playlist$") or
-              item:filepath():match("%.m3u8?$") then
+              playlist_iterator:is_playlist(item) then
             queue.open_playlist(item:filepath())
             playback.playing:set(true)
             backstack.push(playing:new())

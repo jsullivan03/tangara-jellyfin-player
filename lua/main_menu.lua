@@ -11,7 +11,6 @@ local browser = require("browser")
 local playing = require("playing")
 local styles = require("styles")
 local filesystem = require("filesystem")
-local screen = require("screen")
 local font = require("font")
 local theme = require("theme")
 local img = require("images")
@@ -151,6 +150,14 @@ return widgets.MenuScreen:new {
       indexes_list:clear_flag(lvgl.FLAG.HIDDEN)
     end
 
+    local function hide_playlist_listing()
+      playlist_btn:add_flag(lvgl.FLAG.HIDDEN)
+    end
+
+    local function show_playlist_listing()
+      playlist_btn:clear_flag(lvgl.FLAG.HIDDEN)
+    end
+
     local function update_visible_indexes()
       local has_valid_index = false
       for _, idx in ipairs(indexes) do
@@ -164,6 +171,13 @@ return widgets.MenuScreen:new {
       end
       if has_valid_index then
         hide_no_indexes()
+
+        -- If we have valid indexes, then also check for playlists
+        if filesystem.iterator("/Playlists/"):next() == nil then
+          hide_playlist_listing()
+        else
+          show_playlist_listing()
+        end
       else
         if require("database").updating:get() then
           show_no_indexes("The database is updating for the first time. Please wait.")
