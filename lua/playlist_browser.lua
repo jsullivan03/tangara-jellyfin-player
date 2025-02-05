@@ -62,9 +62,9 @@ return screen:new {
 
     local get_icon_func = function(item)
       if item:is_directory() then
-        return img.files
+        return img.file_directory
       else
-        return img.enqueue
+        return img.file_playlist
       end
     end
 
