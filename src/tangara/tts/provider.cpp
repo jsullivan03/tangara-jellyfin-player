@@ -28,7 +28,11 @@ static const char* kTtsPath = "/.tangara-tts/";
 static auto textToFile(const std::string& text) -> std::optional<std::string> {
   uint64_t hash = komihash(text.data(), text.size(), 0);
   std::stringstream stream;
-  stream << kTtsPath << std::hex << hash;
+  // Assume the TTS sample is a .wav file; since we only support one low-RAM
+  // overhead codec, we can presume the suffix. The suffix is needed, else we
+  // fail to open the stream when it fails to autodetect the format when looking
+  // up tags.
+  stream << kTtsPath << std::hex << hash << ".wav";
   return stream.str();
 }
 
