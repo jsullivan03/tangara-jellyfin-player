@@ -179,6 +179,8 @@ local theme_hicon = {
       bg_color = background_color,
       border_color = text_color,
       border_width = 1,
+      outline_color = background_color,
+      outline_width = 1,
     }},
     {lvgl.PART.KNOB | lvgl.STATE.FOCUSED, lvgl.Style {
       bg_color = text_color,

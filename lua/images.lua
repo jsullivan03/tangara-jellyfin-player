@@ -29,6 +29,8 @@ local img = {
   unlistened = lvgl.ImgData("//lua/img/unlistened.png"),
   info = lvgl.ImgData("//lua/img/info.png"),
   menu = lvgl.ImgData("//lua/img/menu.png"),
+  file_directory = lvgl.ImgData("//lua/img/file_icons/directory.png"),
+  file_playlist = lvgl.ImgData("//lua/img/file_icons/playlist.png"),
 }
 
 return img

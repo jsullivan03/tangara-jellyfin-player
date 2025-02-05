@@ -27,7 +27,7 @@ class VolumeButtons : public IInputDevice {
   auto name() -> std::string override;
   auto triggers() -> std::vector<std::reference_wrapper<TriggerHooks>> override;
 
-  auto onLock() -> void override;
+  auto onLock(drivers::NvsStorage::LockedInputModes) -> void override;
   auto onUnlock() -> void override;
 
  private:
@@ -36,7 +36,8 @@ class VolumeButtons : public IInputDevice {
   TriggerHooks up_;
   TriggerHooks down_;
 
-  bool locked_;
+  // When locked, this contains the active mode
+  std::optional<drivers::NvsStorage::LockedInputModes> locked_;
 };
 
 }  // namespace input

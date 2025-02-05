@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "drivers/nvs.hpp"
 #include "indev/lv_indev.h"
 #include "input/input_hook.hpp"
 #include "lua/property.hpp"
@@ -34,7 +35,7 @@ class IInputDevice {
   }
 
   /* Called by the LVGL driver when controls are being locked. */
-  virtual auto onLock() -> void {}
+  virtual auto onLock(drivers::NvsStorage::LockedInputModes) -> void {}
   /* Called by the LVGL driver when controls are being unlocked. */
   virtual auto onUnlock() -> void {}
 };

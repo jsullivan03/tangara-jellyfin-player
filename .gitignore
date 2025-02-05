@@ -12,6 +12,7 @@ sdkconfig.old
 .vscode
 compile_commands.json
 warnings.txt
+.DS_Store
 
 doc/
 

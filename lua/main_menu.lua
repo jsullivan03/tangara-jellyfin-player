@@ -11,7 +11,6 @@ local browser = require("browser")
 local playing = require("playing")
 local styles = require("styles")
 local filesystem = require("filesystem")
-local screen = require("screen")
 local font = require("font")
 local theme = require("theme")
 local img = require("images")
@@ -56,7 +55,6 @@ return widgets.MenuScreen:new {
 
     now_playing:onClicked(function() backstack.push(playing:new()) end)
 
-    local has_focus = false
     local track_duration = nil
 
     self.bindings = self.bindings + {
@@ -72,7 +70,6 @@ return widgets.MenuScreen:new {
           now_playing:add_flag(lvgl.FLAG.HIDDEN)
           return
         else
-          has_focus = true
           now_playing:clear_flag(lvgl.FLAG.HIDDEN)
         end
         title:set { text = track.title }
@@ -131,6 +128,15 @@ return widgets.MenuScreen:new {
       })
     end
 
+    local playlist_btn = indexes_list:add_btn(nil, "Playlists")
+    playlist_btn:onClicked(function()
+      backstack.push(require("playlist_browser"):new {
+        title = "Playlists",
+        iterator = filesystem.iterator("/Playlists")
+      })
+    end)
+    playlist_btn:add_style(styles.list_item)
+
     local function show_no_indexes(msg)
       indexes_list:add_flag(lvgl.FLAG.HIDDEN)
       no_indexes_container:clear_flag(lvgl.FLAG.HIDDEN)
@@ -140,6 +146,18 @@ return widgets.MenuScreen:new {
     local function hide_no_indexes()
       no_indexes_container:add_flag(lvgl.FLAG.HIDDEN)
       indexes_list:clear_flag(lvgl.FLAG.HIDDEN)
+
+      if indexes[1] then
+        indexes[1].object:focus()
+      end
+    end
+
+    local function hide_playlist_listing()
+      playlist_btn:add_flag(lvgl.FLAG.HIDDEN)
+    end
+
+    local function show_playlist_listing()
+      playlist_btn:clear_flag(lvgl.FLAG.HIDDEN)
     end
 
     local function update_visible_indexes()
@@ -155,6 +173,13 @@ return widgets.MenuScreen:new {
       end
       if has_valid_index then
         hide_no_indexes()
+
+        -- If we have valid indexes, then also check for playlists
+        if filesystem.iterator("/Playlists/"):next() == nil then
+          hide_playlist_listing()
+        else
+          show_playlist_listing()
+        end
       else
         if require("database").updating:get() then
           show_no_indexes("The database is updating for the first time. Please wait.")

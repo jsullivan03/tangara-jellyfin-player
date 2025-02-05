@@ -1,18 +1,20 @@
--- SPDX-FileCopyrightText: 2023 jacqueline <me@jacqueline.id.au>
+-- SPDX-FileCopyrightText: 2025 Sam Lord <code@samlord.co.uk>
 --
 -- SPDX-License-Identifier: GPL-3.0-only
 
 local lvgl = require("lvgl")
 local widgets = require("widgets")
 local backstack = require("backstack")
-local font = require("font")
-local queue = require("queue")
 local playing = require("playing")
-local playback = require("playback")
-local theme = require("theme")
-local screen = require("screen")
 local filesystem = require("filesystem")
+local screen = require("screen")
+local font = require("font")
+local theme = require("theme")
+local playback = require("playback")
+local queue = require("queue")
 local playlist_iterator = require("playlist_iterator")
+local img = require("images")
+
 
 return screen:new {
   create_ui = function(self)
@@ -58,25 +60,30 @@ return screen:new {
       }
     end
 
-    widgets.InfiniteList(self.root, self.iterator, {
+    local get_icon_func = function(item)
+      if item:is_directory() then
+        return img.file_directory
+      else
+        return img.file_playlist
+      end
+    end
+
+    widgets.InfiniteList(self.root, playlist_iterator:create(self.iterator), {
       focus_first_item = true,
+      get_icon = get_icon_func,
       callback = function(item)
         return function()
-          local is_dir = item:is_directory()
-          if is_dir then
-            backstack.push(require("file_browser"):new {
-              title = self.title,
-              iterator = filesystem.iterator(item:filepath()),
-              breadcrumb = item:filepath()
-            })
+          if item:is_directory() then
+            backstack.push(
+              require("playlist_browser"):new {
+                title = self.title,
+                iterator = filesystem.iterator(item:filepath()),
+                breadcrumb = item:filepath()
+              })
           elseif
               playlist_iterator:is_playlist(item) then
+            -- TODO: playlist viewer
             queue.open_playlist(item:filepath())
-            playback.playing:set(true)
-            backstack.push(playing:new())
-          elseif playback.is_playable(item:filepath()) then
-            queue.clear()
-            queue.add(item:filepath())
             playback.playing:set(true)
             backstack.push(playing:new())
           end

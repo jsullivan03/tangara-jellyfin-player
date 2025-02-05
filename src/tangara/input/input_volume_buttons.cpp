@@ -15,13 +15,15 @@ VolumeButtons::VolumeButtons(drivers::IGpios& gpios)
     : gpios_(gpios),
       up_("upper", actions::volumeUp()),
       down_("lower", actions::volumeDown()),
-      locked_(false) {}
+      locked_() {}
 
 auto VolumeButtons::read(lv_indev_data_t* data) -> void {
   bool up = !gpios_.Get(drivers::IGpios::Pin::kKeyUp);
   bool down = !gpios_.Get(drivers::IGpios::Pin::kKeyDown);
 
-  if ((up && down) || locked_) {
+  bool input_disabled = locked_.has_value() && (locked_ != drivers::NvsStorage::LockedInputModes::kVolumeOnly);
+
+  if ((up && down) || input_disabled) {
     up = false;
     down = false;
   }
@@ -39,12 +41,12 @@ auto VolumeButtons::triggers()
   return {up_, down_};
 }
 
-auto VolumeButtons::onLock() -> void {
-  locked_ = true;
+auto VolumeButtons::onLock(drivers::NvsStorage::LockedInputModes mode) -> void {
+  locked_ = mode;
 }
 
 auto VolumeButtons::onUnlock() -> void {
-  locked_ = false;
+  locked_ = {};
 }
 
 }  // namespace input

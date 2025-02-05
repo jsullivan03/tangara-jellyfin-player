@@ -21,6 +21,8 @@
 #include "lua/property.hpp"
 #include "ui/ui_events.hpp"
 
+#include "esp_timer.h"
+
 namespace input {
 
 TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
@@ -52,7 +54,8 @@ TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
       is_scrolling_(false),
       threshold_(calculateThreshold(nvs.ScrollSensitivity())),
       is_first_read_(true),
-      last_angle_(0) {}
+      last_angle_(0),
+      last_wheel_touch_time_(0) {}
 
 auto TouchWheel::read(lv_indev_data_t* data) -> void {
   if (locked_) {
@@ -77,7 +80,16 @@ auto TouchWheel::read(lv_indev_data_t* data) -> void {
     data->enc_diff = 0;
   }
 
-  centre_.update(wheel_data.is_button_touched && !wheel_data.is_wheel_touched,
+  // Prevent accidental center button touches while scrolling
+  if (wheel_data.is_wheel_touched) {
+    last_wheel_touch_time_ = esp_timer_get_time();
+  }
+
+  bool wheel_touch_timed_out =
+      esp_timer_get_time() - last_wheel_touch_time_ > SCROLL_TIMEOUT_US;
+
+  centre_.update(wheel_touch_timed_out && wheel_data.is_button_touched &&
+                     !wheel_data.is_wheel_touched,
                  data);
 
   // If the user is touching the wheel but not scrolling, then they may be
@@ -113,7 +125,7 @@ auto TouchWheel::triggers()
   return {centre_, up_, right_, down_, left_};
 }
 
-auto TouchWheel::onLock() -> void {
+auto TouchWheel::onLock(drivers::NvsStorage::LockedInputModes mode) -> void {
   wheel_.LowPowerMode(true);
   locked_ = true;
 }

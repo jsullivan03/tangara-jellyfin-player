@@ -306,10 +306,11 @@ function widgets.InfiniteList(parent, iterator, opts)
     fwd_iterator:prev()
   end
 
-  local function add_item(item, index)
+  local function add_item(item, index, item_opts)
     if not item then
       return
     end
+    item_opts = item_opts or {}
     local this_item = index
     local add_to_top = false
     if this_item < first_index then
@@ -324,6 +325,9 @@ function widgets.InfiniteList(parent, iterator, opts)
     local btn = infinite_list.root:add_btn(icon, tostring(item))
     if add_to_top then
       btn:move_to_index(0)
+    end
+    if item_opts.focus then
+      btn:focus()
     end
     -- opts.callback should take an item and return a function matching the arg of onClicked
     if opts.callback then
@@ -357,11 +361,11 @@ function widgets.InfiniteList(parent, iterator, opts)
   end
 
   for idx = 0, 8 do
-    local val = fwd_iterator()
+    local val = fwd_iterator:next()
     if not val then
       break
     end
-    add_item(val, idx)
+    add_item(val, idx, { focus = (opts.focus_first_item and idx == 0) })
   end
 
   return infinite_list

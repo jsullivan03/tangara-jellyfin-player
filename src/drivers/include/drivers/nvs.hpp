@@ -138,6 +138,14 @@ class NvsStorage {
   auto PrimaryInput() -> InputModes;
   auto PrimaryInput(InputModes) -> void;
 
+  enum class LockedInputModes : uint8_t {
+    kDisabled = 0,
+    kVolumeOnly = 1,
+  };
+
+  auto LockedInput() -> LockedInputModes;
+  auto LockedInput(LockedInputModes) -> void;
+
   auto QueueRepeatMode() -> uint8_t;
   auto QueueRepeatMode(uint8_t) -> void;
 
@@ -167,6 +175,7 @@ class NvsStorage {
   Setting<uint16_t> amp_cur_vol_;
   Setting<int8_t> amp_left_bias_;
   Setting<uint8_t> input_mode_;
+  Setting<uint8_t> locked_input_mode_;
   Setting<uint8_t> output_mode_;
 
   Setting<std::string> theme_;

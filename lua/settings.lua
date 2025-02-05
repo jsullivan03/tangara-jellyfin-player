@@ -93,6 +93,7 @@ settings.BluetoothSettings = SettingsScreen:new {
       local enabled = enable_sw:enabled()
       bluetooth.enabled:set(enabled)
     end)
+    enable_sw:focus()
 
     self.bindings = self.bindings + {
       bluetooth.enabled:bind(function(en)
@@ -232,6 +233,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       local selection = volume_chooser:get('selected') + 1
       volume.limit_db:set(limits[selection])
     end)
+    volume_chooser:focus()
 
     theme.set_subject(self.content:Label {
       text = "Left/Right balance",
@@ -304,6 +306,7 @@ settings.DisplaySettings = SettingsScreen:new {
     brightness:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       display.brightness:set(brightness:value())
     end)
+    brightness:focus()
 
     self.bindings = self.bindings + {
       display.brightness:bind(function(b)
@@ -372,6 +375,8 @@ settings.ThemeSettings = SettingsScreen:new {
         backstack.reset(main_menu:new())
       end
     end)
+
+    theme_chooser:focus()
   end
 }
 
@@ -380,44 +385,62 @@ settings.InputSettings = SettingsScreen:new {
   create_ui = function(self)
     SettingsScreen.create_ui(self)
 
+    -- Use the control scheme enum lists to generate the relevant dropdowns
+    local make_scheme_control = function(self, scheme_list, control_scheme)
+        local option_to_scheme = {}
+        local scheme_to_option = {}
+        local option_idx = 0
+        local options = ""
+
+        -- Sort the keys to order the dropdowns the same as the enums
+        keys = {}
+        for i in pairs(scheme_list) do table.insert(keys, i) end
+        table.sort(keys)
+
+        for i, k in pairs(keys) do
+          v = scheme_list[k]
+
+          option_to_scheme[option_idx] = k
+          scheme_to_option[k] = option_idx
+          if option_idx > 0 then
+            options = options .. "\n"
+          end
+          options = options .. v
+          option_idx = option_idx + 1
+        end
+
+        local controls_chooser = self.content:Dropdown {
+          options = options,
+          symbol = img.chevron,
+        }
+
+        self.bindings = self.bindings + {
+          control_scheme:bind(function(s)
+            local option = scheme_to_option[s]
+            controls_chooser:set({ selected = option })
+          end)
+        }
+
+        controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+          local option = controls_chooser:get('selected')
+          local scheme = option_to_scheme[option]
+          control_scheme:set(scheme)
+        end)
+
+        return controls_chooser
+    end
+
     theme.set_subject(self.content:Label {
       text = "Control scheme",
     }, "settings_title")
+    local controls_chooser = make_scheme_control(self, controls.schemes(), controls.scheme)
 
-    local schemes = controls.schemes()
-    local option_to_scheme = {}
-    local scheme_to_option = {}
+    theme.set_subject(self.content:Label {
+      text = "Control scheme when locked",
+    }, "settings_title")
+    make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
 
-    local option_idx = 0
-    local options = ""
-
-    for i, v in pairs(schemes) do
-      option_to_scheme[option_idx] = i
-      scheme_to_option[i] = option_idx
-      if option_idx > 0 then
-        options = options .. "\n"
-      end
-      options = options .. v
-      option_idx = option_idx + 1
-    end
-
-    local controls_chooser = self.content:Dropdown {
-      options = options,
-      symbol = img.chevron,
-    }
-
-    self.bindings = self.bindings + {
-      controls.scheme:bind(function(s)
-        local option = scheme_to_option[s]
-        controls_chooser:set({ selected = option })
-      end)
-    }
-
-    controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
-      local option = controls_chooser:get('selected')
-      local scheme = option_to_scheme[option]
-      controls.scheme:set(scheme)
-    end)
+    controls_chooser:focus()
 
     theme.set_subject(self.content:Label {
       text = "Scroll Sensitivity",
@@ -483,6 +506,7 @@ settings.MassStorageSettings = SettingsScreen:new {
       end
       bind_switch()
     end)
+    enable_sw:focus()
 
     self.bindings = self.bindings + {
       usb.msc_enabled:bind(bind_switch),
@@ -560,6 +584,7 @@ settings.DatabaseSettings = SettingsScreen:new {
     update:onClicked(function()
       database.update()
     end)
+    update:focus()
 
     self.bindings = self.bindings + {
       database.auto_update:bind(function(en)
@@ -841,10 +866,11 @@ settings.Root = widgets.MenuScreen:new {
          end)
       end
       item:add_style(styles.list_item)
+      return item
     end
 
     local audio_section = section("Audio")
-    submenu("Bluetooth", settings.BluetoothSettings, audio_section)
+    local first_item = submenu("Bluetooth", settings.BluetoothSettings, audio_section)
     submenu("Headphones", settings.HeadphonesSettings)
 
     section("Interface")
@@ -863,6 +889,8 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Firmware", settings.FirmwareSettings)
     submenu("Licenses", settings.LicensesScreen)
     submenu("Regulatory", settings.RegulatoryScreen)
+
+    first_item:focus()
   end
 }
 

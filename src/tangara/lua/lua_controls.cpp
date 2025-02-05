@@ -42,7 +42,24 @@ static auto controls_schemes(lua_State* L) -> int {
   return 1;
 }
 
+static auto locked_controls_schemes(lua_State* L) -> int {
+  lua_newtable(L);
+
+  lua_pushliteral(L, "Disabled");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::LockedInputModes::kDisabled));
+
+  lua_pushliteral(L, "Volume Only");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::LockedInputModes::kVolumeOnly));
+
+  return 1;
+}
+
 static const struct luaL_Reg kControlsFuncs[] = {{"schemes", controls_schemes},
+                                                 {"locked_schemes", locked_controls_schemes},
                                                  {NULL, NULL}};
 
 static auto lua_controls(lua_State* state) -> int {
