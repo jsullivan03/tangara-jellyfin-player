@@ -89,6 +89,8 @@ settings.BluetoothSettings = SettingsScreen:new {
     }
     enable_container:Label { text = "Enable", flex_grow = 1 }
     local enable_sw = enable_container:Switch {}
+    local enable_sw_desc = widgets.Description(enable_sw, "Enable Bluetooth")
+
     enable_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       local enabled = enable_sw:enabled()
       bluetooth.enabled:set(enabled)
@@ -99,8 +101,10 @@ settings.BluetoothSettings = SettingsScreen:new {
       bluetooth.enabled:bind(function(en)
         if en then
           enable_sw:add_state(lvgl.STATE.CHECKED)
+          enable_sw_desc:set({text="Disable Bluetooth"})
         else
           enable_sw:clear_state(lvgl.STATE.CHECKED)
+          enable_sw_desc:set({text="Enable Bluetooth"})
         end
       end),
     }
@@ -244,6 +248,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       range = { min = -100, max = 100 },
       value = 0,
     }
+    local balance_desc = widgets.Description(balance, "Left/Right Balance")
     balance:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       volume.left_bias:set(-balance:value())
     end)
@@ -303,6 +308,7 @@ settings.DisplaySettings = SettingsScreen:new {
       range = { min = 20, max = 100 },
       value = display.brightness:get(),
     }
+    local brightness_desc = widgets.Description(brightness, "Brightness")
     brightness:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       display.brightness:set(brightness:value())
     end)
@@ -485,6 +491,7 @@ settings.MassStorageSettings = SettingsScreen:new {
     }
     enable_container:Label { text = "Enable", flex_grow = 1 }
     local enable_sw = enable_container:Switch {}
+    local enable_sw_desc = widgets.Description(enable_sw, "Enable USB Storage")
 
     local busy_text = self.content:Label {
       w = lvgl.PCT(100),
@@ -495,8 +502,10 @@ settings.MassStorageSettings = SettingsScreen:new {
     local bind_switch = function()
       if usb.msc_enabled:get() then
         enable_sw:add_state(lvgl.STATE.CHECKED)
+        enable_sw_desc:set({ text = "Disable USB Storage"})
       else
         enable_sw:clear_state(lvgl.STATE.CHECKED)
+        enable_sw_desc:set({text = "Enable USB Storage"})
       end
     end
 
