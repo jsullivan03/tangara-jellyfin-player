@@ -58,8 +58,28 @@ static auto locked_controls_schemes(lua_State* L) -> int {
   return 1;
 }
 
+static auto haptics_modes(lua_State* L) -> int {
+  lua_newtable(L);
+
+  lua_pushliteral(L, "Disabled");
+  lua_rawseti(L, -2,
+              static_cast<int>(drivers::NvsStorage::HapticsModes::kDisabled));
+
+  lua_pushliteral(L, "Minimal");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::HapticsModes::kMinimal));
+
+  lua_pushliteral(L, "Strong");
+  lua_rawseti(
+      L, -2, static_cast<int>(drivers::NvsStorage::HapticsModes::kStrong));
+
+  return 1;
+}
+
 static const struct luaL_Reg kControlsFuncs[] = {{"schemes", controls_schemes},
                                                  {"locked_schemes", locked_controls_schemes},
+                                                 {"haptics_modes", haptics_modes},
                                                  {NULL, NULL}};
 
 static auto lua_controls(lua_State* state) -> int {

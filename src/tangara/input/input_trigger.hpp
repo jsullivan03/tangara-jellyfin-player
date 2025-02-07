@@ -23,6 +23,7 @@ class Trigger {
     kDoubleClick,
     kLongPress,
     kRepeatPress,
+    kPress
   };
 
   Trigger();

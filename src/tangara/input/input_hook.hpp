@@ -52,7 +52,7 @@ class TriggerHooks {
                std::optional<HookCallback> long_press,
                std::optional<HookCallback> repeat);
 
-  auto update(bool, lv_indev_data_t*) -> void;
+  auto update(bool, lv_indev_data_t*) -> Trigger::State;
   auto override(Trigger::State, std::optional<HookCallback>) -> void;
 
   auto name() const -> const std::string&;

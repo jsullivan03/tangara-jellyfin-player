@@ -44,7 +44,7 @@ auto Trigger::update(bool is_pressed) -> State {
     was_double_click_ = false;
     times_long_pressed_ = 0;
     was_pressed_ = true;
-    return State::kNone;
+    return State::kPress;
   }
 
   // The key was released. If there were no long-press events fired during the

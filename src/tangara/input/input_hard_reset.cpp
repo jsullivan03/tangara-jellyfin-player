@@ -14,7 +14,7 @@ namespace input {
 
 HardReset::HardReset(drivers::IGpios& gpios) : gpios_(gpios) {}
 
-auto HardReset::read(lv_indev_data_t* data) -> void {
+auto HardReset::read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void {
   bool buttons_pressed = !gpios_.Get(drivers::IGpios::Pin::kKeyUp) &&
                          !gpios_.Get(drivers::IGpios::Pin::kKeyDown);
   if (!buttons_pressed) {

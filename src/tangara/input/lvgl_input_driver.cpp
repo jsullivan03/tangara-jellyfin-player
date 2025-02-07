@@ -112,6 +112,15 @@ LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
               nvs.LockedInput(*mode);
               return true;
             }),
+      haptics_mode_(static_cast<int>(nvs.HapticsMode()),
+            [&](const lua::LuaValue& val) {
+              if (!std::holds_alternative<int>(val)) {
+                return false;
+              }
+              auto mode = drivers::NvsStorage::intToHapticsMode(std::get<int>(val));
+              nvs.HapticsMode(mode);
+              return true;
+            }),
       inputs_(factory.createInputs(nvs.PrimaryInput())),
       feedbacks_(factory.createFeedbacks()),
       is_locked_(false) {
@@ -141,8 +150,14 @@ auto LvglInputDriver::setGroup(lv_group_t* g) -> void {
 }
 
 auto LvglInputDriver::read(lv_indev_data_t* data) -> void {
+  std::vector<InputEvent> events;
   for (auto&& device : inputs_) {
-    device->read(data);
+    device->read(data, events);
+  }
+  for (auto event: events) {
+    for (auto&& device : feedbacks_) {
+      device->feedback(lv_indev_get_group(device_), event);
+    }
   }
 }
 

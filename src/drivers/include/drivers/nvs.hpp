@@ -110,6 +110,15 @@ class NvsStorage {
   auto OutputMode() -> Output;
   auto OutputMode(Output) -> void;
 
+  enum class HapticsModes : uint8_t {
+    kDisabled = 0,
+    kMinimal = 1,
+    kStrong = 2,
+  };
+  auto HapticsMode() -> HapticsModes;
+  auto HapticsMode(HapticsModes) -> void;
+  static auto intToHapticsMode(int raw) -> HapticsModes;
+
   auto ScreenBrightness() -> uint_fast8_t;
   auto ScreenBrightness(uint_fast8_t) -> void;
 
@@ -177,6 +186,7 @@ class NvsStorage {
   Setting<uint8_t> input_mode_;
   Setting<uint8_t> locked_input_mode_;
   Setting<uint8_t> output_mode_;
+  Setting<uint8_t> haptics_mode_;
 
   Setting<std::string> theme_;
 

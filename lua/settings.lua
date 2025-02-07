@@ -451,6 +451,11 @@ settings.InputSettings = SettingsScreen:new {
     local controls_locked = make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
     local controls_locked_desc = widgets.Description(controls_locked, "Control scheme when locked")
 
+    theme.set_subject(self.content:Label {
+      text = "Haptics Mode",
+    }, "settings_title")
+    make_scheme_control(self, controls.haptics_modes(), controls.haptics_mode)
+
     controls_chooser:focus()
 
     theme.set_subject(self.content:Label {

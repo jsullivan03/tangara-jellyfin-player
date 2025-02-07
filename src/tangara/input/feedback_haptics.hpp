@@ -12,17 +12,23 @@
 
 #include "drivers/haptics.hpp"
 #include "input/feedback_device.hpp"
+#include "input/input_events.hpp"
+#include "drivers/nvs.hpp"
+#include "system_fsm/service_locator.hpp"
 
 namespace input {
 
 class Haptics : public IFeedbackDevice {
  public:
-  Haptics(drivers::Haptics& haptics_);
+  Haptics(drivers::Haptics& haptics_,
+          std::shared_ptr<system_fsm::ServiceLocator> services);
 
   auto feedback(lv_group_t*, uint8_t event_type) -> void override;
+  auto feedback(lv_group_t*, InputEvent event) -> void override;
 
  private:
   drivers::Haptics& haptics_;
+  std::shared_ptr<system_fsm::ServiceLocator> services_;
   lv_obj_t* last_selection_;
 };
 

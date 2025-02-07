@@ -57,7 +57,7 @@ TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
       last_angle_(0),
       last_wheel_touch_time_(0) {}
 
-auto TouchWheel::read(lv_indev_data_t* data) -> void {
+auto TouchWheel::read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void {
   if (locked_) {
     return;
   }
@@ -88,9 +88,14 @@ auto TouchWheel::read(lv_indev_data_t* data) -> void {
   bool wheel_touch_timed_out =
       esp_timer_get_time() - last_wheel_touch_time_ > SCROLL_TIMEOUT_US;
 
-  centre_.update(wheel_touch_timed_out && wheel_data.is_button_touched &&
+  auto centre_state = centre_.update(wheel_touch_timed_out && wheel_data.is_button_touched &&
                      !wheel_data.is_wheel_touched,
                  data);
+  if (centre_state == input::Trigger::State::kPress) {
+    events.push_back(InputEvent::kOnPress);
+  } else if (centre_state == input::Trigger::State::kLongPress) {
+    events.push_back(InputEvent::kOnLongPress);
+  }
 
   // If the user is touching the wheel but not scrolling, then they may be
   // clicking on one of the wheel's cardinal directions.

@@ -668,6 +668,7 @@ void Lua::entry() {
         {
             {"scheme", &sInput->mode()},
             {"locked_scheme", &sInput->lockedMode()},
+            {"haptics_mode", &sInput->hapticsMode()},
             {"lock_switch", &sLockSwitch},
             {"hooks", [&](lua_State* L) { return sInput->pushHooks(L); }},
         });

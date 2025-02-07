@@ -35,6 +35,7 @@ static constexpr char kKeyAmpCurrentVolume[] = "hp_vol";
 static constexpr char kKeyAmpLeftBias[] = "hp_bias";
 static constexpr char kKeyPrimaryInput[] = "in_pri";
 static constexpr char kKeyLockedInput[] = "in_locked";
+static constexpr char kKeyHaptics[] = "haptic_mode";
 static constexpr char kKeyScrollSensitivity[] = "scroll";
 static constexpr char kKeyLockPolarity[] = "lockpol";
 static constexpr char kKeyDisplayCols[] = "dispcols";
@@ -275,6 +276,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       input_mode_(kKeyPrimaryInput),
       locked_input_mode_(kKeyLockedInput),
       output_mode_(kKeyOutput),
+      haptics_mode_(kKeyHaptics),
       theme_{kKeyInterfaceTheme},
       bt_preferred_(kKeyBluetoothPreferred),
       bt_names_(kKeyBluetoothNames),
@@ -304,6 +306,7 @@ auto NvsStorage::Read() -> void {
   input_mode_.read(handle_);
   locked_input_mode_.read(handle_);
   output_mode_.read(handle_);
+  haptics_mode_.read(handle_);
   theme_.read(handle_);
   bt_preferred_.read(handle_);
   bt_names_.read(handle_);
@@ -328,6 +331,7 @@ auto NvsStorage::Write() -> bool {
   input_mode_.write(handle_);
   locked_input_mode_.write(handle_);
   output_mode_.write(handle_);
+  haptics_mode_.write(handle_);
   theme_.write(handle_);
   bt_preferred_.write(handle_);
   bt_names_.write(handle_);
@@ -482,6 +486,31 @@ auto NvsStorage::OutputMode(Output out) -> void {
   output_mode_.write(handle_);
   nvs_commit(handle_);
 }
+
+auto NvsStorage::HapticsMode() -> HapticsModes {
+  std::lock_guard<std::mutex> lock{mutex_};
+  int val = haptics_mode_.get().value_or(static_cast<uint8_t>(HapticsModes::kMinimal));
+  return intToHapticsMode(val);
+}
+
+auto NvsStorage::intToHapticsMode(int raw) -> HapticsModes {
+  switch (raw) {
+    case static_cast<int>(HapticsModes::kDisabled):
+      return HapticsModes::kDisabled;
+    case static_cast<int>(HapticsModes::kMinimal):
+      return HapticsModes::kMinimal;
+    case static_cast<int>(HapticsModes::kStrong):
+      return HapticsModes::kStrong;
+    default:
+      return HapticsModes::kStrong;
+  }
+}
+
+auto NvsStorage::HapticsMode(HapticsModes mode) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  haptics_mode_.set(static_cast<uint8_t>(mode));
+}
+
 
 auto NvsStorage::FastCharge() -> bool {
   std::lock_guard<std::mutex> lock{mutex_};

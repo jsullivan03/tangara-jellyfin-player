@@ -56,7 +56,7 @@ auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
 auto DeviceFactory::createFeedbacks()
     -> std::vector<std::shared_ptr<IFeedbackDevice>> {
   return {
-      std::make_shared<Haptics>(services_->haptics()),
+      std::make_shared<Haptics>(services_->haptics(), services_),
       std::make_shared<TextToSpeech>(services_->tts()),
   };
 }

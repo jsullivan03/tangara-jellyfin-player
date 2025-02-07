@@ -17,7 +17,7 @@ VolumeButtons::VolumeButtons(drivers::IGpios& gpios)
       down_("lower", actions::volumeDown()),
       locked_() {}
 
-auto VolumeButtons::read(lv_indev_data_t* data) -> void {
+auto VolumeButtons::read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void {
   bool up = !gpios_.Get(drivers::IGpios::Pin::kKeyUp);
   bool down = !gpios_.Get(drivers::IGpios::Pin::kKeyDown);
 

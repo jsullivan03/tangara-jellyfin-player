@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include "core/lv_group.h"
+#include "input/input_events.hpp"
 
 namespace input {
 
@@ -25,6 +26,7 @@ class IFeedbackDevice {
   virtual ~IFeedbackDevice() {}
 
   virtual auto feedback(lv_group_t* group, uint8_t event_type) -> void = 0;
+  virtual auto feedback(lv_group_t* group, InputEvent event) -> void = 0;
 
   // TODO: Add configuration; likely the same shape of interface that
   // IInputDevice uses.

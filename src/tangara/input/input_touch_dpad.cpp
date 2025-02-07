@@ -28,7 +28,7 @@ TouchDPad::TouchDPad(drivers::TouchWheel& wheel)
       left_("left", actions::goBack(), {}, {}, {}),
       locked_(false) {}
 
-auto TouchDPad::read(lv_indev_data_t* data) -> void {
+auto TouchDPad::read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void {
   if (locked_) {
     return;
   }

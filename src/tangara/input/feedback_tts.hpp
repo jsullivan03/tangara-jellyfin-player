@@ -22,6 +22,7 @@ class TextToSpeech : public IFeedbackDevice {
   TextToSpeech(tts::Provider&);
 
   auto feedback(lv_group_t*, uint8_t event_type) -> void override;
+  auto feedback(lv_group_t*, InputEvent event) -> void override;
 
  private:
   tts::Provider& tts_;

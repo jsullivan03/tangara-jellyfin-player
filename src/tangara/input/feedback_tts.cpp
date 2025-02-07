@@ -22,6 +22,7 @@
 
 #include "tts/events.hpp"
 #include "tts/provider.hpp"
+#include "feedback_tts.hpp"
 
 namespace input {
 
@@ -48,6 +49,10 @@ auto TextToSpeech::feedback(lv_group_t* group, uint8_t event_type) -> void {
       describe(*focused);
     }
   }
+}
+
+auto TextToSpeech::feedback(lv_group_t*, InputEvent event) -> void {
+  return;
 }
 
 auto TextToSpeech::describe(lv_obj_t& obj) -> void {
@@ -93,5 +98,6 @@ auto TextToSpeech::findDescription(lv_obj_t& obj)
 
   return {};
 }
+
 
 }  // namespace input

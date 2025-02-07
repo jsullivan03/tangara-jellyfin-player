@@ -50,8 +50,9 @@ TriggerHooks::TriggerHooks(std::string name,
       long_press_("long_press", long_press),
       repeat_("repeat", repeat) {}
 
-auto TriggerHooks::update(bool pressed, lv_indev_data_t* d) -> void {
-  switch (trigger_.update(pressed)) {
+auto TriggerHooks::update(bool pressed, lv_indev_data_t* d) -> Trigger::State {
+  auto state = trigger_.update(pressed);
+  switch (state) {
     case Trigger::State::kClick:
       click_.invoke(d);
       break;
@@ -68,6 +69,7 @@ auto TriggerHooks::update(bool pressed, lv_indev_data_t* d) -> void {
     default:
       break;
   }
+  return state;
 }
 
 auto TriggerHooks::override(Trigger::State s, std::optional<HookCallback> cb)

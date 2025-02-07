@@ -20,7 +20,7 @@ class HardReset : public IInputDevice {
  public:
   HardReset(drivers::IGpios&);
 
-  auto read(lv_indev_data_t* data) -> void override;
+  auto read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void override;
 
   auto name() -> std::string override;
   auto triggers() -> std::vector<std::reference_wrapper<TriggerHooks>> override;
