@@ -89,6 +89,8 @@ settings.BluetoothSettings = SettingsScreen:new {
     }
     enable_container:Label { text = "Enable", flex_grow = 1 }
     local enable_sw = enable_container:Switch {}
+    local enable_sw_desc = widgets.Description(enable_sw, "Enable Bluetooth")
+
     enable_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       local enabled = enable_sw:enabled()
       bluetooth.enabled:set(enabled)
@@ -99,8 +101,10 @@ settings.BluetoothSettings = SettingsScreen:new {
       bluetooth.enabled:bind(function(en)
         if en then
           enable_sw:add_state(lvgl.STATE.CHECKED)
+          enable_sw_desc:set({text="Disable Bluetooth"})
         else
           enable_sw:clear_state(lvgl.STATE.CHECKED)
+          enable_sw_desc:set({text="Enable Bluetooth"})
         end
       end),
     }
@@ -219,7 +223,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
     SettingsScreen.create_ui(self)
 
     theme.set_subject(self.content:Label {
-      text = "Maxiumum volume limit",
+      text = "Maximum volume limit",
     }, "settings_title")
 
     local volume_chooser = self.content:Dropdown {
@@ -233,6 +237,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       local selection = volume_chooser:get('selected') + 1
       volume.limit_db:set(limits[selection])
     end)
+    local volume_chooser_desc = widgets.Description(volume_chooser, "Maximum volume limit")
     volume_chooser:focus()
 
     theme.set_subject(self.content:Label {
@@ -244,6 +249,7 @@ settings.HeadphonesSettings = SettingsScreen:new {
       range = { min = -100, max = 100 },
       value = 0,
     }
+    local balance_desc = widgets.Description(balance, "Left/Right Balance")
     balance:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       volume.left_bias:set(-balance:value())
     end)
@@ -303,6 +309,7 @@ settings.DisplaySettings = SettingsScreen:new {
       range = { min = 20, max = 100 },
       value = display.brightness:get(),
     }
+    local brightness_desc = widgets.Description(brightness, "Brightness")
     brightness:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       display.brightness:set(brightness:value())
     end)
@@ -365,6 +372,8 @@ settings.ThemeSettings = SettingsScreen:new {
       options = options,
       symbol = img.chevron,
     }
+
+    local theme_chooser_desc = widgets.Description(theme_chooser, "Theme")
     theme_chooser:set({ selected = selected_idx })
 
     theme_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
@@ -434,11 +443,13 @@ settings.InputSettings = SettingsScreen:new {
       text = "Control scheme",
     }, "settings_title")
     local controls_chooser = make_scheme_control(self, controls.schemes(), controls.scheme)
+    local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
 
     theme.set_subject(self.content:Label {
       text = "Control scheme when locked",
     }, "settings_title")
-    make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
+    local controls_locked = make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
+    local controls_locked_desc = widgets.Description(controls_locked, "Control scheme when locked")
 
     controls_chooser:focus()
 
@@ -455,6 +466,7 @@ settings.InputSettings = SettingsScreen:new {
     sensitivity:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       controls.scroll_sensitivity:set(sensitivity:value() * slider_scale)
     end)
+    local sensitivity_desc = widgets.Description(sensitivity, "Scroll Sensitivity")
   end
 }
 
@@ -485,6 +497,7 @@ settings.MassStorageSettings = SettingsScreen:new {
     }
     enable_container:Label { text = "Enable", flex_grow = 1 }
     local enable_sw = enable_container:Switch {}
+    local enable_sw_desc = widgets.Description(enable_sw, "Enable USB Storage")
 
     local busy_text = self.content:Label {
       w = lvgl.PCT(100),
@@ -495,8 +508,10 @@ settings.MassStorageSettings = SettingsScreen:new {
     local bind_switch = function()
       if usb.msc_enabled:get() then
         enable_sw:add_state(lvgl.STATE.CHECKED)
+        enable_sw_desc:set({ text = "Disable USB Storage"})
       else
         enable_sw:clear_state(lvgl.STATE.CHECKED)
+        enable_sw_desc:set({text = "Enable USB Storage"})
       end
     end
 
@@ -560,9 +575,15 @@ settings.DatabaseSettings = SettingsScreen:new {
     auto_update_container:add_style(styles.list_item)
     auto_update_container:Label { text = "Auto update", flex_grow = 1 }
     local auto_update_sw = auto_update_container:Switch {}
+    local auto_update_desc = widgets.Description(auto_update_sw, "Auto update")
 
     auto_update_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       database.auto_update:set(auto_update_sw:enabled())
+      if auto_update_sw:enabled() then
+        auto_update_desc:set({text = "Disable auto-update"})
+      else
+        auto_update_desc:set({text = "Enable auto-update"})
+      end
     end)
 
     local actions_container = self.content:Object {
@@ -634,6 +655,7 @@ settings.PowerSettings = SettingsScreen:new {
     fast_charge_container:add_style(styles.list_item)
     fast_charge_container:Label { text = "Fast Charging", flex_grow = 1 }
     local fast_charge_sw = fast_charge_container:Switch {}
+    local fast_charge_desc = widgets.Description(fast_charge_sw, "Fast Charging")
 
     fast_charge_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       power.fast_charge:set(fast_charge_sw:enabled())
@@ -643,8 +665,10 @@ settings.PowerSettings = SettingsScreen:new {
       power.fast_charge:bind(function(en)
         if en then
           fast_charge_sw:add_state(lvgl.STATE.CHECKED)
+          fast_charge_desc:set({text = "Disable Fast Charging"})
         else
           fast_charge_sw:clear_state(lvgl.STATE.CHECKED)
+          fast_charge_desc:set({text = "Enable Fast Charging"})
         end
       end),
     }
