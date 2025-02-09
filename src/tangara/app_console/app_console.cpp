@@ -207,8 +207,11 @@ void RegisterDbInit() {
 
 int CmdTasks(int argc, char** argv) {
 #if (configUSE_TRACE_FACILITY == 0)
-  std::cout << "configUSE_TRACE_FACILITY must be enabled" << std::endl;
-  std::cout << "also consider configTASKLIST_USE_COREID" << std::endl;
+  std::cout
+    << "FreeRTOS is not configured to track task info." << std::endl
+    << "Enable CONFIG_FREERTOS_USE_TRACE_FACILITY=y in " << std::endl
+    << "sdkconfig.local, and also consider enabling " << std::endl
+    << "CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y" << std::endl;
   return 1;
 #endif
 
@@ -217,6 +220,14 @@ int CmdTasks(int argc, char** argv) {
     std::cout << usage << std::endl;
     return 1;
   }
+
+  // Sample the task runtime percentage over 2.5 seconds if collecting
+  // task statistics. Else, we don't need to sample for as long.
+#ifdef CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
+  const int kSamplePeriodMs = 2500;
+#else
+  const int kSamplePeriodMs = 10;
+#endif
 
   // Pad the number of tasks so that uxTaskGetSystemState still returns info
   // if new tasks are started during measurement.
@@ -229,10 +240,20 @@ int CmdTasks(int argc, char** argv) {
   size_t start_num_tasks =
       uxTaskGetSystemState(start_status, num_tasks, &start_elapsed_ticks);
 
-  vTaskDelay(pdMS_TO_TICKS(2500));
+  vTaskDelay(pdMS_TO_TICKS(kSamplePeriodMs));
 
   size_t end_num_tasks =
       uxTaskGetSystemState(end_status, num_tasks, &end_elapsed_ticks);
+
+  uint32_t elapsed_ticks = end_elapsed_ticks - start_elapsed_ticks;
+
+  if (0 == elapsed_ticks) {
+    std::cout << "Warning: the scheduler is not recording run-time" << std::endl
+              << "statistics, and this means that detailed task" << std::endl
+              << "information is not available." << std::endl
+              << "Enable CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS" << std::endl
+              << "in sdkconfig.local to capture these stats." << std::endl;
+  }
 
   std::vector<std::pair<uint32_t, std::pmr::string>> info_strings;
   for (int i = 0; i < start_num_tasks; i++) {
@@ -279,8 +300,12 @@ int CmdTasks(int argc, char** argv) {
         str << "\t\t";
       }
 
+#ifdef CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
       str << std::fixed << std::setprecision(1) << (time_percent * 100);
       str << "%";
+#else
+      str << "(unavailable)";
+#endif
 
       info_strings.push_back({run_time, std::pmr::string{str.str()}});
     }
