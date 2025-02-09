@@ -286,9 +286,9 @@ int CmdTasks(int argc, char** argv) {
     }
   }
 
-  std::sort(info_strings.begin(), info_strings.end(),
+  std::sort(info_strings.rbegin(), info_strings.rend(),
             [](const auto& first, const auto& second) {
-              return first.first >= second.first;
+              return first.first < second.first;
             });
 
   std::cout << "name\t\t";
