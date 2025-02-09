@@ -47,3 +47,37 @@ logs a `WARN`ing each time it cannot find a TTS sample. You can enable
 these log messages on the console by using the command `loglevel warn`,
 and then manipulating the click wheel to move through the UI to discover
 other missing TTS samples.
+
+## Tasks and Event Passing
+
+### In the `ui` task
+
+There are two main threads involved with running TTS - firstly, the `ui`
+task, which is rooted in `ui::UiTask::Main()` (`src/tangara/ui/lvgl_task.hpp)`.
+By way of the LVGL stack, eventually navigation in the UI results in sending
+a `tts::SelectionChanged` message from `input::TextToSpeech::describe()`
+(`src/tangara/input/feedback_tts.cpp`) to `tts::Provider::feed()`
+(`src/tangara/tts/provider.cpp`), all in the UI task.
+
+The `tts::Provider` is responsible for translating the UI string from a lump
+of text to a TTS sample filename, which is then passed along to the player
+in `tts::Player::playFile()` (`src/tangara/tts/player.cpp`), still on the UI
+thread.
+
+The UI task has a smaller stack than the `worker_X` tasks, and are not
+appropriate to use for audio decoding work, both because they would block any
+UI updates, and also have insufficient stack space for audio decode activity.
+
+### Transitioning to the `WorkerPool` background threads
+
+`playFile()` uses `tasks::WorkerPool::Dispatch()` to fire off a lambda in a
+different task - one of the background `worker_X` tasks, owned by `WorkerPool`.
+Control returns to the UI thread in under 2ms, so it remains pretty responsive
+throughout this flow.
+
+The background worker uses `tts::Player::openAndDecode` to do the bulk of the
+decode/resample/playback work, and it is on this background task that the
+majority of the work occurs. Note that there is nothing stopping the TTS worker
+from consuming a number of worker tasks at once, but we rely on the interaction
+of stream cancellation behaviour between the workers to ensure that previous
+samples' playback is promptly terminated after a new sample is requested.
