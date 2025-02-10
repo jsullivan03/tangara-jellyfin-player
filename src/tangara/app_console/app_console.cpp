@@ -209,10 +209,10 @@ int CmdTasks(int argc, char** argv) {
 #if (configUSE_TRACE_FACILITY == 0)
   std::cout
     << "FreeRTOS is not configured to track task info." << std::endl
-    << "You can enable task tracing via sdkconfig.local, by" << std::endl
-    << "setting CONFIG_FREERTOS_USE_TRACE_FACILITY=y. Alternately," << std::endl
-    << "use idf.py menuconfig to enable Components / FreeRTOS /" << std::endl
-    << "Kernel / configUSE_TRACE_FACILITY to do the same." << std::endl
+    << "You can enable task tracing via sdkconfig, by setting" << std::endl
+    << "CONFIG_FREERTOS_USE_TRACE_FACILITY=y. Alternately, use" << std::endl
+    << "idf.py menuconfig to enable Components/FreeRTOS/Kernel" << std::endl
+    << "configUSE_TRACE_FACILITY to do the same." << std::endl << std::endl
     << "Also consider 'Enable display of xCoreID in vTaskList'," << std::endl
     << "or CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y" << std::endl;
   return 1;
@@ -255,9 +255,9 @@ int CmdTasks(int argc, char** argv) {
               << "statistics, and this means that detailed task" << std::endl
               << "information is not available." << std::endl
               << "Enable CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS" << std::endl
-              << "in sdkconfig.local to capture these stats, or" << std::endl
-              << "via idf.py menuconfig, in Components/FreeRTOS/" << std::endl
-              << "Kernel/configGENERATE_RUN_TIME_STATS." << std::endl;
+              << "in sdkconfig to capture these stats, or via" << std::endl
+              << "idf.py menuconfig, in Components/FreeRTOS/Kernel" << std::endl
+              << "configGENERATE_RUN_TIME_STATS." << std::endl;
   }
 
   std::vector<std::pair<uint32_t, std::pmr::string>> info_strings;
