@@ -36,6 +36,15 @@ struct SelectionChanged {
   std::optional<Selection> new_selection;
 };
 
-using Event = std::variant<SimpleEvent, SelectionChanged>;
+/*
+  Event emitted when a user enables or disables the 'Spoken Interface' (TTS)
+  setting on the device. This is used to convey the new state to the
+  tts::Provider, but will not stop the current sample from being played.
+*/
+struct TtsEnabledChanged {
+  bool tts_enabled;
+};
+
+using Event = std::variant<SimpleEvent, SelectionChanged, TtsEnabledChanged>;
 
 }  // namespace tts

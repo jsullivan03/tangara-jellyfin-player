@@ -130,6 +130,7 @@ class UiState : public tinyfsm::Fsm<UiState> {
   static lua::Property sVolumeLimit;
 
   static lua::Property sDisplayBrightness;
+  static lua::Property sDisplayTextToSpeech;
 
   static lua::Property sLockSwitch;
 

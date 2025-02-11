@@ -100,7 +100,7 @@ auto Booting::entry() -> void {
       sServices->bg_worker(), sServices->database(), sServices->nvs()));
   sServices->tag_parser(std::make_unique<database::TagParserImpl>());
   sServices->collator(locale::CreateCollator());
-  sServices->tts(std::make_unique<tts::Provider>());
+  sServices->tts(std::make_unique<tts::Provider>(sServices->nvs()));
 
   ESP_LOGI(kTag, "init bluetooth");
   sServices->bluetooth(std::make_unique<drivers::Bluetooth>(

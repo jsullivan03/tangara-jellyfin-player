@@ -320,6 +320,43 @@ settings.DisplaySettings = SettingsScreen:new {
         brightness_pct:set { text = tostring(b) .. "%" }
       end)
     }
+
+    -- Only show the TTS option if there are voice samples on disk.
+    local tts_iter = filesystem.iterator("/.tangara-tts/")
+    for _ in tts_iter do
+      local text_to_speech_container = self.content:Object {
+        flex = {
+          flex_direction = "row",
+          justify_content = "flex-start",
+          align_items = "center",
+          align_content = "flex-start",
+        },
+        w = lvgl.PCT(100),
+        h = lvgl.SIZE_CONTENT,
+        pad_bottom = 4,
+      }
+      text_to_speech_container:add_style(styles.list_item)
+      text_to_speech_container:Label { text = "Spoken Interface", flex_grow = 1 }
+      local text_to_speech_sw = text_to_speech_container:Switch {}
+      local tts_desc = widgets.Description(text_to_speech_sw, "Spoken interface")
+
+      text_to_speech_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+        display.text_to_speech:set(text_to_speech_sw:enabled())
+      end)
+
+      self.bindings = self.bindings + {
+        display.text_to_speech:bind(function(en)
+          if en then
+            text_to_speech_sw:add_state(lvgl.STATE.CHECKED)
+          else
+            text_to_speech_sw:clear_state(lvgl.STATE.CHECKED)
+          end
+        end),
+      }
+
+      break
+    end
+
   end
 }
 

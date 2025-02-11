@@ -36,7 +36,9 @@ static auto textToFile(const std::string& text) -> std::optional<std::string> {
   return stream.str();
 }
 
-Provider::Provider() {}
+Provider::Provider(drivers::NvsStorage& nvs) : nvs_(nvs) {
+  tts_enabled_ = nvs_.UITextToSpeech();
+}
 
 auto Provider::player(std::unique_ptr<Player> p) -> void {
   player_ = std::move(p);
@@ -45,6 +47,9 @@ auto Provider::player(std::unique_ptr<Player> p) -> void {
 auto Provider::feed(const Event& e) -> void {
   if (std::holds_alternative<SimpleEvent>(e)) {
     // ESP_LOGI(kTag, "context changed");
+  } else if (std::holds_alternative<TtsEnabledChanged>(e)) {
+    auto ev = std::get<TtsEnabledChanged>(e);
+    tts_enabled_ = ev.tts_enabled;
   } else if (std::holds_alternative<SelectionChanged>(e)) {
     auto ev = std::get<SelectionChanged>(e);
     if (!ev.new_selection) {
@@ -63,7 +68,7 @@ auto Provider::feed(const Event& e) -> void {
         return;
       }
 
-      if (player_) {
+      if (player_ && tts_enabled_) {
         player_->playFile(*text, *file);
       }
     }

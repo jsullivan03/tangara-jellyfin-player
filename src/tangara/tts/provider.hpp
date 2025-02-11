@@ -13,6 +13,7 @@
 
 #include "tts/events.hpp"
 #include "tts/player.hpp"
+#include "drivers/nvs.hpp"
 
 namespace tts {
 
@@ -23,7 +24,7 @@ namespace tts {
  */
 class Provider {
  public:
-  Provider();
+  Provider(drivers::NvsStorage& nvs);
 
   auto player(std::unique_ptr<Player>) -> void;
 
@@ -34,7 +35,9 @@ class Provider {
   Provider& operator=(const Provider&) = delete;
 
  private:
+  drivers::NvsStorage& nvs_;
   std::unique_ptr<Player> player_;
+  bool tts_enabled_;
 };
 
 }  // namespace tts

@@ -122,6 +122,9 @@ class NvsStorage {
   auto ScreenBrightness() -> uint_fast8_t;
   auto ScreenBrightness(uint_fast8_t) -> void;
 
+  auto UITextToSpeech() -> bool;
+  auto UITextToSpeech(bool) -> void;
+
   auto InterfaceTheme() -> std::optional<std::string>;
   auto InterfaceTheme(std::string) -> void;
 
@@ -179,6 +182,7 @@ class NvsStorage {
   Setting<uint8_t> fast_charge_;
 
   Setting<uint8_t> brightness_;
+  Setting<uint8_t> text_to_speech_;
   Setting<uint8_t> sensitivity_;
   Setting<uint16_t> amp_max_vol_;
   Setting<uint16_t> amp_cur_vol_;

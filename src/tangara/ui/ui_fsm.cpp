@@ -295,6 +295,16 @@ lua::Property UiState::sDisplayBrightness{
       return true;
     }};
 
+lua::Property UiState::sDisplayTextToSpeech{
+    false, [](const lua::LuaValue& val) {
+      if (!std::holds_alternative<bool>(val)) {
+        return false;
+      }
+      sServices->nvs().UITextToSpeech(std::get<bool>(val));
+      sServices->tts().feed(tts::TtsEnabledChanged{.tts_enabled = std::get<bool>(val)});
+      return true;
+    }};
+
 lua::Property UiState::sLockSwitch{false};
 
 lua::Property UiState::sDatabaseUpdating{false};
@@ -661,6 +671,7 @@ void Lua::entry() {
     registry.AddPropertyModule("display",
                                {
                                    {"brightness", &sDisplayBrightness},
+                                   {"text_to_speech", &sDisplayTextToSpeech},
                                });
 
     registry.AddPropertyModule(
@@ -721,6 +732,7 @@ void Lua::entry() {
     sBluetoothKnownDevices.setDirect(bt.knownDevices());
 
     sPowerFastChargeEnabled.setDirect(sServices->nvs().FastCharge());
+    sDisplayTextToSpeech.setDirect(sServices->nvs().UITextToSpeech());
 
     if (sServices->sd() == drivers::SdState::kMounted) {
       sLua->RunScript("/sd/config.lua");

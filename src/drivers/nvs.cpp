@@ -29,6 +29,7 @@ static constexpr char kKeyBluetoothVolumes[] = "bt_vols";
 static constexpr char kKeyBluetoothNames[] = "bt_names";
 static constexpr char kKeyOutput[] = "out";
 static constexpr char kKeyBrightness[] = "bright";
+static constexpr char kKeyTextToSpeech[] = "tts";
 static constexpr char kKeyInterfaceTheme[] = "ui_theme";
 static constexpr char kKeyAmpMaxVolume[] = "hp_vol_max";
 static constexpr char kKeyAmpCurrentVolume[] = "hp_vol";
@@ -269,6 +270,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       lra_calibration_(kKeyLraCalibration),
       fast_charge_(kKeyFastCharge),
       brightness_(kKeyBrightness),
+      text_to_speech_(kKeyTextToSpeech),
       sensitivity_(kKeyScrollSensitivity),
       amp_max_vol_(kKeyAmpMaxVolume),
       amp_cur_vol_(kKeyAmpCurrentVolume),
@@ -299,6 +301,7 @@ auto NvsStorage::Read() -> void {
   lra_calibration_.read(handle_);
   fast_charge_.read(handle_);
   brightness_.read(handle_);
+  text_to_speech_.read(handle_);
   sensitivity_.read(handle_);
   amp_max_vol_.read(handle_);
   amp_cur_vol_.read(handle_);
@@ -324,6 +327,7 @@ auto NvsStorage::Write() -> bool {
   lra_calibration_.write(handle_);
   fast_charge_.write(handle_);
   brightness_.write(handle_);
+  text_to_speech_.write(handle_);
   sensitivity_.write(handle_);
   amp_max_vol_.write(handle_);
   amp_cur_vol_.write(handle_);
@@ -530,6 +534,21 @@ auto NvsStorage::ScreenBrightness() -> uint_fast8_t {
 auto NvsStorage::ScreenBrightness(uint_fast8_t val) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   brightness_.set(val);
+}
+
+auto NvsStorage::UITextToSpeech() -> bool {
+  std::lock_guard<std::mutex> lock{mutex_};
+
+  // Default to enabling text-to-speech if not set; this may need to be
+  // revisited if we end up adding on-device speech generation, but in a world
+  // where speech samples need to be loaded onto the SD card, it makes sense to
+  // enable this by default, as it'll only work if speech samples are present.
+  return text_to_speech_.get().value_or(true);
+}
+
+auto NvsStorage::UITextToSpeech(bool val) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  text_to_speech_.set(val);
 }
 
 auto NvsStorage::InterfaceTheme() -> std::optional<std::string> {
