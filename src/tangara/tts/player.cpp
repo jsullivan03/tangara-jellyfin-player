@@ -174,7 +174,7 @@ auto Player::decodeToSink(const codecs::ICodec::OutputFormat& format,
 
     // The mixin PcmBuffer should almost always be draining, so we can force
     // samples into it more aggressively than with the main music PcmBuffer.
-    while (!stereo_buf.isEmpty()) {
+    while (!stereo_buf.isEmpty() && !stream_cancelled_) {
       size_t sent = output_.send(stereo_buf.readAcquire());
       stereo_buf.readCommit(sent);
     }
