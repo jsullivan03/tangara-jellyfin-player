@@ -41,6 +41,8 @@ idf.py -p /dev/serial/by-id/usb-cool_tech_zone_Tangara_* -b 1000000 flash
 
 (give or take the correct serial port)
 
+If `idf.py flash` complains about the serial port not being readable, you'll need to add your user account to either the `dialout` or `uucp` groups, try `dialout` first.  After, logout of your current session then try to flash again.
+
 # Running tests
 
 See `TESTING.md` for an overview of how to write and run our on-device test suite.
