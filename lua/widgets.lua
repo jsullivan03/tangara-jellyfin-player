@@ -346,8 +346,9 @@ function widgets.InfiniteList(parent, iterator, opts)
       if this_item < last_selected then
         -- moving backward
         if (first_index > 0 and last_index - this_item > 3) then
-          local to_add = bck_iterator:prev();
+          local to_add = bck_iterator:value();
           if to_add then
+            bck_iterator:prev()
             remove_last()
             add_item(to_add, first_index - 1)
             refresh_group()

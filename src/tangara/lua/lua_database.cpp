@@ -250,6 +250,19 @@ static auto db_iterate(lua_State* state) -> int {
   return 1;
 }
 
+static auto db_iterator_value(lua_State* state) -> int {
+  database::Iterator* it = db_check_iterator(state, 1);
+  std::optional<database::Record> res = it->value();
+
+  if (res) {
+    push_lua_record(state, *res);
+  } else {
+    lua_pushnil(state);
+  }
+
+  return 1;
+}
+
 static auto db_iterator_clone(lua_State* state) -> int {
   database::Iterator* it = db_check_iterator(state, 1);
   push_iterator(state, *it);
@@ -265,7 +278,8 @@ static auto db_iterator_gc(lua_State* state) -> int {
 static const struct luaL_Reg kDbIteratorFuncs[] = {
     {"next", db_iterate},         {"prev", db_iterate_prev},
     {"clone", db_iterator_clone}, {"__call", db_iterate},
-    {"__gc", db_iterator_gc},     {NULL, NULL}};
+    {"__gc", db_iterator_gc},     {"value", db_iterator_value},
+    {NULL, NULL}};
 
 static auto record_text(lua_State* state) -> int {
   database::Record* rec = db_check_record(state, 1);
