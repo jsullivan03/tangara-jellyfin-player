@@ -390,16 +390,20 @@ void AudioState::react(const OutputModeChanged& ev) {
   if (ev.set_to) {
     new_mode = *ev.set_to;
   }
+  std::shared_ptr<IAudioOutput> new_output;
   switch (new_mode) {
     case drivers::NvsStorage::Output::kBluetooth:
-      sOutput = sBtOutput;
-      sI2SOutput->mode(IAudioOutput::Modes::kOff);
+      new_output = sBtOutput;
       break;
     case drivers::NvsStorage::Output::kHeadphones:
-      sOutput = sI2SOutput;
-      sBtOutput->mode(IAudioOutput::Modes::kOff);
+      new_output = sI2SOutput;
       break;
   }
+  if (new_output == sOutput) {
+    return;
+  }
+  sOutput->mode(IAudioOutput::Modes::kOff);
+  sOutput = new_output;
   sSampleProcessor->SetOutput(sOutput);
   updateOutputMode();
 
