@@ -288,6 +288,8 @@ void AudioState::react(const system_fsm::BluetoothEvent& ev) {
         if (bt.connectionState() !=
             drivers::Bluetooth::ConnectionState::kConnected) {
           // If BT Disconnected, move to standby state
+          events::Audio().Dispatch(audio::OutputModeChanged{
+              .set_to = drivers::NvsStorage::Output::kHeadphones});
           transit<states::Standby>();
           return;
         }
@@ -295,6 +297,8 @@ void AudioState::react(const system_fsm::BluetoothEvent& ev) {
         if (!dev) {
           return;
         }
+        events::Audio().Dispatch(audio::OutputModeChanged{
+            .set_to = drivers::NvsStorage::Output::kBluetooth});
         sBtOutput->SetVolume(sServices->nvs().BluetoothVolume(dev->mac));
         events::Ui().Dispatch(VolumeChanged{
             .percent = sOutput->GetVolumePct(),
@@ -386,15 +390,20 @@ void AudioState::react(const OutputModeChanged& ev) {
   if (ev.set_to) {
     new_mode = *ev.set_to;
   }
-  sOutput->mode(IAudioOutput::Modes::kOff);
+  std::shared_ptr<IAudioOutput> new_output;
   switch (new_mode) {
     case drivers::NvsStorage::Output::kBluetooth:
-      sOutput = sBtOutput;
+      new_output = sBtOutput;
       break;
     case drivers::NvsStorage::Output::kHeadphones:
-      sOutput = sI2SOutput;
+      new_output = sI2SOutput;
       break;
   }
+  if (new_output == sOutput) {
+    return;
+  }
+  sOutput->mode(IAudioOutput::Modes::kOff);
+  sOutput = new_output;
   sSampleProcessor->SetOutput(sOutput);
   updateOutputMode();
 
@@ -429,8 +438,8 @@ auto AudioState::updateTrackData(std::string uri,
   });
 }
 
-auto AudioState::updateSavedPosition(std::string uri, uint32_t position)
-    -> void {
+auto AudioState::updateSavedPosition(std::string uri,
+                                     uint32_t position) -> void {
   updateTrackData(
       uri, [=](database::TrackData& data) { data.last_position = position; });
 }
@@ -486,13 +495,13 @@ void Uninitialised::react(const system_fsm::BootComplete& ev) {
   sI2SOutput->SetVolume(nvs.AmpCurrentVolume());
   sI2SOutput->SetVolumeImbalance(nvs.AmpLeftBias());
 
+  // Always set to headphones output initially
+  // Connecting bluetooth will change this
+  sOutput = sI2SOutput;
   if (sServices->nvs().OutputMode() ==
-      drivers::NvsStorage::Output::kHeadphones) {
-    sOutput = sI2SOutput;
-  } else {
+      drivers::NvsStorage::Output::kBluetooth) {
     // Ensure Bluetooth gets enabled if it's the default sink.
     sServices->bluetooth().enable(true);
-    sOutput = sBtOutput;
   }
   sOutput->mode(IAudioOutput::Modes::kOnPaused);
 
