@@ -27,7 +27,7 @@ namespace states {
 
 [[maybe_unused]] static const char kTag[] = "RUN";
 
-static const TickType_t kTicksBeforeUnmount = pdMS_TO_TICKS(10000);
+static const TickType_t kTicksBeforeUnmount = pdMS_TO_TICKS(120000);
 
 static TimerHandle_t sUnmountTimer = nullptr;
 
