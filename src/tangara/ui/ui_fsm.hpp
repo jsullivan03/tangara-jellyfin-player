@@ -37,6 +37,8 @@
 
 namespace ui {
 
+struct UnmountRequest : tinyfsm::Event {};
+
 class UiState : public tinyfsm::Fsm<UiState> {
  public:
   static auto InitBootSplash(drivers::IGpios&, drivers::NvsStorage&) -> bool;

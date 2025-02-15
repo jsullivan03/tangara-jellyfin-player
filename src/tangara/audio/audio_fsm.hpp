@@ -65,7 +65,7 @@ class AudioState : public tinyfsm::Fsm<AudioState> {
   void react(const OutputModeChanged&);
 
   virtual void react(const system_fsm::BootComplete&) {}
-  virtual void react(const system_fsm::KeyLockChanged&){};
+  virtual void react(const system_fsm::UnmountRequest&) {}
   virtual void react(const system_fsm::SdStateChanged&) {}
   virtual void react(const system_fsm::BluetoothEvent&);
   virtual void react(const system_fsm::HasPhonesChanged&);
@@ -114,7 +114,7 @@ class Uninitialised : public AudioState {
 class Standby : public AudioState {
  public:
   void entry() override;
-  void react(const system_fsm::KeyLockChanged&) override;
+  void react(const system_fsm::UnmountRequest&) override;
   void react(const system_fsm::SdStateChanged&) override;
 
   using AudioState::react;

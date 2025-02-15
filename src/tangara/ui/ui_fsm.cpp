@@ -714,6 +714,11 @@ void Lua::entry() {
                                });
     registry.AddPropertyModule("sd_card", {
                                               {"mounted", &sSdMounted},
+                                              {"unmount", [&](lua_State*) {
+                                                events::System().Dispatch(
+                                                    UnmountRequest{});
+                                                return 0;
+                                              }},
                                           });
     registry.AddPropertyModule("usb",
                                {

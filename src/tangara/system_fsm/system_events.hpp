@@ -40,6 +40,9 @@ struct FatalError : tinyfsm::Event {};
 struct OnIdle : tinyfsm::Event {};
 
 struct SdStateChanged : tinyfsm::Event {};
+struct UnmountRequest : tinyfsm::Event {
+  bool idle;
+};
 
 struct StorageError : tinyfsm::Event {
   FRESULT error;

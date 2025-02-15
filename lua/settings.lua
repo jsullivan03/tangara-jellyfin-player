@@ -18,6 +18,7 @@ local font = require("font")
 local main_menu = require("main_menu")
 local img = require("images")
 local nvs = require("nvs")
+local sd_card = require("sd_card")
 
 local settings = {}
 
@@ -512,6 +513,77 @@ settings.InputSettings = SettingsScreen:new {
   end
 }
 
+settings.SDSettings = SettingsScreen:new {
+  title = "SD Card",
+  create_ui = function(self)
+    SettingsScreen.create_ui(self)
+
+    local actions_container = self.content:Object {
+      w = lvgl.PCT(100),
+      h = lvgl.SIZE_CONTENT,
+      flex = {
+        flex_direction = "row",
+        justify_content = "center",
+        align_items = "space-evenly",
+        align_content = "center",
+      },
+      pad_top = 4,
+      pad_column = 4,
+    }
+    actions_container:add_style(styles.list_item)
+
+    local busy_text = self.content:Label {
+      w = lvgl.PCT(100),
+      text = "",
+      long_mode = lvgl.LABEL.LONG_WRAP,
+    }
+    local busy_text_bind = function()
+      if database.updating:get() then
+        busy_text:clear_flag(lvgl.FLAG.HIDDEN)
+        busy_text:set {
+          text = "Your database is currently updating. Please wait."
+        }
+      elseif usb.msc_enabled:get() then
+        busy_text:clear_flag(lvgl.FLAG.HIDDEN)
+        busy_text:set {
+          text = "USB Mass Storage is currently enabled. Please disable it before unmounting."
+        }
+      elseif not sd_card.mounted:get() then
+        busy_text:clear_flag(lvgl.FLAG.HIDDEN)
+        busy_text:set {
+          text = "No SD card is currently mounted."
+        }
+      else
+        busy_text:add_flag(lvgl.FLAG.HIDDEN)
+      end
+    end
+    self.bindings = self.bindings + {
+      sd_card.mounted:bind(busy_text_bind),
+      database.updating:bind(busy_text_bind),
+      usb.msc_enabled:bind(busy_text_bind)
+    }
+
+    local unmount_btn = actions_container:Button {}
+    unmount_btn:Label { text = "Unmount" }
+    unmount_btn:onClicked(function()
+      sd_card.unmount()
+    end)
+    local unmount_btn_bind = function()
+      if sd_card.mounted:get() and not database.updating:get() and not usb.msc_enabled:get() then
+        unmount_btn:clear_flag(lvgl.FLAG.HIDDEN)
+      else
+        unmount_btn:add_flag(lvgl.FLAG.HIDDEN)
+      end
+    end
+    self.bindings = self.bindings + {
+      sd_card.mounted:bind(unmount_btn_bind),
+      database.updating:bind(unmount_btn_bind),
+      usb.msc_enabled:bind(unmount_btn_bind)
+    }
+    unmount_btn:focus()
+  end
+}
+
 settings.MassStorageSettings = SettingsScreen:new {
   title = "USB Storage",
   create_ui = function(self)
@@ -944,8 +1016,9 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Theme", settings.ThemeSettings)
     submenu("Input Method", settings.InputSettings)
 
-    section("USB")
-    submenu("Storage", settings.MassStorageSettings)
+    section("Storage")
+    submenu("SD Card", settings.SDSettings)
+    submenu("USB", settings.MassStorageSettings)
 
     section("System")
     submenu("Database", settings.DatabaseSettings)

@@ -150,6 +150,10 @@ struct TtsPlaybackChanged : tinyfsm::Event {
   bool is_playing;
 };
 
+struct UnmountReady : tinyfsm::Event {
+  bool idle;
+};
+
 namespace internal {
 struct DecodingStarted : tinyfsm::Event {
   std::shared_ptr<TrackInfo> track;
