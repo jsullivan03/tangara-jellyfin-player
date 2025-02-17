@@ -86,6 +86,19 @@ static auto fs_iterator_clone(lua_State* state) -> int {
   return 1;
 }
 
+static auto fs_iterator_value(lua_State* state) -> int {
+  lua::FileIterator* it = check_file_iterator(state, 1);
+  std::optional<lua::FileEntry> res = it->value();
+
+  if (res) {
+    push_lua_file_entry(state, *res);
+  } else {
+    lua_pushnil(state);
+  }
+
+  return 1;
+}
+
 static auto fs_iterator_gc(lua_State* state) -> int {
   lua::FileIterator* it = check_file_iterator(state, 1);
   delete it;
@@ -95,6 +108,7 @@ static auto fs_iterator_gc(lua_State* state) -> int {
 static const struct luaL_Reg kFileIteratorFuncs[] = {{"next", fs_iterate},
                                                    {"prev", fs_iterate_prev},
                                                    {"clone", fs_iterator_clone},
+                                                   {"value", fs_iterator_value},
                                                    {"__call", fs_iterate},
                                                    {"__gc", fs_iterator_gc},
                                                    {NULL, NULL}};
