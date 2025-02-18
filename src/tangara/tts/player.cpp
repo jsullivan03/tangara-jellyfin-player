@@ -44,7 +44,11 @@ auto Player::playFile(const std::string& text, const std::string& file)
       stream_playing_ = true;
     }
 
-    openAndDecode(text, file);
+    // Only attempt playback if the card contains samples.
+    // We gate this on directory existence to avoid spamming the logs.
+    if (Provider::SamplesOnSDCard()) {
+      openAndDecode(text, file);
+    }
 
     if (!stream_cancelled_) {
       events::Audio().Dispatch(audio::TtsPlaybackChanged{.is_playing = false});

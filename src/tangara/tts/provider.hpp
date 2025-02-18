@@ -11,9 +11,9 @@
 #include <string>
 #include <variant>
 
+#include "drivers/nvs.hpp"
 #include "tts/events.hpp"
 #include "tts/player.hpp"
-#include "drivers/nvs.hpp"
 
 namespace tts {
 
@@ -33,6 +33,8 @@ class Provider {
   // Not copyable or movable.
   Provider(const Provider&) = delete;
   Provider& operator=(const Provider&) = delete;
+
+  static bool SamplesOnSDCard();
 
  private:
   drivers::NvsStorage& nvs_;

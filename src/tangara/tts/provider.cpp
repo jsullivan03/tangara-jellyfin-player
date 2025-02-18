@@ -75,4 +75,37 @@ auto Provider::feed(const Event& e) -> void {
   }
 }
 
+bool Provider::SamplesOnSDCard() {
+  // Does the /.tangara-tts/ path exist on the SD card?
+  FILINFO fi;
+  FRESULT status = f_stat(kTtsPath, &fi);
+
+  switch (status) {
+    case FR_NO_PATH:
+    case FR_NO_FILE:
+    case FR_NO_FILESYSTEM:
+      // If the SD card isn't mounted, or no matching file, then no samples.
+      return false;
+
+    case FR_OK:
+      // If /.tangara-tts exists, let's check it out first.
+      break;
+
+    default:
+      // If things look odd, then assume samples aren't present.
+      ESP_LOGW(kTag, "got unexpected %d status from f_stat(\"%s\")", status,
+               kTtsPath);
+      return false;
+  }
+
+  // If /.tangara-tts exists and is a directory, it probably contains samples.
+  if (fi.fattrib & AM_DIR)
+    return true;
+
+  // Otherwise, for example, if it's a file, assume no samples present.
+  ESP_LOGW(kTag, "got unexpected file attributes for %s: %d", kTtsPath,
+           fi.fattrib);
+  return false;
+}
+
 }  // namespace tts
