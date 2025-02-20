@@ -53,7 +53,7 @@ auto FileIterator::prev() -> void {
   f_rewinddir(&dir_);
   auto new_offset = offset_ - 1;
   offset_ = -1;
-  for (int i = 0; i <= new_offset; i++) {
+  while (offset_ < new_offset) {
     iterate(show_hidden_);
   }
 }
@@ -72,9 +72,9 @@ auto FileIterator::iterate(bool show_hidden) -> bool {
     return false;
   } else {
     // Update current value
-    offset_++;
     bool hidden =  (info.fattrib & AM_HID) > 0 || info.fname[0] == '.';
     if (!hidden || show_hidden) {
+      offset_++;
       current_ = FileEntry{
           .index = offset_,
           .isHidden = hidden,
