@@ -34,7 +34,7 @@ class Display {
   static auto Create(IGpios& expander,
                      const displays::InitialisationData& init_data) -> Display*;
 
-  Display(IGpios& gpio, spi_device_handle_t handle);
+  Display(IGpios& gpio, spi_device_handle_t handle, uint_fast8_t pad);
   ~Display();
 
   auto SetDisplayOn(bool) -> void;
@@ -54,6 +54,7 @@ class Display {
   bool first_flush_finished_;
   bool display_on_;
   uint_fast8_t brightness_;
+  uint_fast8_t pad_;
 
   lv_display_t* display_ = nullptr;
 
@@ -63,6 +64,7 @@ class Display {
   };
 
   void SendInitialisationSequence(const uint8_t* data);
+  void WriteLeftPad(uint8_t *buffer);
 
   void SendCommandWithData(uint8_t command, const uint8_t* data, size_t length);
 
