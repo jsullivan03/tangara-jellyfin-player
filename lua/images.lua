@@ -31,6 +31,8 @@ local img = {
   menu = lvgl.ImgData("//lua/img/menu.png"),
   file_directory = lvgl.ImgData("//lua/img/file_icons/directory.png"),
   file_playlist = lvgl.ImgData("//lua/img/file_icons/playlist.png"),
+  file_music = lvgl.ImgData("//lua/img/file_icons/music.png"),
+  unknown = lvgl.ImgData("//lua/img/file_icons/unknown.png"),
 }
 
 return img

@@ -13,6 +13,8 @@ local theme = require("theme")
 local screen = require("screen")
 local filesystem = require("filesystem")
 local playlist_iterator = require("playlist_iterator")
+local img = require("images")
+
 
 return screen:new {
   create_ui = function(self)
@@ -58,8 +60,21 @@ return screen:new {
       }
     end
 
+    local get_icon_func = function(item)
+      if item:is_directory() then
+        return img.file_directory
+      elseif playlist_iterator:is_playlist(item) then
+        return img.file_playlist
+      elseif playback.is_playable(item:filepath()) then
+        return img.file_music
+      else
+        return img.unknown
+      end
+    end
+
     widgets.InfiniteList(self.root, self.iterator, {
       focus_first_item = true,
+      get_icon = get_icon_func,
       callback = function(item)
         return function()
           local is_dir = item:is_directory()
