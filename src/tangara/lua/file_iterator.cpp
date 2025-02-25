@@ -46,15 +46,18 @@ auto FileIterator::next() -> void {
 }
 
 auto FileIterator::prev() -> void {
-  if (offset_ == 0) {
+  f_rewinddir(&dir_);
+  if (offset_ <= 0) {
+    offset_ = -1;
     current_.reset();
     return;
   }
-  f_rewinddir(&dir_);
   auto new_offset = offset_ - 1;
   offset_ = -1;
   while (offset_ < new_offset) {
-    iterate(show_hidden_);
+    if (!iterate(show_hidden_)) {
+      break;
+    }
   }
 }
 
