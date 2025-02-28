@@ -479,6 +479,35 @@ void RegisterBtList() {
   esp_console_cmd_register(&cmd);
 }
 
+int CmdBtForget(int argc, char** argv) {
+  static const std::pmr::string usage = "usage: bt_forget <index>";
+  if (argc != 2) {
+    std::cout << usage << std::endl;
+    return 1;
+  }
+
+  auto devices = AppConsole::sServices->bluetooth().knownDevices();
+  int index = std::atoi(argv[1]);
+  if (index < 0 || index >= devices.size()) {
+    std::cout << "index out of range" << std::endl;
+    return -1;
+  }
+
+  AppConsole::sServices->bluetooth().forgetKnownDevice(devices[index].mac);
+  std::cout << "Device '" << devices[index].name << "' forgotten" << std::endl;
+  return 0;
+}
+
+void RegisterBtForget() {
+  esp_console_cmd_t cmd{
+      .command = "bt_forget",
+      .help = "removes a bluetooth device from known devices list",
+      .hint = "index",
+      .func = &CmdBtForget,
+      .argtable = NULL};
+  esp_console_cmd_register(&cmd);
+}
+
 int CmdSamd(int argc, char** argv) {
   static const std::pmr::string usage = "usage: samd [flash|charge|off]";
   if (argc != 2) {
@@ -739,6 +768,7 @@ auto AppConsole::RegisterExtraComponents() -> void {
 #endif
 
   RegisterBtList();
+  RegisterBtForget();
   RegisterSamd();
   RegisterCoreDump();
 
