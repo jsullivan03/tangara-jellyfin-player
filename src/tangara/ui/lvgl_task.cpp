@@ -63,7 +63,7 @@ auto UiTask::Main() -> void {
     }
 
     TickType_t delay = lv_timer_handler();
-    vTaskDelay(pdMS_TO_TICKS(std::clamp<TickType_t>(delay, 0, 100)));
+    vTaskDelay(pdMS_TO_TICKS(std::clamp<TickType_t>(delay, 16, 100)));
   }
 }
 
