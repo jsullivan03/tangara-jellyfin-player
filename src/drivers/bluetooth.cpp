@@ -364,8 +364,21 @@ auto Scanner::HandleDeviceDiscovery(const esp_bt_gap_cb_param_t& param)
     return;
   }
 
-  device.name = std::pmr::string{reinterpret_cast<char*>(name),
-                                 static_cast<size_t>(length)};
+  // Create string from the device name
+  std::pmr::string deviceName{reinterpret_cast<char*>(name),
+                              static_cast<size_t>(length)};
+
+  // Trim trailing whitespace (spaces, tabs, \r, \n)
+  const std::string::size_type lastChar = deviceName.find_last_not_of(" \n\r\t");
+  if (lastChar != std::string::npos) {
+    deviceName.erase(lastChar + 1);
+  }
+
+  if (deviceName.empty()) {
+    return;
+  }
+
+  device.name = deviceName;
   events::DeviceDiscovered ev{.device = device};
   tinyfsm::FsmList<bluetooth::BluetoothState>::dispatch(ev);
 }
