@@ -362,12 +362,16 @@ int CmdHeaps(int argc, char** argv) {
             << std::endl;
   std::cout << (heap_caps_get_minimum_free_size(MALLOC_CAP_DMA) / 1024)
             << " KiB free at lowest" << std::endl;
+  std::cout << (heap_caps_get_largest_free_block(MALLOC_CAP_DMA) / 1024)
+            << " KiB largest free block" << std::endl;
 
   std::cout << "heap stats (external):" << std::endl;
   std::cout << (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024)
             << " KiB free" << std::endl;
   std::cout << (heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM) / 1024)
             << " KiB free at lowest" << std::endl;
+  std::cout << (heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024)
+            << " KiB largest free block" << std::endl;
 
   return 0;
 }
