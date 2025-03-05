@@ -89,15 +89,18 @@ class ServiceLocator {
     touchwheel_ = std::move(i);
   }
 
-  auto haptics() -> drivers::Haptics& { return *haptics_; }
+  auto haptics() -> std::optional<drivers::Haptics*> {
+    if (!haptics_) {
+      return {};
+    }
+    return haptics_.get();
+  }
 
   auto haptics(std::unique_ptr<drivers::Haptics> i) { haptics_ = std::move(i); }
 
   auto lua_input() -> std::shared_ptr<input::LuaInput> { return lua_input_; }
 
-  auto lua_input(std::shared_ptr<input::LuaInput> i) -> void {
-    lua_input_ = i;
-  }
+  auto lua_input(std::shared_ptr<input::LuaInput> i) -> void { lua_input_ = i; }
 
   auto database() -> database::Handle { return database_; }
 

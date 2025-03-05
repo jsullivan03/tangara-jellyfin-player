@@ -196,6 +196,8 @@ class Haptics {
   // TODO(robin): remove; I'm leaving this around for temporary testing
   auto TourLibraries(Effect from, Effect to) -> void;
 
+  static auto IsHardwarePresent() -> bool;
+
  private:
   std::optional<Effect> current_effect_;
   std::mutex playing_effect_;

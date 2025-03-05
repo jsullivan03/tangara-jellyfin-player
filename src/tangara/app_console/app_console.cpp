@@ -207,14 +207,18 @@ void RegisterDbInit() {
 
 int CmdTasks(int argc, char** argv) {
 #if (configUSE_TRACE_FACILITY == 0)
-  std::cout
-    << "FreeRTOS is not configured to track task info." << std::endl
-    << "You can enable task tracing via sdkconfig, by setting" << std::endl
-    << "CONFIG_FREERTOS_USE_TRACE_FACILITY=y. Alternately, use" << std::endl
-    << "idf.py menuconfig to enable Components/FreeRTOS/Kernel" << std::endl
-    << "configUSE_TRACE_FACILITY to do the same." << std::endl << std::endl
-    << "Also consider 'Enable display of xCoreID in vTaskList'," << std::endl
-    << "or CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y" << std::endl;
+  std::cout << "FreeRTOS is not configured to track task info." << std::endl
+            << "You can enable task tracing via sdkconfig, by setting"
+            << std::endl
+            << "CONFIG_FREERTOS_USE_TRACE_FACILITY=y. Alternately, use"
+            << std::endl
+            << "idf.py menuconfig to enable Components/FreeRTOS/Kernel"
+            << std::endl
+            << "configUSE_TRACE_FACILITY to do the same." << std::endl
+            << std::endl
+            << "Also consider 'Enable display of xCoreID in vTaskList',"
+            << std::endl
+            << "or CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y" << std::endl;
   return 1;
 #endif
 
@@ -591,17 +595,21 @@ int CmdHaptics(int argc, char** argv) {
       "library)\n"
       "  haptic_effect 1 10 4 (plays from 1 to 10 with library 4)";
 
-  auto& haptics = AppConsole::sServices->haptics();
+  auto haptics = AppConsole::sServices->haptics();
+  if (!haptics) {
+    std::cout << "No haptics hardware is present." << std::endl;
+    return 1;
+  }
 
   if (argc == 1) {
-    haptics.TourEffects();
+    (*haptics)->TourEffects();
 
   } else if (argc == 2 && argv[1] != std::string{"help"}) {
     std::istringstream raw_library_id{argv[1]};
     int library_id = 0;
     raw_library_id >> library_id;
 
-    haptics.TourEffects(static_cast<drivers::Haptics::Library>(library_id));
+    (*haptics)->TourEffects(static_cast<drivers::Haptics::Library>(library_id));
 
   } else if (argc == 3) {
     std::istringstream raw_effect_from_id{argv[1]};
@@ -610,8 +618,9 @@ int CmdHaptics(int argc, char** argv) {
     raw_effect_from_id >> effect_from_id;
     raw_effect_to_id >> effect_to_id;
 
-    haptics.TourEffects(static_cast<drivers::Haptics::Effect>(effect_from_id),
-                        static_cast<drivers::Haptics::Effect>(effect_to_id));
+    (*haptics)->TourEffects(
+        static_cast<drivers::Haptics::Effect>(effect_from_id),
+        static_cast<drivers::Haptics::Effect>(effect_to_id));
 
   } else if (argc == 4) {
     std::istringstream raw_effect_from_id{argv[1]};
@@ -622,9 +631,10 @@ int CmdHaptics(int argc, char** argv) {
     raw_effect_to_id >> effect_to_id;
     raw_library_id >> library_id;
 
-    haptics.TourEffects(static_cast<drivers::Haptics::Effect>(effect_from_id),
-                        static_cast<drivers::Haptics::Effect>(effect_to_id),
-                        static_cast<drivers::Haptics::Library>(library_id));
+    (*haptics)->TourEffects(
+        static_cast<drivers::Haptics::Effect>(effect_from_id),
+        static_cast<drivers::Haptics::Effect>(effect_to_id),
+        static_cast<drivers::Haptics::Library>(library_id));
   } else {
     std::cout << usage << std::endl;
     return 1;

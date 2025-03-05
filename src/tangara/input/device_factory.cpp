@@ -33,6 +33,7 @@ DeviceFactory::DeviceFactory(
 auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
     -> std::vector<std::shared_ptr<IInputDevice>> {
   std::vector<std::shared_ptr<IInputDevice>> ret;
+
   switch (mode) {
     case drivers::NvsStorage::InputModes::kButtonsOnly:
       ret.push_back(std::make_shared<NavButtons>(services_->gpios()));
@@ -56,10 +57,11 @@ auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
   auto lua_input = services_->lua_input();
   if (!lua_input) {
     auto services = services_;
-    lua_input = std::make_shared<LuaInput>([=]() -> std::shared_ptr<lua::LuaThread> {
-      auto& registry = lua::Registry::instance(*services);
-      return registry.newThread();
-    });
+    lua_input =
+        std::make_shared<LuaInput>([=]() -> std::shared_ptr<lua::LuaThread> {
+          auto& registry = lua::Registry::instance(*services);
+          return registry.newThread();
+        });
     services_->lua_input(lua_input);
   }
   ret.push_back(lua_input);
@@ -68,10 +70,12 @@ auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
 
 auto DeviceFactory::createFeedbacks()
     -> std::vector<std::shared_ptr<IFeedbackDevice>> {
-  return {
-      std::make_shared<Haptics>(services_->haptics(), services_),
-      std::make_shared<TextToSpeech>(services_->tts()),
-  };
+  std::vector<std::shared_ptr<IFeedbackDevice>> ret;
+  if (services_->haptics()) {
+    std::make_shared<Haptics>(**services_->haptics(), services_);
+  }
+  ret.push_back(std::make_shared<TextToSpeech>(services_->tts()));
+  return ret;
 }
 
 }  // namespace input

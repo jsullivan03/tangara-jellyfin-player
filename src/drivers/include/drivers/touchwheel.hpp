@@ -42,6 +42,8 @@ class TouchWheel {
   auto Recalibrate() -> void;
   auto LowPowerMode(bool en) -> void;
 
+  static auto IsHardwarePresent() -> bool;
+
  private:
   TouchWheelData data_;
 

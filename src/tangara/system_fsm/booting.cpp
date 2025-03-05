@@ -88,9 +88,13 @@ auto Booting::entry() -> void {
   ESP_LOGI(kTag, "installing remaining drivers");
   drivers::spiffs_mount();
   sServices->samd(std::make_unique<drivers::Samd>(sServices->nvs()));
-  sServices->touchwheel(
-      std::unique_ptr<drivers::TouchWheel>{drivers::TouchWheel::Create()});
-  sServices->haptics(std::make_unique<drivers::Haptics>(sServices->nvs()));
+  if (drivers::TouchWheel::IsHardwarePresent()) {
+	  sServices->touchwheel(
+	      std::unique_ptr<drivers::TouchWheel>{drivers::TouchWheel::Create()});
+  }
+  if (drivers::Haptics::IsHardwarePresent()) {
+	  sServices->haptics(std::make_unique<drivers::Haptics>(sServices->nvs()));
+  }
 
   auto adc = drivers::AdcBattery::Create();
   sServices->battery(std::make_unique<battery::Battery>(
