@@ -30,14 +30,14 @@ static void maybe_init_faceplate_interrupt() {
   did_init = true;
 }
 
-static int get_faceplate_interrupt_state(lua_State* L) {
+static int get_faceplate_interrupt_level(lua_State* L) {
   maybe_init_faceplate_interrupt();
   lua_pushinteger(L, gpio_get_level(kFaceplateInterruptPin));
   return 1;
 }
 
 static const struct luaL_Reg kFaceplateInterruptFuncs[] = {
-    {"get_faceplate_interrupt_state", get_faceplate_interrupt_state},
+    {"get_faceplate_interrupt_level", get_faceplate_interrupt_level},
     {NULL, NULL}};
 
 static auto lua_gpio(lua_State* L) -> int {

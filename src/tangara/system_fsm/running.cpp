@@ -208,6 +208,12 @@ void Running::react(const internal::Mount& ev) {
       db->updateIndexes();
     });
   }
+
+  // The other thing that's on the SD card is the custom input script, if any.
+  auto lua_input = sServices->lua_input();
+  if (lua_input) {
+    lua_input->tryReloadScript();
+  }
 }
 
 auto Running::unmountStorage() -> void {

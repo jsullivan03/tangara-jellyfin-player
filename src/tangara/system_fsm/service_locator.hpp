@@ -20,6 +20,7 @@
 #include "drivers/samd.hpp"
 #include "drivers/storage.hpp"
 #include "drivers/touchwheel.hpp"
+#include "input/input_lua.hpp"
 #include "tasks.hpp"
 #include "tts/provider.hpp"
 
@@ -92,6 +93,12 @@ class ServiceLocator {
 
   auto haptics(std::unique_ptr<drivers::Haptics> i) { haptics_ = std::move(i); }
 
+  auto lua_input() -> std::shared_ptr<input::LuaInput> { return lua_input_; }
+
+  auto lua_input(std::shared_ptr<input::LuaInput> i) -> void {
+    lua_input_ = i;
+  }
+
   auto database() -> database::Handle { return database_; }
 
   auto database(std::unique_ptr<database::Database> i) {
@@ -145,6 +152,7 @@ class ServiceLocator {
   std::unique_ptr<drivers::TouchWheel> touchwheel_;
   std::unique_ptr<drivers::Haptics> haptics_;
   std::unique_ptr<drivers::Bluetooth> bluetooth_;
+  std::shared_ptr<input::LuaInput> lua_input_;
 
   std::unique_ptr<audio::TrackQueue> queue_;
   std::unique_ptr<battery::Battery> battery_;

@@ -25,7 +25,7 @@ class LuaThread {
   ~LuaThread();
 
   auto RunScript(const std::string& path) -> bool;
-  auto RunString(const std::string& path) -> bool;
+  auto RunString(const std::string& script) -> bool;
 
   auto DumpStack() -> void;
 

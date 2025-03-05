@@ -12,10 +12,12 @@
 #include "input/feedback_tts.hpp"
 #include "input/input_device.hpp"
 #include "input/input_hard_reset.hpp"
+#include "input/input_lua.hpp"
 #include "input/input_nav_buttons.hpp"
 #include "input/input_touch_dpad.hpp"
 #include "input/input_touch_wheel.hpp"
 #include "input/input_volume_buttons.hpp"
+#include "lua/lua_registry.hpp"
 
 namespace input {
 
@@ -50,6 +52,17 @@ auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
       break;
   }
   ret.push_back(std::make_shared<HardReset>(services_->gpios()));
+
+  auto lua_input = services_->lua_input();
+  if (!lua_input) {
+    auto services = services_;
+    lua_input = std::make_shared<LuaInput>([=]() -> std::shared_ptr<lua::LuaThread> {
+      auto& registry = lua::Registry::instance(*services);
+      return registry.newThread();
+    });
+    services_->lua_input(lua_input);
+  }
+  ret.push_back(lua_input);
   return ret;
 }
 

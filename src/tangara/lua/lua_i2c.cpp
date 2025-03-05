@@ -46,18 +46,18 @@ struct I2CCommand {
   uint8_t data;      // for write
   bool ack;          // for read/write
 };
-static char const* kTransactionMetatable = "i2c_command";
+static char const* kCommandMetatable = "i2c_command";
 
 static auto make_i2c_command(lua_State* L) -> I2CCommand* {
   void* userdata = lua_newuserdata(L, sizeof(I2CCommand));
   I2CCommand* cmd = new (userdata) I2CCommand;
-  luaL_getmetatable(L, kTransactionMetatable);
+  luaL_getmetatable(L, kCommandMetatable);
   lua_setmetatable(L, -2);
   return cmd;
 }
 
 static auto check_i2c_command(lua_State* L, int i) -> I2CCommand* {
-  return static_cast<I2CCommand*>(luaL_checkudata(L, i, kTransactionMetatable));
+  return static_cast<I2CCommand*>(luaL_checkudata(L, i, kCommandMetatable));
 }
 
 static auto make_start(lua_State* L) -> int {
@@ -149,7 +149,7 @@ static auto execute(lua_State* L) -> int {
   // match the read values with their names and stuff them into a table to return
   lua_createtable(L, 0, read_count);
   lua_pushinteger(L, err);
-  lua_setfield(L, lua_gettop(L) - 1, "i2c_error");
+  lua_setfield(L, lua_gettop(L) - 1, "i2c_error"); // TODO<ee> does this actually work? I added it after I got the rest working
   read_index = 0;
   for (int i = 1; i <= arg_count; i++) {
     auto arg = check_i2c_command(L, i);
@@ -172,7 +172,7 @@ static const struct luaL_Reg kI2CFuncs[] = {{"start", make_start},
                                             {NULL, NULL}};
 
 static auto lua_i2c(lua_State* L) -> int {
-  luaL_newmetatable(L, kTransactionMetatable);
+  luaL_newmetatable(L, kCommandMetatable);
   luaL_newlib(L, kI2CFuncs);
   return 1;
 }

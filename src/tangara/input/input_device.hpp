@@ -14,7 +14,6 @@
 #include "indev/lv_indev.h"
 #include "input/input_events.hpp"
 #include "input/input_hook.hpp"
-#include "lua/property.hpp"
 
 namespace input {
 
