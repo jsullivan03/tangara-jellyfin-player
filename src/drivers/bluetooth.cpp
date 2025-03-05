@@ -188,6 +188,8 @@ auto Bluetooth::knownDevices() -> std::vector<bluetooth::MacAndName> {
 
 auto Bluetooth::forgetKnownDevice(const bluetooth::mac_addr_t& mac) -> void {
   nvs_.BluetoothName(mac, {});
+  std::invoke(bluetooth::BluetoothState::eventHandler(),
+              bluetooth::SimpleEvent::kKnownDevicesChanged);
 }
 
 auto Bluetooth::discoveryEnabled(bool en) -> void {
@@ -412,6 +414,10 @@ auto BluetoothState::pairedDevice(std::optional<MacAndName> dev) -> void {
 
   tinyfsm::FsmList<bluetooth::BluetoothState>::dispatch(
       bluetooth::events::PairedDeviceChanged{});
+}
+
+auto BluetoothState::eventHandler() -> std::function<void(Event)>& {
+  return sEventHandler_;
 }
 
 auto BluetoothState::discovery() -> bool {

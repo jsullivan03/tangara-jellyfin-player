@@ -162,6 +162,8 @@ class BluetoothState : public tinyfsm::Fsm<BluetoothState> {
   static auto pairedDevice() -> std::optional<bluetooth::MacAndName>;
   static auto pairedDevice(std::optional<bluetooth::MacAndName>) -> void;
 
+  static auto eventHandler() -> std::function<void(Event)>&;
+
   static auto discovery() -> bool;
   static auto discovery(bool) -> void;
   static auto discoveredDevices() -> std::vector<Device>;
