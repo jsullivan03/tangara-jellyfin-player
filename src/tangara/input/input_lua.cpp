@@ -15,15 +15,11 @@
 
 namespace input {
 
-static std::string const kScriptPath = "/sd/input.lua";
-
 #define LOG(...) ESP_LOGW("input_lua", __VA_ARGS__)
 
-static auto scriptExists() -> bool {
+auto LuaInput::IsScriptPresent() -> bool {
   FILINFO info;
-  // f_stat's root is /sd, so strip that bit off the front of the path
-  bool exists = (f_stat(kScriptPath.c_str() + strlen("/sd"), &info) == FR_OK);
-  LOG("exists? %d", exists);
+  bool exists = (f_stat(kScriptPath.c_str(), &info) == FR_OK);
   return exists;
 }
 
@@ -91,9 +87,8 @@ LuaInput::LuaInput(
 }
 
 void LuaInput::tryReloadScript() {
-  LOG("reload begin");
-  if (!scriptExists()) {
-    LOG("reloadScript: script doesn't exist, not changing anything");
+  if (!IsScriptPresent()) {
+    LOG("tryReloadScript: script doesn't exist");
     return;
   }
   // We load the updated script into a totally new Lua state, so that input
@@ -113,12 +108,15 @@ void LuaInput::tryReloadScript() {
       },
       true);
 
-  auto ok = new_thread->RunScript(kScriptPath);
+  auto ok = new_thread->RunScript("/sd/" + kScriptPath);
   if (ok) {
     // TODO<ee> does this need locking or anything
     thread_ = new_thread;
   }
-  LOG("reload end, ok=%d", ok);
+}
+
+auto LuaInput::isScriptActive() -> bool {
+  return thread_ != nullptr;
 }
 
 // read t[key], converting booleans to integer 1 or 0

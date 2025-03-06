@@ -23,11 +23,15 @@ class LuaInput : public IInputDevice {
   LuaInput(std::function<std::shared_ptr<lua::LuaThread>()> thread_factory);
 
   auto tryReloadScript() -> void;
+  auto isScriptActive() -> bool;
 
   auto read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void override;
   auto name() -> std::string override;
   auto onLock(drivers::NvsStorage::LockedInputModes) -> void override;
   auto onUnlock() -> void override;
+
+  static std::string constexpr kScriptPath = "/input.lua";
+  static auto IsScriptPresent() -> bool;
 
  private:
   std::shared_ptr<lua::LuaThread> thread_;

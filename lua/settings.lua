@@ -476,39 +476,61 @@ settings.InputSettings = SettingsScreen:new {
         return controls_chooser
     end
 
+    -- if we don't have a touchwheel installed, the only thing this setting controls is the side buttons
+    -- (the labels returned by controls.schemes() will have been changed to match)
+    local control_scheme_label = controls.touchwheel_present() and "Control scheme" or "Side buttons"
     theme.set_subject(self.content:Label {
-      text = "Control scheme",
+      text = control_scheme_label,
     }, "settings_title")
     local controls_chooser = make_scheme_control(self, controls.schemes(), controls.scheme)
-    local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
+    local controls_chooser_desc = widgets.Description(controls_chooser, control_scheme_label)
 
     theme.set_subject(self.content:Label {
-      text = "Control scheme when locked",
+      text = control_scheme_label .. " when locked",
     }, "settings_title")
     local controls_locked = make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
-    local controls_locked_desc = widgets.Description(controls_locked, "Control scheme when locked")
+    local controls_locked_desc = widgets.Description(controls_locked, control_scheme_label .. " when locked")
 
-    theme.set_subject(self.content:Label {
-      text = "Haptics Mode",
-    }, "settings_title")
-    make_scheme_control(self, controls.haptics_modes(), controls.haptics_mode)
+    if controls.haptics_present() then
+      theme.set_subject(self.content:Label {
+        text = "Haptics Mode",
+      }, "settings_title")
+      make_scheme_control(self, controls.haptics_modes(), controls.haptics_mode)
+    end
+
+    local lua_input_state = controls.lua_input_status()
+    local lua_input_hint = ""
+    if lua_input_state.active then
+      lua_input_hint = "Scripted input is active:"
+    elseif lua_input_state.present then
+      lua_input_hint = "Scripted input is inactive:"
+    end
+    -- else we just don't mention it
+    if lua_input_hint ~= "" then
+      self.content:Label {
+        symbol = img.info,
+        text = lua_input_hint .. "\n" .. lua_input_state.script_path,
+      }
+    end
 
     controls_chooser:focus()
 
-    theme.set_subject(self.content:Label {
-      text = "Scroll Sensitivity",
-    }, "settings_title")
+    if controls.touchwheel_present() then
+      theme.set_subject(self.content:Label {
+        text = "Scroll Sensitivity",
+      }, "settings_title")
 
-    local slider_scale = 4; -- Power steering
-    local sensitivity = self.content:Slider {
-      w = lvgl.PCT(90),
-      range = { min = 0, max = 255 / slider_scale },
-      value = controls.scroll_sensitivity:get() / slider_scale,
-    }
-    sensitivity:onevent(lvgl.EVENT.VALUE_CHANGED, function()
-      controls.scroll_sensitivity:set(sensitivity:value() * slider_scale)
-    end)
-    local sensitivity_desc = widgets.Description(sensitivity, "Scroll Sensitivity")
+      local slider_scale = 4; -- Power steering
+      local sensitivity = self.content:Slider {
+        w = lvgl.PCT(90),
+        range = { min = 0, max = 255 / slider_scale },
+        value = controls.scroll_sensitivity:get() / slider_scale,
+      }
+      sensitivity:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+        controls.scroll_sensitivity:set(sensitivity:value() * slider_scale)
+      end)
+      local sensitivity_desc = widgets.Description(sensitivity, "Scroll Sensitivity")
+    end
   end
 }
 

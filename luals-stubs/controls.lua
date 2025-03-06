@@ -14,4 +14,11 @@
 --- @field hooks function Returns a table containing the inputs and actions associated with the current control scheme.
 local controls = {}
 
+function controls.schemes() end
+function controls.locked_schemes() end
+function controls.haptics_modes() end
+function controls.haptics_present() end
+function controls.touchwheel_present() end
+function controls.lua_input_status() end
+
 return controls
