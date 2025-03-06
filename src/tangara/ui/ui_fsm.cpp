@@ -201,26 +201,29 @@ lua::Property UiState::sPlaybackPosition{
       return true;
     }};
 
-lua::Property UiState::sQueuePosition{0, [](const lua::LuaValue& val){
-                                      if (!std::holds_alternative<int>(val)) {
-                                        return false;
-                                      }
-                                      int new_val = std::get<int>(val);
-                                      // val-1 because Lua uses 1-based indexing
-                                      return sServices->track_queue().currentPosition(new_val-1);
-                                    }};
+lua::Property UiState::sQueuePosition{
+    0, [](const lua::LuaValue& val) {
+      if (!std::holds_alternative<int>(val)) {
+        return false;
+      }
+      int new_val = std::get<int>(val);
+      // val-1 because Lua uses 1-based indexing
+      return sServices->track_queue().currentPosition(new_val - 1);
+    }};
 lua::Property UiState::sQueueSize{0};
-lua::Property UiState::sQueueRepeatMode{0, [](const lua::LuaValue& val) {
-                                      if (!std::holds_alternative<int>(val)) {
-                                        return false;
-                                      }
-                                      int new_val = std::get<int>(val);
-                                      if (new_val < 0 || new_val >= 3) {
-                                        return false;
-                                      }
-                                      sServices->track_queue().repeatMode(static_cast<audio::TrackQueue::RepeatMode>(new_val));
-                                      return true;
-                                    }};
+lua::Property UiState::sQueueRepeatMode{
+    0, [](const lua::LuaValue& val) {
+      if (!std::holds_alternative<int>(val)) {
+        return false;
+      }
+      int new_val = std::get<int>(val);
+      if (new_val < 0 || new_val >= 3) {
+        return false;
+      }
+      sServices->track_queue().repeatMode(
+          static_cast<audio::TrackQueue::RepeatMode>(new_val));
+      return true;
+    }};
 lua::Property UiState::sQueueRandom{false, [](const lua::LuaValue& val) {
                                       if (!std::holds_alternative<bool>(val)) {
                                         return false;
@@ -301,7 +304,8 @@ lua::Property UiState::sDisplayTextToSpeech{
         return false;
       }
       sServices->nvs().UITextToSpeech(std::get<bool>(val));
-      sServices->tts().feed(tts::TtsEnabledChanged{.tts_enabled = std::get<bool>(val)});
+      sServices->tts().feed(
+          tts::TtsEnabledChanged{.tts_enabled = std::get<bool>(val)});
       return true;
     }};
 
@@ -618,16 +622,16 @@ void Lua::entry() {
                          {"paired_device", &sBluetoothPairedDevice},
                          {"discovered_devices", &sBluetoothDiscoveredDevices},
                          {"known_devices", &sBluetoothKnownDevices},
-                         {"enable", 
-                            [&](lua_State* s) {
-                              sBluetoothEnabled.set(true);
-                              return 0;
-                         }},
-                         {"disable", 
-                            [&](lua_State* s) {
-                              sBluetoothEnabled.set(false);
-                              return 0;
-                         }},
+                         {"enable",
+                          [&](lua_State* s) {
+                            sBluetoothEnabled.set(true);
+                            return 0;
+                          }},
+                         {"disable",
+                          [&](lua_State* s) {
+                            sBluetoothEnabled.set(false);
+                            return 0;
+                          }},
                      });
     registry.AddPropertyModule(
         "playback",
@@ -736,6 +740,11 @@ void Lua::entry() {
 
     if (sServices->sd() == drivers::SdState::kMounted) {
       sLua->RunScript("/sd/config.lua");
+      // if config.lua doesn't exist, this will have left the string "cannot
+      // open /sd/config.lua: No such file or directory" on the stack as an
+      // error, so make that (and anything else config.lua may have left here)
+      // go away
+      lua_settop(sLua->state(), 0);
     }
     sLua->RunScript("/lua/main.lua");
   }
@@ -860,10 +869,10 @@ auto Lua::SetRepeatMode(const lua::LuaValue& val) -> bool {
     return false;
   }
   int mode = std::get<int>(val);
-  sServices->track_queue().repeatMode(static_cast<audio::TrackQueue::RepeatMode>(mode));
+  sServices->track_queue().repeatMode(
+      static_cast<audio::TrackQueue::RepeatMode>(mode));
   return true;
 }
-
 
 void Lua::exit() {
   lv_group_set_default(NULL);
