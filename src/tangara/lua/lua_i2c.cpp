@@ -146,16 +146,18 @@ static auto execute(lua_State* L) -> int {
   }
   esp_err_t err = transaction.Execute();
 
-  // match the read values with their names and stuff them into a table to return
+  // match the read values with their names, and stuff them into a table to return
   lua_createtable(L, 0, read_count);
-  lua_pushinteger(L, err);
-  lua_setfield(L, lua_gettop(L) - 1, "i2c_error"); // TODO<ee> does this actually work? I added it after I got the rest working
+  if (err != ESP_OK) {
+    lua_pushstring(L, esp_err_to_name(err));
+    lua_setfield(L, -2, "i2c_error");
+  }
   read_index = 0;
   for (int i = 1; i <= arg_count; i++) {
     auto arg = check_i2c_command(L, i);
     if (arg->type == I2CCommand::Type::read) {
       lua_pushinteger(L, read_slots[read_index]);
-      lua_setfield(L, lua_gettop(L) - 1, arg->name.c_str());
+      lua_setfield(L, -2, arg->name.c_str());
       read_index++;
     }
   }

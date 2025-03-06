@@ -34,7 +34,7 @@ class LuaInput : public IInputDevice {
   static auto IsScriptPresent() -> bool;
 
  private:
-  std::shared_ptr<lua::LuaThread> thread_;
+  std::atomic<std::shared_ptr<lua::LuaThread>> thread_;
   std::function<std::shared_ptr<lua::LuaThread>()> thread_factory_;
 };
 

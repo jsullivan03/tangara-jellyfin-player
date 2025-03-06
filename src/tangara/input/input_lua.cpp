@@ -109,13 +109,12 @@ void LuaInput::tryReloadScript() {
 
   auto ok = new_thread->RunScript("/sd/" + kScriptPath);
   if (ok) {
-    // TODO<ee> does this need locking or anything
     thread_ = new_thread;
   }
 }
 
 auto LuaInput::isScriptActive() -> bool {
-  return thread_ != nullptr;
+  return thread_.load() != nullptr;
 }
 
 // read t[key], converting booleans to integer 1 or 0
