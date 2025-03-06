@@ -164,9 +164,11 @@ static auto do_callback(std::shared_ptr<lua::LuaThread> thread,
 auto LuaInput::read(lv_indev_data_t* data, std::vector<InputEvent>& events)
     -> void {
   do_callback(thread_, kReadFunc, [=](lua_State* L) {
-    data->enc_diff = get_int_from_table(L, "encoder_diff").value_or(0);
-    data->state = lv_indev_state_t(
-        get_int_from_table(L, "encoder_button_pressed").value_or(0));
+    data->enc_diff += get_int_from_table(L, "encoder_diff").value_or(0);
+    if (data->state == LV_INDEV_STATE_RELEASED) {
+      data->state = lv_indev_state_t(
+          get_int_from_table(L, "encoder_button_pressed").value_or(0));
+    }
   });
 }
 
