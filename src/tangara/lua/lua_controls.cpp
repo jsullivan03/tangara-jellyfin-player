@@ -123,11 +123,6 @@ static auto lua_input_status(lua_State* L) -> int {
 	return 1;
 }
 
-static auto lua_input_script_path(lua_State* L) -> int {
-	// just so we can show it in a hint in the ui
-	return 1;
-}
-
 static const struct luaL_Reg kControlsFuncs[] = {
     {"schemes", controls_schemes},
     {"locked_schemes", locked_controls_schemes},

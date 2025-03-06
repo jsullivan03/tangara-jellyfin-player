@@ -7,7 +7,6 @@
 #include "input/input_lua.hpp"
 
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "ff.h"
 #include "indev/lv_indev.h"
 #include "input_trigger.hpp"
@@ -15,7 +14,7 @@
 
 namespace input {
 
-#define LOG(...) ESP_LOGW("input_lua", __VA_ARGS__)
+#define WARN(...) ESP_LOGW("input_lua", __VA_ARGS__)
 
 auto LuaInput::IsScriptPresent() -> bool {
   FILINFO info;
@@ -88,7 +87,7 @@ LuaInput::LuaInput(
 
 void LuaInput::tryReloadScript() {
   if (!IsScriptPresent()) {
-    LOG("tryReloadScript: script doesn't exist");
+    WARN("tryReloadScript: script not present");
     return;
   }
   // We load the updated script into a totally new Lua state, so that input
@@ -133,7 +132,7 @@ static auto get_int_from_table(lua_State* L, char const* key)
   } else if (lua_isboolean(L, -1)) {
     rv = lua_toboolean(L, -1) ? 1 : 0;
   }
-  lua_pop(L, 1); // leave the table as the top item
+  lua_pop(L, 1);  // leave the table as the top item
   return rv;
 }
 
@@ -157,8 +156,8 @@ static auto do_callback(std::shared_ptr<lua::LuaThread> thread,
     }
   } else {
     auto err_str = lua_tostring(L, -1);
-    LOG("lua input callback failed (%d, %s)", err,
-        err_str ? err_str : "(error isn't a string)");
+    WARN("lua input callback failed (%d, %s)", err,
+         err_str ? err_str : "(error isn't a string)");
   }
   lua_settop(L, 0);
 }
