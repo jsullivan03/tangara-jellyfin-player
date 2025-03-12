@@ -27,6 +27,7 @@
 #include "drivers/touchwheel.hpp"
 #include "system_fsm/service_locator.hpp"
 #include "system_fsm/system_events.hpp"
+#include "ui/ui_fsm.hpp"
 #include "tinyfsm.hpp"
 
 namespace system_fsm {
@@ -64,6 +65,8 @@ class SystemState : public tinyfsm::Fsm<SystemState> {
   virtual void react(const internal::IdleTimeout&) {}
   virtual void react(const internal::UnmountTimeout&) {}
   virtual void react(const internal::Mount&) {}
+  virtual void react(const ui::UnmountRequest&) {}
+  virtual void react(const audio::UnmountReady&) {}
 
  protected:
   auto IdleCondition() -> bool;
@@ -103,6 +106,8 @@ class Running : public SystemState {
   void react(const database::event::UpdateFinished&) override;
   void react(const SamdUsbMscChanged&) override;
   void react(const StorageError&) override;
+  void react(const ui::UnmountRequest&) override;
+  void react(const audio::UnmountReady&) override;
 
   void react(const internal::UnmountTimeout&) override;
   void react(const internal::Mount&) override;

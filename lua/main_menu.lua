@@ -15,6 +15,7 @@ local font = require("font")
 local theme = require("theme")
 local img = require("images")
 local playback = require("playback")
+local usb = require("usb")
 
 return widgets.MenuScreen:new {
   create_ui = function(self)
@@ -236,6 +237,26 @@ return widgets.MenuScreen:new {
           usb_btn:add_flag(lvgl.FLAG.HIDDEN)
         end
       end)
+    }
+
+    local unmount_btn = bottom_bar:Button {}
+    unmount_btn:onClicked(function()
+      sd_card.unmount()
+    end)
+    unmount_btn:Image { src = img.unmount }
+    widgets.Description(unmount_btn, "Unmount the SD Card")
+    theme.set_subject(unmount_btn, "menu_icon")
+    local unmount_btn_bind = function()
+      if sd_card.mounted:get() and not database.updating:get() and not usb.msc_enabled:get() then
+        unmount_btn:clear_flag(lvgl.FLAG.HIDDEN)
+      else
+        unmount_btn:add_flag(lvgl.FLAG.HIDDEN)
+      end
+    end
+    self.bindings = self.bindings + {
+      sd_card.mounted:bind(unmount_btn_bind),
+      database.updating:bind(unmount_btn_bind),
+      usb.msc_enabled:bind(unmount_btn_bind)
     }
 
     local files_btn = bottom_bar:Button {}
