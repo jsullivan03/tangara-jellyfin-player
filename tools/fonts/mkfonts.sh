@@ -11,6 +11,7 @@ fusion_12() {
     --font fusion/fusion-pixel-12px-proportional/fusion-pixel-12px-proportional-latin.ttf \
     -r 0x2000-0x206F \
     -r 0x20-0x7F,0xA0-0xFF \
+    -r 0x400-0x4FF \
     --font fusion/fusion-pixel-12px-proportional/fusion-pixel-12px-proportional-ja.ttf \
     -r 0x3000-0x303f,0x3040-0x309F,0x30A0-0x30FF \
     -r 0xFF00-0xFFEF,0x4E00-0x9FAF \
@@ -26,6 +27,7 @@ fusion_10() {
     --font fusion/fusion-pixel-10px-proportional/fusion-pixel-10px-proportional-latin.ttf \
     -r 0x2000-0x206F \
     -r 0x20-0x7F,0xA0-0xFF \
+    -r 0x400-0x4FF \
     --font fusion/fusion-pixel-10px-proportional/fusion-pixel-10px-proportional-ja.ttf \
     -r 0x3000-0x303f,0x3040-0x309F,0x30A0-0x30FF \
     -r 0xFF00-0xFFEF,0x4E00-0x9FAF \
@@ -41,6 +43,7 @@ fusion_8() {
     --font fusion/fusion-pixel-8px-monospaced/fusion-pixel-8px-monospaced-latin.ttf \
     -r 0x2000-0x206F \
     -r 0x20-0x7F,0xA0-0xFF \
+    -r 0x400-0x4FF \
     --font fusion/fusion-pixel-8px-monospaced/fusion-pixel-8px-monospaced-ja.ttf \
     -r 0x3000-0x303f,0x3040-0x309F,0x30A0-0x30FF \
     -r 0xFF00-0xFFEF,0x4E00-0x9FAF \
