@@ -62,11 +62,22 @@ auto volumeDown() -> HookCallback {
                       }};
 }
 
-auto allActions() -> std::vector<HookCallback> {
-  return {
-      select(),         scrollUp(), scrollDown(), scrollToTop(),
-      scrollToBottom(), goBack(),   volumeUp(),   volumeDown(),
-  };
+auto nextTrack(audio::TrackQueue& queue) -> HookCallback {
+  return HookCallback{.name = "next_track", .fn = [&](lv_indev_data_t* d) {
+                        queue.next();
+                      }};
+}
+
+auto prevTrack(audio::TrackQueue& queue) -> HookCallback {
+  return HookCallback{.name = "prev_track", .fn = [&](lv_indev_data_t* d) {
+                        queue.previous();
+                      }};
+}
+
+auto togglePlayPause() -> HookCallback {
+  return HookCallback{.name = "toggle_play_pause", .fn = [&](lv_indev_data_t* d) {
+                        events::Audio().Dispatch(audio::TogglePlayPause{});
+                      }};
 }
 
 }  // namespace actions

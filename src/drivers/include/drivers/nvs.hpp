@@ -143,23 +143,27 @@ class NvsStorage {
   auto AmpLeftBias() -> int_fast8_t;
   auto AmpLeftBias(int_fast8_t) -> void;
 
-  enum class InputModes : uint8_t {
-    kButtonsOnly = 0,
-    kButtonsWithWheel = 1,
-    kDirectionalWheel = 2,
-    kRotatingWheel = 3,
+  enum class WheelInputModes : uint8_t {
+    kDisabled = 0,
+    kDirectionalWheel = 1,
+    kRotatingWheel = 2,
   };
 
-  auto PrimaryInput() -> InputModes;
-  auto PrimaryInput(InputModes) -> void;
+  auto WheelInput() -> WheelInputModes;
+  auto WheelInput(WheelInputModes) -> void;
 
-  enum class LockedInputModes : uint8_t {
+  enum class ButtonInputModes : uint8_t {
     kDisabled = 0,
     kVolumeOnly = 1,
+    kMediaControls = 2,
+    kNavigation = 3,
   };
 
-  auto LockedInput() -> LockedInputModes;
-  auto LockedInput(LockedInputModes) -> void;
+  auto ButtonInput() -> ButtonInputModes;
+  auto ButtonInput(ButtonInputModes) -> void;
+
+  auto LockedInput() -> ButtonInputModes;
+  auto LockedInput(ButtonInputModes) -> void;
 
   auto QueueRepeatMode() -> uint8_t;
   auto QueueRepeatMode(uint8_t) -> void;
@@ -191,7 +195,8 @@ class NvsStorage {
   Setting<uint16_t> amp_max_vol_;
   Setting<uint16_t> amp_cur_vol_;
   Setting<int8_t> amp_left_bias_;
-  Setting<uint8_t> input_mode_;
+  Setting<uint8_t> wheel_input_mode_;
+  Setting<uint8_t> button_input_mode_;
   Setting<uint8_t> locked_input_mode_;
   Setting<uint8_t> output_mode_;
   Setting<uint8_t> haptics_mode_;

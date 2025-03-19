@@ -471,20 +471,33 @@ settings.InputSettings = SettingsScreen:new {
         controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
           local option = controls_chooser:get('selected')
           local scheme = option_to_scheme[option]
-          control_scheme:set(scheme)
+          local prev_scheme = control_scheme:get()
+          -- Check the new scheme is valid
+          if not control_scheme:set(scheme) then
+            widgets.PopUp("Controls not valid")
+            control_scheme:set(prev_scheme)
+          end
         end)
 
         return controls_chooser
     end
 
     theme.set_subject(self.content:Label {
-      text = "Control scheme",
+      text = "Wheel Controls",
     }, "settings_title")
-    local controls_chooser = make_scheme_control(self, controls.schemes(), controls.scheme)
+    local controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
     local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
 
     theme.set_subject(self.content:Label {
-      text = "Control scheme when locked",
+      text = "Side Button Controls",
+    }, "settings_title")
+    make_scheme_control(self, controls.button_schemes(), controls.button_scheme)
+    
+    theme.set_subject(self.content:Label {
+      text = "Side Button Controls When Locked",
+      w = lvgl.PCT(80),
+      h = lvgl.SIZE_CONTENT, 
+      long_mode = lvgl.LABEL.LONG_WRAP,
     }, "settings_title")
     local controls_locked = make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
     local controls_locked_desc = widgets.Description(controls_locked, "Control scheme when locked")
@@ -510,6 +523,14 @@ settings.InputSettings = SettingsScreen:new {
       controls.scroll_sensitivity:set(sensitivity:value() * slider_scale)
     end)
     local sensitivity_desc = widgets.Description(sensitivity, "Scroll Sensitivity")
+
+    local spacer = self.content:Object {
+      w = lvgl.PCT(90),
+      h = 10,
+    }
+    sensitivity:onevent(lvgl.EVENT.FOCUSED, function()
+      spacer:scroll_to_view(true)
+    end)
   end
 }
 

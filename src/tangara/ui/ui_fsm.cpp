@@ -680,7 +680,8 @@ void Lua::entry() {
     registry.AddPropertyModule(
         "controls",
         {
-            {"scheme", &sInput->mode()},
+            {"wheel_scheme", &sInput->wheelMode()},
+            {"button_scheme", &sInput->buttonMode()},
             {"locked_scheme", &sInput->lockedMode()},
             {"haptics_mode", &sInput->hapticsMode()},
             {"lock_switch", &sLockSwitch},

@@ -23,37 +23,64 @@ namespace lua {
 
 [[maybe_unused]] static constexpr char kTag[] = "lua_controls";
 
-static auto controls_schemes(lua_State* L) -> int {
+static auto wheel_schemes(lua_State* L) -> int {
   lua_newtable(L);
 
-  lua_pushliteral(L, "Buttons Only");
+  lua_pushliteral(L, "Disabled");
   lua_rawseti(L, -2,
-              static_cast<int>(drivers::NvsStorage::InputModes::kButtonsOnly));
+              static_cast<int>(drivers::NvsStorage::WheelInputModes::kDisabled));
 
   lua_pushliteral(L, "D-Pad");
-  lua_rawseti(
-      L, -2,
-      static_cast<int>(drivers::NvsStorage::InputModes::kDirectionalWheel));
+  lua_rawseti(L, -2,
+              static_cast<int>(drivers::NvsStorage::WheelInputModes::kDirectionalWheel));
 
   lua_pushliteral(L, "Touchwheel");
   lua_rawseti(
-      L, -2, static_cast<int>(drivers::NvsStorage::InputModes::kRotatingWheel));
+      L, -2, static_cast<int>(drivers::NvsStorage::WheelInputModes::kRotatingWheel));
 
   return 1;
 }
 
-static auto locked_controls_schemes(lua_State* L) -> int {
+static auto button_schemes(lua_State* L) -> int {
   lua_newtable(L);
 
   lua_pushliteral(L, "Disabled");
   lua_rawseti(
       L, -2,
-      static_cast<int>(drivers::NvsStorage::LockedInputModes::kDisabled));
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kDisabled));
 
   lua_pushliteral(L, "Volume Only");
   lua_rawseti(
       L, -2,
-      static_cast<int>(drivers::NvsStorage::LockedInputModes::kVolumeOnly));
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kVolumeOnly));
+  lua_pushliteral(L, "Media Controls");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kMediaControls));
+  lua_pushliteral(L, "Navigation");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kNavigation));
+
+  return 1;
+}
+
+static auto locked_button_schemes(lua_State* L) -> int {
+  lua_newtable(L);
+
+  lua_pushliteral(L, "Disabled");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kDisabled));
+
+  lua_pushliteral(L, "Volume Only");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kVolumeOnly));
+  lua_pushliteral(L, "Media Controls");
+  lua_rawseti(
+      L, -2,
+      static_cast<int>(drivers::NvsStorage::ButtonInputModes::kMediaControls));
 
   return 1;
 }
@@ -77,8 +104,9 @@ static auto haptics_modes(lua_State* L) -> int {
   return 1;
 }
 
-static const struct luaL_Reg kControlsFuncs[] = {{"schemes", controls_schemes},
-                                                 {"locked_schemes", locked_controls_schemes},
+static const struct luaL_Reg kControlsFuncs[] = {{"wheel_schemes", wheel_schemes},
+                                                 {"button_schemes", button_schemes},
+                                                 {"locked_schemes", locked_button_schemes},
                                                  {"haptics_modes", haptics_modes},
                                                  {NULL, NULL}};
 

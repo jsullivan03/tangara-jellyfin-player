@@ -8,7 +8,9 @@
 --- controls. These controls include the touchwheel, the lock switch, and the
 --- side buttons.
 --- @class controls
---- @field scheme Property The currently configured control scheme
+--- @field wheel_scheme Property The currently configured control scheme for the touchwheel
+--- @field button_scheme Property The currently configured control scheme for the side buttons
+--- @field locked_scheme Property The currently configured control scheme for the side buttons when locked
 --- @field scroll_sensitivity Property How much rotational motion is required on the touchwheel per scroll tick.
 --- @field lock_switch Property  The current state of the device's lock switch.
 --- @field hooks funtion Returns a table containing the inputs and actions associated with the current control scheme.
