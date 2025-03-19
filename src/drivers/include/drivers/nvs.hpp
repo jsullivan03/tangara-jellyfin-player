@@ -93,6 +93,9 @@ class NvsStorage {
   auto FastCharge() -> bool;
   auto FastCharge(bool) -> void;
 
+  auto DisplayLeftPadding() -> uint8_t;
+  auto DisplayLeftPadding(uint8_t) -> void;
+
   auto PreferredBluetoothDevice() -> std::optional<bluetooth::MacAndName>;
   auto PreferredBluetoothDevice(std::optional<bluetooth::MacAndName>) -> void;
 
@@ -177,6 +180,7 @@ class NvsStorage {
   Setting<uint8_t> lock_polarity_;
   Setting<uint16_t> display_cols_;
   Setting<uint16_t> display_rows_;
+  Setting<uint8_t> display_left_padding_;
   Setting<uint8_t> haptic_motor_type_;
   Setting<LraData> lra_calibration_;
   Setting<uint8_t> fast_charge_;

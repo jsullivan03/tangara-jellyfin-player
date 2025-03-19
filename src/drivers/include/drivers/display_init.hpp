@@ -17,6 +17,7 @@ extern const uint8_t kDelayBit;
 struct InitialisationData {
   uint16_t width;
   uint16_t height;
+  uint8_t pad;
   uint8_t num_sequences;
   const uint8_t* sequences[4];
 };

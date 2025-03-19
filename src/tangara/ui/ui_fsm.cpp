@@ -352,10 +352,13 @@ void UiState::react(const internal::InitDisplay& ev) {
 
   // HACK: correct the display size for our prototypes.
   // ev.nvs.DisplaySize({161, 130});
+  // HACK: correct the display padding for batch 2.
+  // ev.nvs.DisplayLeftPadding(3);
 
   auto actual_size = ev.nvs.DisplaySize();
   init_data.width = actual_size.first.value_or(init_data.width);
   init_data.height = actual_size.second.value_or(init_data.height);
+  init_data.pad = ev.nvs.DisplayLeftPadding();
   sDisplay.reset(drivers::Display::Create(ev.gpios, init_data));
 
   sCurrentScreen.reset(new screens::Splash());

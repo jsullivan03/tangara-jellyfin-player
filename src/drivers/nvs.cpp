@@ -41,6 +41,7 @@ static constexpr char kKeyScrollSensitivity[] = "scroll";
 static constexpr char kKeyLockPolarity[] = "lockpol";
 static constexpr char kKeyDisplayCols[] = "dispcols";
 static constexpr char kKeyDisplayRows[] = "disprows";
+static constexpr char kKeyDisplayLeftPadding[] = "displeftpad";
 static constexpr char kKeyHapticMotorType[] = "hapticmtype";
 static constexpr char kKeyLraCalibration[] = "lra_cali";
 static constexpr char kKeyDbAutoIndex[] = "dbautoindex";
@@ -266,6 +267,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       lock_polarity_(kKeyLockPolarity),
       display_cols_(kKeyDisplayCols),
       display_rows_(kKeyDisplayRows),
+      display_left_padding_(kKeyDisplayLeftPadding),
       haptic_motor_type_(kKeyHapticMotorType),
       lra_calibration_(kKeyLraCalibration),
       fast_charge_(kKeyFastCharge),
@@ -297,6 +299,7 @@ auto NvsStorage::Read() -> void {
   lock_polarity_.read(handle_);
   display_cols_.read(handle_);
   display_rows_.read(handle_);
+  display_left_padding_.read(handle_);
   haptic_motor_type_.read(handle_);
   lra_calibration_.read(handle_);
   fast_charge_.read(handle_);
@@ -323,6 +326,7 @@ auto NvsStorage::Write() -> bool {
   lock_polarity_.write(handle_);
   display_cols_.write(handle_);
   display_rows_.write(handle_);
+  display_left_padding_.write(handle_);
   haptic_motor_type_.write(handle_);
   lra_calibration_.write(handle_);
   fast_charge_.write(handle_);
@@ -401,6 +405,16 @@ auto NvsStorage::DisplaySize(
   std::lock_guard<std::mutex> lock{mutex_};
   display_cols_.set(std::move(size.first));
   display_rows_.set(std::move(size.second));
+}
+
+auto NvsStorage::DisplayLeftPadding() -> uint8_t {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return display_left_padding_.get().value_or(0);
+}
+
+auto NvsStorage::DisplayLeftPadding(uint8_t val) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  display_left_padding_.set(val);
 }
 
 auto NvsStorage::PreferredBluetoothDevice()
