@@ -371,7 +371,8 @@ auto Scanner::HandleDeviceDiscovery(const esp_bt_gap_cb_param_t& param)
                               static_cast<size_t>(length)};
 
   // Trim trailing whitespace (spaces, tabs, \r, \n)
-  const std::string::size_type lastChar = deviceName.find_last_not_of(" \n\r\t");
+  const std::string::size_type lastChar =
+      deviceName.find_last_not_of(" \n\r\t");
   if (lastChar != std::string::npos) {
     deviceName.erase(lastChar + 1);
   }
@@ -533,6 +534,12 @@ void Disabled::react(const events::Enable&) {
 
   if ((err = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT) != ESP_OK)) {
     ESP_LOGE(kTag, "enable controller failed %s", esp_err_to_name(err));
+    return;
+  }
+
+  if ((err =
+           esp_bredr_tx_power_set(ESP_PWR_LVL_N0, ESP_PWR_LVL_P9) != ESP_OK)) {
+    ESP_LOGE(kTag, "set tx power failed %s", esp_err_to_name(err));
     return;
   }
 
