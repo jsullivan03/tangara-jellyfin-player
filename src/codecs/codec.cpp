@@ -16,6 +16,7 @@
 #include "types.hpp"
 #include "vorbis.hpp"
 #include "wav.hpp"
+#include "wavpack.hpp"
 
 namespace codecs {
 
@@ -33,6 +34,8 @@ auto StreamTypeToString(StreamType t) -> std::string {
       return "Opus";
     case StreamType::kNative:
       return "Native";
+    case StreamType::kWavPack:
+      return "WavPack";
     default:
       return "";
   }
@@ -52,6 +55,8 @@ auto CreateCodecForType(StreamType type) -> std::optional<ICodec*> {
       return new WavDecoder();
     case StreamType::kNative:
       return new NativeDecoder();
+    case StreamType::kWavPack:
+      return new WavPackDecoder();
     default:
       return {};
   }

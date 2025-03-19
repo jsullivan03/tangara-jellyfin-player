@@ -413,6 +413,9 @@ auto GenericTagParser::ReadAndParseTags(std::string_view p)
     case Fopus:
       out->encoding(Container::kOpus);
       break;
+    case Fwavpack:
+      out->encoding(Container::kWavPack);
+      break;
     default:
       out->encoding(Container::kUnsupported);
   }

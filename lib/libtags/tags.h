@@ -37,6 +37,7 @@ enum
 	Fm4a,
 	Fopus,
 	Fwav,
+	Fwavpack,
 	Fit,
 	Fxm,
 	Fs3m,
