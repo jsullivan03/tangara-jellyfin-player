@@ -35,7 +35,8 @@ class LvglInputDriver {
  public:
   LvglInputDriver(drivers::NvsStorage& nvs, DeviceFactory&);
 
-  auto mode() -> lua::Property& { return mode_; }
+  auto wheelMode() -> lua::Property& { return wheel_mode_; }
+  auto buttonMode() -> lua::Property& { return button_mode_; }
   auto lockedMode() -> lua::Property& { return locked_mode_; }
   auto hapticsMode() -> lua::Property& { return haptics_mode_; }
 
@@ -50,7 +51,8 @@ class LvglInputDriver {
   drivers::NvsStorage& nvs_;
   DeviceFactory& factory_;
 
-  lua::Property mode_;
+  lua::Property wheel_mode_;
+  lua::Property button_mode_;
   lua::Property locked_mode_;
   lua::Property haptics_mode_;
   lv_indev_t* device_;
@@ -73,8 +75,6 @@ class LvglInputDriver {
              std::tie(r.device_name, r.trigger_name, r.hook_name);
     }
   };
-
-  /* Userdata object for tracking the Lua mirror of a TriggerHooks object. */
   class LuaTrigger {
    public:
     LuaTrigger(LvglInputDriver&, IInputDevice&, TriggerHooks&);
@@ -96,12 +96,14 @@ class LvglInputDriver {
     std::string trigger_;
     std::map<std::string, std::string> hooks_;
   };
-
-  /* A hook override implemented as a lua callback */
   struct LuaOverride {
     lua_State* L;
     int ref;
   };
+
+  /* Userdata object for tracking the Lua mirror of a TriggerHooks object. */
+
+  /* A hook override implemented as a lua callback */
 
   std::map<OverrideSelector, LuaOverride> overrides_;
 

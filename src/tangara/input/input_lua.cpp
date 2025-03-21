@@ -176,7 +176,7 @@ auto LuaInput::name() -> std::string {
   return "lua scripted input";
 }
 
-auto LuaInput::onLock(drivers::NvsStorage::LockedInputModes) -> void {
+auto LuaInput::onLock() -> void {
   do_callback(thread_, kLockFunc);
 }
 

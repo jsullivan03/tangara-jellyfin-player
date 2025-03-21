@@ -55,63 +55,94 @@ static void focus_cb(lv_group_t* group) {
 
 namespace {
 
-auto intToMode(int raw) -> std::optional<drivers::NvsStorage::InputModes> {
+auto intToWheelMode(int raw)
+    -> std::optional<drivers::NvsStorage::WheelInputModes> {
   switch (raw) {
     case 0:
-      return drivers::NvsStorage::InputModes::kButtonsOnly;
+      return drivers::NvsStorage::WheelInputModes::kDisabled;
     case 1:
-      return drivers::NvsStorage::InputModes::kButtonsWithWheel;
+      return drivers::NvsStorage::WheelInputModes::kDirectionalWheel;
     case 2:
-      return drivers::NvsStorage::InputModes::kDirectionalWheel;
-    case 3:
-      return drivers::NvsStorage::InputModes::kRotatingWheel;
+      return drivers::NvsStorage::WheelInputModes::kRotatingWheel;
     default:
       return {};
   }
 }
 
-auto intToLockedMode(int raw) -> std::optional<drivers::NvsStorage::LockedInputModes> {
+auto intToButtonMode(int raw)
+    -> std::optional<drivers::NvsStorage::ButtonInputModes> {
   switch (raw) {
     case 0:
-      return drivers::NvsStorage::LockedInputModes::kDisabled;
+      return drivers::NvsStorage::ButtonInputModes::kDisabled;
     case 1:
-      return drivers::NvsStorage::LockedInputModes::kVolumeOnly;
+      return drivers::NvsStorage::ButtonInputModes::kVolumeOnly;
+    case 2:
+      return drivers::NvsStorage::ButtonInputModes::kMediaControls;
+    case 3:
+      return drivers::NvsStorage::ButtonInputModes::kNavigation;
     default:
       return {};
   }
 }
 
-} // namespace {}
+}  // namespace
 
 LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
                                  DeviceFactory& factory)
     : nvs_(nvs),
       factory_(factory),
-      mode_(static_cast<int>(nvs.PrimaryInput()),
-            [&](const lua::LuaValue& val) {
-              if (!std::holds_alternative<int>(val)) {
-                return false;
-              }
-              auto mode = intToMode(std::get<int>(val));
-              if (!mode) {
-                return false;
-              }
-              nvs.PrimaryInput(*mode);
-              inputs_ = factory.createInputs(*mode);
-              return true;
-            }),
+      wheel_mode_(
+          static_cast<int>(nvs.WheelInput()),
+          [&](const lua::LuaValue& val) {
+            if (!std::holds_alternative<int>(val)) {
+              return false;
+            }
+            auto mode = intToWheelMode(std::get<int>(val));
+            if (!mode) {
+              return false;
+            }
+            // Only allow disabling wheel if side buttons are
+            // used for navigation
+            if (*mode == drivers::NvsStorage::WheelInputModes::kDisabled &&
+                nvs.ButtonInput() !=
+                    drivers::NvsStorage::ButtonInputModes::kNavigation) {
+              return false;
+            }
+            nvs.WheelInput(*mode);
+            inputs_ = factory.createInputs();
+            return true;
+          }),
+      button_mode_(
+          static_cast<int>(nvs.ButtonInput()),
+          [&](const lua::LuaValue& val) {
+            if (!std::holds_alternative<int>(val)) {
+              return false;
+            }
+            auto mode = intToButtonMode(std::get<int>(val));
+            if (!mode) {
+              return false;
+            }
+            // Ensure we don't remove the only navigation control
+            if (*mode != drivers::NvsStorage::ButtonInputModes::kNavigation &&
+                nvs.WheelInput() == drivers::NvsStorage::WheelInputModes::kDisabled) {
+              return false;
+            }
+            nvs.ButtonInput(*mode);
+            inputs_ = factory.createInputs();
+            return true;
+          }),
       locked_mode_(static_cast<int>(nvs.LockedInput()),
-            [&](const lua::LuaValue& val) {
-              if (!std::holds_alternative<int>(val)) {
-                return false;
-              }
-              auto mode = intToLockedMode(std::get<int>(val));
-              if (!mode) {
-                return false;
-              }
-              nvs.LockedInput(*mode);
-              return true;
-            }),
+                   [&](const lua::LuaValue& val) {
+                     if (!std::holds_alternative<int>(val)) {
+                       return false;
+                     }
+                     auto mode = intToButtonMode(std::get<int>(val));
+                     if (!mode) {
+                       return false;
+                     }
+                     nvs.LockedInput(*mode);
+                     return true;
+                   }),
       haptics_mode_(static_cast<int>(nvs.HapticsMode()),
             [&](const lua::LuaValue& val) {
               if (!std::holds_alternative<int>(val)) {
@@ -121,7 +152,7 @@ LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
               nvs.HapticsMode(mode);
               return true;
             }),
-      inputs_(factory.createInputs(nvs.PrimaryInput())),
+      inputs_(factory.createInputs()),
       feedbacks_(factory.createFeedbacks()),
       is_locked_(false) {
   device_ = lv_indev_create();
@@ -172,14 +203,11 @@ auto LvglInputDriver::feedback(uint8_t event) -> void {
 
 auto LvglInputDriver::lock(bool l) -> void {
   is_locked_ = l;
-  auto locked_input_mode = nvs_.LockedInput();
-
-  for (auto&& device : inputs_) {
-    if (l) {
-      device->onLock(locked_input_mode);
-    } else {
-      device->onUnlock();
-    }
+  // Todo:: Call onLock/onUnlock on inputs_?
+  if (l) {
+    inputs_ = factory_.createLockedInputs();
+  } else {
+    inputs_ = factory_.createInputs();
   }
 }
 

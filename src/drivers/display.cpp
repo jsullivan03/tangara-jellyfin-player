@@ -136,13 +136,26 @@ auto Display::Create(IGpios& expander,
   spi_device_handle_t handle;
   spi_bus_add_device(VSPI_HOST, &spi_cfg, &handle);
 
-  auto display = std::make_unique<Display>(expander, handle);
+  auto display = std::make_unique<Display>(expander, handle, init_data.pad);
 
   // Now we reset the display into a known state, then configure it
   ESP_LOGI(kTag, "Sending init sequences");
+
+  // Hold the SPI bus for the entire init sequence, as otherwise SD init may
+  // grab it and delay showing the boot splash. The total time until boot is
+  // finished may be increased by doing this, but a short boot with no feedback
+  // feels worse than a longer boot that doesn't tell you anything.
+  spi_device_acquire_bus(handle, portMAX_DELAY);
+  expander.SdMuxEnable(false);
+
   for (int i = 0; i < init_data.num_sequences; i++) {
     display->SendInitialisationSequence(init_data.sequences[i]);
   }
+
+  display->WriteLeftPad(reinterpret_cast<uint8_t*>(kDisplayBuffer));
+
+  expander.SdMuxEnable(true);
+  spi_device_release_bus(handle);
 
   // The hardware is now configured correctly. Next, initialise the LVGL display
   // driver.
@@ -150,7 +163,8 @@ auto Display::Create(IGpios& expander,
   assert(esp_ptr_dma_capable(kDisplayBuffer));
 
   ESP_LOGI(kTag, "Creating display");
-  display->display_ = lv_display_create(init_data.width, init_data.height);
+  display->display_ =
+      lv_display_create(init_data.width - init_data.pad, init_data.height);
   lv_display_set_buffers(display->display_, kDisplayBuffer, NULL,
                          sizeof(kDisplayBuffer),
                          LV_DISPLAY_RENDER_MODE_PARTIAL);
@@ -162,12 +176,13 @@ auto Display::Create(IGpios& expander,
   return display.release();
 }
 
-Display::Display(IGpios& gpio, spi_device_handle_t handle)
+Display::Display(IGpios& gpio, spi_device_handle_t handle, uint_fast8_t pad)
     : gpio_(gpio),
       handle_(handle),
       first_flush_finished_(false),
       display_on_(false),
-      brightness_(0) {}
+      brightness_(0),
+      pad_(pad) {}
 
 Display::~Display() {
   ledc_fade_func_uninstall();
@@ -223,13 +238,6 @@ auto Display::SetDutyCycle(uint_fast8_t new_duty, bool fade) -> void {
 }
 
 void Display::SendInitialisationSequence(const uint8_t* data) {
-  // Hold the SPI bus for the entire init sequence, as otherwise SD init may
-  // grab it and delay showing the boot splash. The total time until boot is
-  // finished may be increased by doing this, but a short boot with no feedback
-  // feels worse than a longer boot that doesn't tell you anything.
-  spi_device_acquire_bus(handle_, portMAX_DELAY);
-  gpio_.SdMuxEnable(false);
-
   // First byte of the data is the number of commands.
   for (int i = *(data++); i > 0; i--) {
     uint8_t command = *(data++);
@@ -249,9 +257,33 @@ void Display::SendInitialisationSequence(const uint8_t* data) {
       vTaskDelay(pdMS_TO_TICKS(sleep_duration_ms));
     }
   }
+}
 
-  gpio_.SdMuxEnable(true);
-  spi_device_release_bus(handle_);
+void Display::WriteLeftPad(uint8_t* buffer) {
+  if (pad_ == 0) {
+    return;
+  }
+
+  uint16_t data1[2] = {0, 0};
+
+  // Select the left pad_ cols
+  data1[0] = SPI_SWAP_DATA_TX(0, 16);
+  data1[1] = SPI_SWAP_DATA_TX(pad_, 16);
+  SendCommandWithData(displays::ST77XX_CASET, reinterpret_cast<uint8_t*>(data1),
+                      4);
+
+  // Select all rows
+  data1[0] = SPI_SWAP_DATA_TX(0, 16);
+  data1[1] = SPI_SWAP_DATA_TX(128, 16);
+  SendCommandWithData(displays::ST77XX_RASET, reinterpret_cast<uint8_t*>(data1),
+                      4);
+
+  // Prep our beautiful zeroes.
+  size_t len = pad_ * 128 * 3;
+  std::memset(buffer, 0, len);
+
+  // Write our beautiful zeroes.
+  SendCommandWithData(displays::ST77XX_RAMWR, buffer, len);
 }
 
 IRAM_ATTR
@@ -309,8 +341,8 @@ void Display::OnLvglFlush(const lv_area_t* area, uint8_t* color_map) {
   // First we need to specify the rectangle of the display we're writing into.
   uint16_t data[2] = {0, 0};
 
-  data[0] = SPI_SWAP_DATA_TX(area->x1, 16);
-  data[1] = SPI_SWAP_DATA_TX(area->x2, 16);
+  data[0] = SPI_SWAP_DATA_TX(area->x1 + pad_, 16);
+  data[1] = SPI_SWAP_DATA_TX(area->x2 + pad_, 16);
   SendCommandWithData(displays::ST77XX_CASET, reinterpret_cast<uint8_t*>(data),
                       4);
 

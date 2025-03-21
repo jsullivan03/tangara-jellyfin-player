@@ -74,7 +74,7 @@ local function init_ui()
         end
       end
     end),
-    controls.scheme:bind(function()
+    controls.wheel_scheme:bind(function()
       -- Set up a shortcut for jumping straight to the 'now playing' screen.
       -- Implemented as a binding so that the shortcut is still applied even if
       -- the control scheme is changed at runtime.

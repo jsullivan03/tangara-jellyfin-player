@@ -13,6 +13,7 @@
 #include "input/input_device.hpp"
 #include "input/input_hard_reset.hpp"
 #include "input/input_lua.hpp"
+#include "input/input_media_buttons.hpp"
 #include "input/input_nav_buttons.hpp"
 #include "input/input_touch_dpad.hpp"
 #include "input/input_touch_wheel.hpp"
@@ -28,31 +29,75 @@ DeviceFactory::DeviceFactory(
     wheel_ =
         std::make_shared<TouchWheel>(services->nvs(), **services->touchwheel());
   }
+  reset_ = std::make_shared<HardReset>(services_->gpios());
 }
 
-auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
+auto DeviceFactory::createLockedInputs()
+    -> std::vector<std::shared_ptr<IInputDevice>> {
+  auto locked_mode = services_->nvs().LockedInput();
+  std::vector<std::shared_ptr<IInputDevice>> ret;
+  switch (locked_mode) {
+    case drivers::NvsStorage::ButtonInputModes::kDisabled:
+      break;
+    case drivers::NvsStorage::ButtonInputModes::kMediaControls:
+      ret.push_back(std::make_shared<MediaButtons>(services_->gpios(),
+                                                   services_->track_queue()));
+      break;
+    case drivers::NvsStorage::ButtonInputModes::kNavigation:
+      // I don't think we want navigation to work when locked?
+      // ret.push_back(std::make_shared<NavButtons>(services_->gpios()));
+      break;
+    case drivers::NvsStorage::ButtonInputModes::kVolumeOnly:
+      ret.push_back(std::make_shared<VolumeButtons>(services_->gpios()));
+      break;
+  }
+  ret.push_back(reset_);
+  return ret;
+}
+
+auto DeviceFactory::createInputs()
     -> std::vector<std::shared_ptr<IInputDevice>> {
   std::vector<std::shared_ptr<IInputDevice>> ret;
-
-  switch (mode) {
-    case drivers::NvsStorage::InputModes::kButtonsOnly:
-      ret.push_back(std::make_shared<NavButtons>(services_->gpios()));
+  auto wheel_mode = services_->nvs().WheelInput();
+  auto buttons_mode = services_->nvs().ButtonInput();
+  // Make sure we always have a navigational input
+  if (wheel_mode == drivers::NvsStorage::WheelInputModes::kDisabled) {
+    if (buttons_mode != drivers::NvsStorage::ButtonInputModes::kNavigation) {
+      wheel_mode = drivers::NvsStorage::WheelInputModes::kRotatingWheel;
+      services_->nvs().WheelInput(wheel_mode);
+    }
+  }
+  switch (wheel_mode) {
+    case drivers::NvsStorage::WheelInputModes::kDisabled:
       break;
-    case drivers::NvsStorage::InputModes::kDirectionalWheel:
-      ret.push_back(std::make_shared<VolumeButtons>(services_->gpios()));
+    case drivers::NvsStorage::WheelInputModes::kDirectionalWheel:
       if (services_->touchwheel()) {
         ret.push_back(std::make_shared<TouchDPad>(**services_->touchwheel()));
       }
       break;
-    case drivers::NvsStorage::InputModes::kRotatingWheel:
+    case drivers::NvsStorage::WheelInputModes::kRotatingWheel:
     default:  // Don't break input over a bad enum value.
-      ret.push_back(std::make_shared<VolumeButtons>(services_->gpios()));
       if (wheel_) {
         ret.push_back(wheel_);
       }
       break;
   }
-  ret.push_back(std::make_shared<HardReset>(services_->gpios()));
+  switch (buttons_mode) {
+    case drivers::NvsStorage::ButtonInputModes::kDisabled:
+      break;
+    case drivers::NvsStorage::ButtonInputModes::kMediaControls:
+      ret.push_back(std::make_shared<MediaButtons>(services_->gpios(),
+                                                   services_->track_queue()));
+      break;
+    case drivers::NvsStorage::ButtonInputModes::kNavigation:
+      ret.push_back(std::make_shared<NavButtons>(services_->gpios()));
+      break;
+    case drivers::NvsStorage::ButtonInputModes::kVolumeOnly:
+    default:
+      ret.push_back(std::make_shared<VolumeButtons>(services_->gpios()));
+      break;
+  }
+  ret.push_back(reset_);
 
   auto lua_input = services_->lua_input();
   if (!lua_input) {
@@ -65,6 +110,7 @@ auto DeviceFactory::createInputs(drivers::NvsStorage::InputModes mode)
     services_->lua_input(lua_input);
   }
   ret.push_back(lua_input);
+
   return ret;
 }
 

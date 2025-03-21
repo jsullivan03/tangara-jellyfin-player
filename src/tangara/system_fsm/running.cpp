@@ -59,9 +59,22 @@ void Running::react(const database::event::UpdateFinished&) {
   checkIdle();
 }
 
+void Running::react(const ui::UnmountRequest& ev) {
+  events::Audio().Dispatch(audio::TogglePlayPause{.set_to = false});
+  events::Audio().Dispatch(UnmountRequest{.idle = false});
+}
+
+void Running::react(const audio::UnmountReady& ev) {
+  if (ev.idle) {
+    transit<Idle>();
+  } else {
+    unmountStorage();
+  }
+}
+
 void Running::react(const internal::UnmountTimeout&) {
   if (IdleCondition()) {
-    transit<Idle>();
+    events::Audio().Dispatch(UnmountRequest{.idle = true});
   }
 }
 

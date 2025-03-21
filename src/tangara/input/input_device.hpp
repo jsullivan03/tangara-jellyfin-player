@@ -35,7 +35,7 @@ class IInputDevice {
   }
 
   /* Called by the LVGL driver when controls are being locked. */
-  virtual auto onLock(drivers::NvsStorage::LockedInputModes) -> void {}
+  virtual auto onLock() -> void {}
   /* Called by the LVGL driver when controls are being unlocked. */
   virtual auto onUnlock() -> void {}
 };

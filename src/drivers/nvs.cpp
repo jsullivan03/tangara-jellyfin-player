@@ -34,13 +34,15 @@ static constexpr char kKeyInterfaceTheme[] = "ui_theme";
 static constexpr char kKeyAmpMaxVolume[] = "hp_vol_max";
 static constexpr char kKeyAmpCurrentVolume[] = "hp_vol";
 static constexpr char kKeyAmpLeftBias[] = "hp_bias";
-static constexpr char kKeyPrimaryInput[] = "in_pri";
+static constexpr char kKeyWheelInput[] = "in_wheel";
+static constexpr char kKeyButtonInput[] = "in_btn";
 static constexpr char kKeyLockedInput[] = "in_locked";
 static constexpr char kKeyHaptics[] = "haptic_mode";
 static constexpr char kKeyScrollSensitivity[] = "scroll";
 static constexpr char kKeyLockPolarity[] = "lockpol";
 static constexpr char kKeyDisplayCols[] = "dispcols";
 static constexpr char kKeyDisplayRows[] = "disprows";
+static constexpr char kKeyDisplayLeftPadding[] = "displeftpad";
 static constexpr char kKeyHapticMotorType[] = "hapticmtype";
 static constexpr char kKeyLraCalibration[] = "lra_cali";
 static constexpr char kKeyDbAutoIndex[] = "dbautoindex";
@@ -266,6 +268,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       lock_polarity_(kKeyLockPolarity),
       display_cols_(kKeyDisplayCols),
       display_rows_(kKeyDisplayRows),
+      display_left_padding_(kKeyDisplayLeftPadding),
       haptic_motor_type_(kKeyHapticMotorType),
       lra_calibration_(kKeyLraCalibration),
       fast_charge_(kKeyFastCharge),
@@ -275,7 +278,8 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       amp_max_vol_(kKeyAmpMaxVolume),
       amp_cur_vol_(kKeyAmpCurrentVolume),
       amp_left_bias_(kKeyAmpLeftBias),
-      input_mode_(kKeyPrimaryInput),
+      wheel_input_mode_(kKeyWheelInput),
+      button_input_mode_(kKeyButtonInput),
       locked_input_mode_(kKeyLockedInput),
       output_mode_(kKeyOutput),
       haptics_mode_(kKeyHaptics),
@@ -297,6 +301,7 @@ auto NvsStorage::Read() -> void {
   lock_polarity_.read(handle_);
   display_cols_.read(handle_);
   display_rows_.read(handle_);
+  display_left_padding_.read(handle_);
   haptic_motor_type_.read(handle_);
   lra_calibration_.read(handle_);
   fast_charge_.read(handle_);
@@ -306,7 +311,8 @@ auto NvsStorage::Read() -> void {
   amp_max_vol_.read(handle_);
   amp_cur_vol_.read(handle_);
   amp_left_bias_.read(handle_);
-  input_mode_.read(handle_);
+  wheel_input_mode_.read(handle_);
+  button_input_mode_.read(handle_);
   locked_input_mode_.read(handle_);
   output_mode_.read(handle_);
   haptics_mode_.read(handle_);
@@ -323,6 +329,7 @@ auto NvsStorage::Write() -> bool {
   lock_polarity_.write(handle_);
   display_cols_.write(handle_);
   display_rows_.write(handle_);
+  display_left_padding_.write(handle_);
   haptic_motor_type_.write(handle_);
   lra_calibration_.write(handle_);
   fast_charge_.write(handle_);
@@ -332,7 +339,8 @@ auto NvsStorage::Write() -> bool {
   amp_max_vol_.write(handle_);
   amp_cur_vol_.write(handle_);
   amp_left_bias_.write(handle_);
-  input_mode_.write(handle_);
+  wheel_input_mode_.write(handle_);
+  button_input_mode_.write(handle_);
   locked_input_mode_.write(handle_);
   output_mode_.write(handle_);
   haptics_mode_.write(handle_);
@@ -401,6 +409,16 @@ auto NvsStorage::DisplaySize(
   std::lock_guard<std::mutex> lock{mutex_};
   display_cols_.set(std::move(size.first));
   display_rows_.set(std::move(size.second));
+}
+
+auto NvsStorage::DisplayLeftPadding() -> uint8_t {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return display_left_padding_.get().value_or(0);
+}
+
+auto NvsStorage::DisplayLeftPadding(uint8_t val) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  display_left_padding_.set(val);
 }
 
 auto NvsStorage::PreferredBluetoothDevice()
@@ -601,40 +619,63 @@ auto NvsStorage::AmpLeftBias(int_fast8_t val) -> void {
   amp_left_bias_.set(val);
 }
 
-auto NvsStorage::PrimaryInput() -> InputModes {
+auto NvsStorage::WheelInput() -> WheelInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (input_mode_.get().value_or(3)) {
-    case static_cast<uint8_t>(InputModes::kButtonsOnly):
-      return InputModes::kButtonsOnly;
-    case static_cast<uint8_t>(InputModes::kButtonsWithWheel):
-      return InputModes::kButtonsWithWheel;
-    case static_cast<uint8_t>(InputModes::kDirectionalWheel):
-      return InputModes::kDirectionalWheel;
-    case static_cast<uint8_t>(InputModes::kRotatingWheel):
-      return InputModes::kRotatingWheel;
+  switch (wheel_input_mode_.get().value_or(3)) {
+    case static_cast<uint8_t>(WheelInputModes::kDisabled):
+      return WheelInputModes::kDisabled;
+    case static_cast<uint8_t>(WheelInputModes::kDirectionalWheel):
+      return WheelInputModes::kDirectionalWheel;
+    case static_cast<uint8_t>(WheelInputModes::kRotatingWheel):
+      return WheelInputModes::kRotatingWheel;
     default:
-      return InputModes::kRotatingWheel;
+      return WheelInputModes::kRotatingWheel;
   }
 }
 
-auto NvsStorage::PrimaryInput(InputModes mode) -> void {
+auto NvsStorage::WheelInput(WheelInputModes mode) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
-  input_mode_.set(static_cast<uint8_t>(mode));
+  wheel_input_mode_.set(static_cast<uint8_t>(mode));
 }
 
-auto NvsStorage::LockedInput() -> LockedInputModes {
+auto NvsStorage::ButtonInput() -> ButtonInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (locked_input_mode_.get().value_or(static_cast<uint8_t>(LockedInputModes::kDisabled))) {
-    case static_cast<uint8_t>(LockedInputModes::kDisabled):
-      return LockedInputModes::kDisabled;
-    case static_cast<uint8_t>(LockedInputModes::kVolumeOnly):
-      return LockedInputModes::kVolumeOnly;
+  switch (button_input_mode_.get().value_or(static_cast<uint8_t>(ButtonInputModes::kVolumeOnly))) {
+    case static_cast<uint8_t>(ButtonInputModes::kDisabled):
+      return ButtonInputModes::kDisabled;
+    case static_cast<uint8_t>(ButtonInputModes::kVolumeOnly):
+      return ButtonInputModes::kVolumeOnly;
+    case static_cast<uint8_t>(ButtonInputModes::kMediaControls):
+      return ButtonInputModes::kMediaControls;
+    case static_cast<uint8_t>(ButtonInputModes::kNavigation):
+      return ButtonInputModes::kNavigation;
     default:
-      return LockedInputModes::kDisabled;
+      return ButtonInputModes::kVolumeOnly;
   }
 }
 
-auto NvsStorage::LockedInput(LockedInputModes mode) -> void {
+auto NvsStorage::ButtonInput(ButtonInputModes mode) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  button_input_mode_.set(static_cast<uint8_t>(mode));
+}
+
+auto NvsStorage::LockedInput() -> ButtonInputModes {
+  std::lock_guard<std::mutex> lock{mutex_};
+  switch (locked_input_mode_.get().value_or(static_cast<uint8_t>(ButtonInputModes::kDisabled))) {
+    case static_cast<uint8_t>(ButtonInputModes::kDisabled):
+      return ButtonInputModes::kDisabled;
+    case static_cast<uint8_t>(ButtonInputModes::kVolumeOnly):
+      return ButtonInputModes::kVolumeOnly;
+    case static_cast<uint8_t>(ButtonInputModes::kMediaControls):
+      return ButtonInputModes::kMediaControls;
+    case static_cast<uint8_t>(ButtonInputModes::kNavigation):
+      return ButtonInputModes::kNavigation; 
+    default:
+      return ButtonInputModes::kDisabled;
+  }
+}
+
+auto NvsStorage::LockedInput(ButtonInputModes mode) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   locked_input_mode_.set(static_cast<uint8_t>(mode));
 }

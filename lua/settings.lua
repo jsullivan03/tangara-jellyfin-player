@@ -18,6 +18,7 @@ local font = require("font")
 local main_menu = require("main_menu")
 local img = require("images")
 local nvs = require("nvs")
+local sd_card = require("sd_card")
 
 local settings = {}
 
@@ -470,26 +471,39 @@ settings.InputSettings = SettingsScreen:new {
         controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
           local option = controls_chooser:get('selected')
           local scheme = option_to_scheme[option]
-          control_scheme:set(scheme)
+          local prev_scheme = control_scheme:get()
+          -- Check the new scheme is valid
+          if not control_scheme:set(scheme) then
+            widgets.PopUp("Controls not valid")
+            control_scheme:set(prev_scheme)
+          end
         end)
 
         return controls_chooser
     end
 
-    -- if we don't have a touchwheel installed, the only thing this setting controls is the side buttons
-    -- (the labels returned by controls.schemes() will have been changed to match)
-    local control_scheme_label = controls.touchwheel_present() and "Control scheme" or "Side buttons"
-    theme.set_subject(self.content:Label {
-      text = control_scheme_label,
-    }, "settings_title")
-    local controls_chooser = make_scheme_control(self, controls.schemes(), controls.scheme)
-    local controls_chooser_desc = widgets.Description(controls_chooser, control_scheme_label)
+    local controls_chooser
+    if controls.touchwheel_present() then
+      theme.set_subject(self.content:Label {
+        text = "Wheel Controls",
+      }, "settings_title")
+      controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
+      local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
+    end
 
     theme.set_subject(self.content:Label {
-      text = control_scheme_label .. " when locked",
+      text = "Side Button Controls",
+    }, "settings_title")
+    local buttons_chooser = make_scheme_control(self, controls.button_schemes(), controls.button_scheme)
+    
+    theme.set_subject(self.content:Label {
+      text = "Side Button Controls When Locked",
+      w = lvgl.PCT(80),
+      h = lvgl.SIZE_CONTENT, 
+      long_mode = lvgl.LABEL.LONG_WRAP,
     }, "settings_title")
     local controls_locked = make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
-    local controls_locked_desc = widgets.Description(controls_locked, control_scheme_label .. " when locked")
+    local controls_locked_desc = widgets.Description(controls_locked, "Control scheme when locked")
 
     if controls.haptics_present() then
       theme.set_subject(self.content:Label {
@@ -498,22 +512,11 @@ settings.InputSettings = SettingsScreen:new {
       make_scheme_control(self, controls.haptics_modes(), controls.haptics_mode)
     end
 
-    local lua_input_state = controls.lua_input_status()
-    local lua_input_hint = ""
-    if lua_input_state.active then
-      lua_input_hint = "Scripted input is active:"
-    elseif lua_input_state.present then
-      lua_input_hint = "Scripted input is inactive:"
+    if controls.touchwheel_present() then
+      controls_chooser:focus()
+    else
+      buttons_chooser:focus()
     end
-    -- else we just don't mention it
-    if lua_input_hint ~= "" then
-      self.content:Label {
-        symbol = img.info,
-        text = lua_input_hint .. "\n" .. lua_input_state.script_path,
-      }
-    end
-
-    controls_chooser:focus()
 
     if controls.touchwheel_present() then
       theme.set_subject(self.content:Label {
@@ -530,7 +533,86 @@ settings.InputSettings = SettingsScreen:new {
         controls.scroll_sensitivity:set(sensitivity:value() * slider_scale)
       end)
       local sensitivity_desc = widgets.Description(sensitivity, "Scroll Sensitivity")
+
+      local spacer = self.content:Object {
+        w = lvgl.PCT(90),
+        h = 10,
+      }
+      sensitivity:onevent(lvgl.EVENT.FOCUSED, function()
+        spacer:scroll_to_view(true)
+      end)
     end
+  end
+}
+
+settings.SDSettings = SettingsScreen:new {
+  title = "SD Card",
+  create_ui = function(self)
+    SettingsScreen.create_ui(self)
+
+    local actions_container = self.content:Object {
+      w = lvgl.PCT(100),
+      h = lvgl.SIZE_CONTENT,
+      flex = {
+        flex_direction = "row",
+        justify_content = "center",
+        align_items = "space-evenly",
+        align_content = "center",
+      },
+      pad_top = 4,
+      pad_column = 4,
+    }
+    actions_container:add_style(styles.list_item)
+
+    local busy_text = self.content:Label {
+      w = lvgl.PCT(100),
+      text = "",
+      long_mode = lvgl.LABEL.LONG_WRAP,
+    }
+    local busy_text_bind = function()
+      if database.updating:get() then
+        busy_text:clear_flag(lvgl.FLAG.HIDDEN)
+        busy_text:set {
+          text = "Your database is currently updating. Please wait."
+        }
+      elseif usb.msc_enabled:get() then
+        busy_text:clear_flag(lvgl.FLAG.HIDDEN)
+        busy_text:set {
+          text = "USB Mass Storage is currently enabled. Please disable it before unmounting."
+        }
+      elseif not sd_card.mounted:get() then
+        busy_text:clear_flag(lvgl.FLAG.HIDDEN)
+        busy_text:set {
+          text = "No SD card is currently mounted."
+        }
+      else
+        busy_text:add_flag(lvgl.FLAG.HIDDEN)
+      end
+    end
+    self.bindings = self.bindings + {
+      sd_card.mounted:bind(busy_text_bind),
+      database.updating:bind(busy_text_bind),
+      usb.msc_enabled:bind(busy_text_bind)
+    }
+
+    local unmount_btn = actions_container:Button {}
+    unmount_btn:Label { text = "Unmount" }
+    unmount_btn:onClicked(function()
+      sd_card.unmount()
+    end)
+    local unmount_btn_bind = function()
+      if sd_card.mounted:get() and not database.updating:get() and not usb.msc_enabled:get() then
+        unmount_btn:clear_flag(lvgl.FLAG.HIDDEN)
+      else
+        unmount_btn:add_flag(lvgl.FLAG.HIDDEN)
+      end
+    end
+    self.bindings = self.bindings + {
+      sd_card.mounted:bind(unmount_btn_bind),
+      database.updating:bind(unmount_btn_bind),
+      usb.msc_enabled:bind(unmount_btn_bind)
+    }
+    unmount_btn:focus()
   end
 }
 
@@ -966,8 +1048,9 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Theme", settings.ThemeSettings)
     submenu("Input Method", settings.InputSettings)
 
-    section("USB")
-    submenu("Storage", settings.MassStorageSettings)
+    section("Storage")
+    submenu("SD Card", settings.SDSettings)
+    submenu("USB", settings.MassStorageSettings)
 
     section("System")
     submenu("Database", settings.DatabaseSettings)

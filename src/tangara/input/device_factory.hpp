@@ -12,6 +12,7 @@
 #include "input/feedback_device.hpp"
 #include "input/input_device.hpp"
 #include "input/input_touch_wheel.hpp"
+#include "input/input_hard_reset.hpp"
 #include "drivers/nvs.hpp"
 #include "system_fsm/service_locator.hpp"
 
@@ -21,7 +22,9 @@ class DeviceFactory {
  public:
   DeviceFactory(std::shared_ptr<system_fsm::ServiceLocator>);
 
-  auto createInputs(drivers::NvsStorage::InputModes mode)
+  auto createInputs()
+      -> std::vector<std::shared_ptr<IInputDevice>>;
+  auto createLockedInputs()
       -> std::vector<std::shared_ptr<IInputDevice>>;
 
   auto createFeedbacks() -> std::vector<std::shared_ptr<IFeedbackDevice>>;
@@ -34,6 +37,10 @@ class DeviceFactory {
   // HACK: the touchwheel is current a special case, since it's the only input
   // device that has some kind of setting/configuration; scroll sensitivity.
   std::shared_ptr<TouchWheel> wheel_;
+
+  // Another special case, the hard reset input should persist between
+  // lock modes, and always be added to the created inputs
+  std::shared_ptr<HardReset> reset_;
 };
 
 }  // namespace input

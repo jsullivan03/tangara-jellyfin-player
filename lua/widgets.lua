@@ -372,4 +372,30 @@ function widgets.InfiniteList(parent, iterator, opts)
   return infinite_list
 end
 
+function widgets.PopUp(text) 
+      require("alerts").show(function()
+        local container = lvgl.Object(nil, {
+          w = lvgl.PCT(80),
+          h = lvgl.SIZE_CONTENT,
+          flex = {
+            flex_direction = "column",
+            justify_content = "center",
+            align_items = "center",
+            align_content = "center",
+          },
+          radius = 8,
+          pad_all = 5,
+        })
+        theme.set_subject(container, "pop_up")
+        container:Label {
+          text = text,
+          text_font = font.fusion_10,
+          w = lvgl.PCT(100),
+          h = lvgl.SIZE_CONTENT, 
+          long_mode = lvgl.LABEL.LONG_WRAP,
+        }
+        container:center()
+      end)
+end
+
 return widgets

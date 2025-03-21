@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 jacqueline <me@jacqueline.id.au>
+ * Copyright 2025 ailurux <ailuruxx@gmail.com>
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -8,6 +8,7 @@
 
 #include <cstdint>
 
+#include "audio/track_queue.hpp"
 #include "indev/lv_indev.h"
 
 #include "drivers/gpios.hpp"
@@ -15,13 +16,12 @@
 #include "drivers/touchwheel.hpp"
 #include "input/input_device.hpp"
 #include "input/input_hook.hpp"
-#include "input/input_trigger.hpp"
 
 namespace input {
 
-class NavButtons : public IInputDevice {
+class MediaButtons : public IInputDevice {
  public:
-  NavButtons(drivers::IGpios&);
+  MediaButtons(drivers::IGpios&, audio::TrackQueue& queue);
 
   auto read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void override;
 
@@ -38,6 +38,7 @@ class NavButtons : public IInputDevice {
   TriggerHooks down_;
 
   bool locked_;
+  bool both_buttons_pressed_;
 };
 
 }  // namespace input

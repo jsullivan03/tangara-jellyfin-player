@@ -103,6 +103,7 @@ static const uint8_t kST7735RCommonFooter[]{
 const InitialisationData kST7735R = {
     .width = 160,
     .height = 128,
+    .pad = 0,
     .num_sequences = 3,
     .sequences = {kST7735RCommonHeader, kST7735RCommonGreen,
                   kST7735RCommonFooter}};

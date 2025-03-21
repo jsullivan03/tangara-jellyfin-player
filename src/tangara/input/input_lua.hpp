@@ -27,7 +27,7 @@ class LuaInput : public IInputDevice {
 
   auto read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void override;
   auto name() -> std::string override;
-  auto onLock(drivers::NvsStorage::LockedInputModes) -> void override;
+  auto onLock() -> void override;
   auto onUnlock() -> void override;
 
   static std::string constexpr kScriptPath = "/input.lua";

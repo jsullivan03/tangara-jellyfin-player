@@ -7,6 +7,7 @@
 #pragma once
 
 #include "input/input_hook.hpp"
+#include "audio/track_queue.hpp"
 
 namespace input {
 namespace actions {
@@ -21,10 +22,13 @@ auto scrollToBottom() -> HookCallback;
 
 auto goBack() -> HookCallback;
 
+auto togglePlayPause() -> HookCallback;
+
+auto nextTrack(audio::TrackQueue& queue) -> HookCallback;
+auto prevTrack(audio::TrackQueue& queue) -> HookCallback;
+
 auto volumeUp() -> HookCallback;
 auto volumeDown() -> HookCallback;
-
-auto allActions() -> std::vector<HookCallback>;
 
 }  // namespace actions
 }  // namespace input

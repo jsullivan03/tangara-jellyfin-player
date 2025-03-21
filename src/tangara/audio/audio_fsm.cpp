@@ -534,10 +534,7 @@ auto Standby::entry() -> void {
   updateOutputMode();
 }
 
-void Standby::react(const system_fsm::KeyLockChanged& ev) {
-  if (!ev.locking) {
-    return;
-  }
+void Standby::react(const system_fsm::UnmountRequest& ev) {
   auto current = sStreamCues.current();
   sServices->bg_worker().Dispatch<void>([=]() {
     auto db = sServices->database().lock();
@@ -548,6 +545,7 @@ void Standby::react(const system_fsm::KeyLockChanged& ev) {
     if (queue.totalSize() <= queue.currentPosition()) {
       // Nothing is playing, so don't bother saving the queue.
       db->put(kQueueKey, "");
+      events::System().Dispatch(UnmountReady{.idle = ev.idle});
       return;
     }
     db->put(kQueueKey, queue.serialise());
@@ -562,6 +560,7 @@ void Standby::react(const system_fsm::KeyLockChanged& ev) {
       };
       db->put(kCurrentFileKey, current_track.toString());
     }
+    events::System().Dispatch(UnmountReady{.idle = ev.idle});
   });
 }
 
