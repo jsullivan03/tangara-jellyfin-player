@@ -23,7 +23,7 @@ namespace input {
 
 class TouchWheel : public IInputDevice {
  public:
-  TouchWheel(drivers::NvsStorage&, drivers::TouchWheel&);
+  TouchWheel(drivers::NvsStorage&, drivers::TouchWheel&, audio::TrackQueue&);
 
   auto read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void override;
 
@@ -35,6 +35,8 @@ class TouchWheel : public IInputDevice {
 
   auto sensitivity() -> lua::Property&;
 
+  auto activate_buttons(bool activate) -> void;
+
  private:
   const int64_t SCROLL_TIMEOUT_US = 250000;  // 250ms
 
@@ -43,6 +45,8 @@ class TouchWheel : public IInputDevice {
 
   drivers::NvsStorage& nvs_;
   drivers::TouchWheel& wheel_;
+
+  audio::TrackQueue& queue_;
 
   lua::Property sensitivity_;
 
@@ -54,10 +58,12 @@ class TouchWheel : public IInputDevice {
 
   bool locked_;
   bool is_scrolling_;
+  uint64_t last_scroll_;
   uint8_t threshold_;
   bool is_first_read_;
   uint8_t last_angle_;
   int64_t last_wheel_touch_time_;
+  bool buttons_active_;
 };
 
 }  // namespace input

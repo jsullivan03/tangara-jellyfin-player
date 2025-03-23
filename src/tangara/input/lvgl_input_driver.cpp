@@ -64,6 +64,8 @@ auto intToWheelMode(int raw)
       return drivers::NvsStorage::WheelInputModes::kDirectionalWheel;
     case 2:
       return drivers::NvsStorage::WheelInputModes::kRotatingWheel;
+    case 3:
+      return drivers::NvsStorage::WheelInputModes::kWheelWithButtons;
     default:
       return {};
   }

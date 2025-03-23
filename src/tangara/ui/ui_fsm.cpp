@@ -403,6 +403,31 @@ void UiState::react(const Screenshot& ev) {
   SaveScreenshot(sCurrentScreen->root(), ev.filename);
 }
 
+void UiState::react(const SeekBack& ev) {
+  const auto playback_position = sPlaybackPosition.get();
+  if (!std::holds_alternative<int>(playback_position)) {
+    // I don't think this ever happens, but check anyway.
+    return;
+  }
+
+  const auto track = sPlaybackTrack.get();
+  if (!std::holds_alternative<audio::TrackInfo>(track)) {
+    // Nothing is playing
+    return;
+  }
+
+  const auto current_position = std::get<int>(playback_position);
+  int32_t seek_position = current_position - ev.seconds;
+  if (seek_position < 1) {
+    seek_position = 0;
+  }
+
+  events::Audio().Dispatch(audio::SetTrack{
+    .new_track = std::get<audio::TrackInfo>(track).uri,
+    .seek_to_second = seek_position,
+  });
+}
+
 void UiState::react(const system_fsm::KeyLockChanged& ev) {
   sDisplay->SetDisplayOn(!ev.locking);
   sInput->lock(ev.locking);

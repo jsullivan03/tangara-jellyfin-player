@@ -147,6 +147,7 @@ class NvsStorage {
     kDisabled = 0,
     kDirectionalWheel = 1,
     kRotatingWheel = 2,
+    kWheelWithButtons = 3,
   };
 
   auto WheelInput() -> WheelInputModes;
