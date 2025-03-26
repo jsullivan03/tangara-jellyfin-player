@@ -225,7 +225,10 @@ void Running::react(const internal::Mount& ev) {
   // The other thing that's on the SD card is the custom input script, if any.
   auto lua_input = sServices->lua_input();
   if (lua_input) {
-    lua_input->tryReloadScript();
+    // Parsing Lua can take a few kilobytes of stack, which can overflow the
+    // main task's stack, so don't run it on the main task.
+    sServices->bg_worker().Dispatch<void>(
+        [&]() { lua_input->tryReloadScript(); });
   }
 }
 

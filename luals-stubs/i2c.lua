@@ -7,19 +7,18 @@
 --- The `i2c` module contains functions for performing I2C communication.
 --
 -- Example usage:
--- t = i2c.execute(
+-- low_byte, high_byte = i2c.execute(
 --   i2c.start(),
 --   i2c.write_addr(0x12, 'write'),
 --   i2c.write_ack(0x34),
 --   i2c.start(),
 --   i2c.write_addr(0x12, 'read'),
---   -- read() takes a key to be used in the table execute() returns
---   -- and an optional second parameter, 'ack' or 'nack', defaults to 'ack'
---   i2c.read('high_byte'),
---   i2c.read('low_byte', 'nack'),
+--   -- read() takes an optional second parameter, 'ack' or 'nack', defaults to 'ack'
+--   i2c.read(),
+--   i2c.read('nack'),
 --   i2c.stop()
 -- )
--- print(t.high_byte)
+-- print(high_byte)
 -- 
 --- @class i2c
 
@@ -34,10 +33,9 @@ function i2c.start() end
 function i2c.stop() end
 
 --- Create an I2C command representing a byte read.
--- @param name key in the returned table. (@see execute)
 -- @param ackiness 'ack' or 'nack'
 -- @return userdata
-function i2c.read(name, ackiness) end
+function i2c.read(ackiness) end
 
 --- Create an I2C command representing an address write.
 -- @param address the 7-bit I2C peripheral address
@@ -51,8 +49,7 @@ function i2c.write_addr(address, direction) end
 function i2c.write_ack(data) end
 
 --- Execute a series of I2C commands in one transaction.
--- @return a table, in which the keys are the names passed to read() and the values are the bytes read.
--- the table also contains the special key `i2c_error`, an esp_err_t integer value.
+-- @return multiple values, one for each read byte, in the same order as the read() calls.
 function i2c.execute(...) end
 
 return i2c

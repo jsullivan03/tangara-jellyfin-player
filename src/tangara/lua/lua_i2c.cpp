@@ -19,10 +19,11 @@ namespace lua {
 
 struct I2CCommand {
   enum class Type { start, stop, read, write } type;
-  std::string name;  // for read
   uint8_t data;      // for write
   bool ack;          // for read/write
 };
+static_assert(std::is_trivially_destructible<I2CCommand>());
+
 static char const* kCommandMetatable = "i2c_command";
 
 static auto make_i2c_command(lua_State* L) -> I2CCommand* {
@@ -55,11 +56,9 @@ static char const* const ack_opts[]{
     "nack", "ack", nullptr};  // order also important, it's a boolean
 
 static auto make_read(lua_State* L) -> int {
-  auto name = luaL_checkstring(L, 1);
-  auto ack = luaL_checkoption(L, 2, "ack", ack_opts);
+  auto ack = luaL_checkoption(L, 1, "ack", ack_opts);
   auto c = make_i2c_command(L);
   c->type = I2CCommand::Type::read;
-  c->name = name;
   c->ack = ack;
   return 1;
 }
@@ -123,23 +122,14 @@ static auto execute(lua_State* L) -> int {
   }
   esp_err_t err = transaction.Execute();
 
-  // match the read values with their names, and stuff them into a table to return
-  lua_createtable(L, 0, read_count);
   if (err != ESP_OK) {
-    lua_pushstring(L, esp_err_to_name(err));
-    lua_setfield(L, -2, "i2c_error");
+    return 0;
   }
-  read_index = 0;
-  for (int i = 1; i <= arg_count; i++) {
-    auto arg = check_i2c_command(L, i);
-    if (arg->type == I2CCommand::Type::read) {
-      lua_pushinteger(L, read_slots[read_index]);
-      lua_setfield(L, -2, arg->name.c_str());
-      read_index++;
-    }
+  for (int i = 0; i < read_count; i++) {
+    lua_pushinteger(L, read_slots[i]);
   }
 
-  return 1;
+  return read_count;
 }
 
 static const struct luaL_Reg kI2CFuncs[] = {{"start", make_start},
