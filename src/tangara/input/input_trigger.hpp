@@ -39,4 +39,6 @@ class Trigger {
   uint16_t times_long_pressed_;
 };
 
+static_assert(std::is_trivially_destructible<Trigger>());
+
 }  // namespace input

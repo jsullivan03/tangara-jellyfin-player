@@ -31,7 +31,4 @@ function controls.haptics_present() end
 --- @return boolean
 function controls.touchwheel_present() end
 
---- @return table
-function controls.lua_input_status() end
-
 return controls

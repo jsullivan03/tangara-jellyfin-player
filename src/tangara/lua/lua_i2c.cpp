@@ -16,29 +16,6 @@
 #include "drivers/i2c.hpp"
 
 namespace lua {
-/*
-api looks like this:
-t = i2c.execute(
-  i2c.start(),
-  i2c.write_addr(0x12, 'write'),
-  i2c.write_ack(0x34),
-  i2c.start(),
-  i2c.write_addr(0x12, 'read'),
-  -- read() takes a key to be used in the table execute() returns
-  -- and an optional second parameter, 'ack' or 'nack', defaults to 'ack'
-  i2c.read('high_byte'),
-  i2c.read('low_byte', 'nack'),
-  i2c.stop()
-)
-print(t.high_byte)
-
-everything passed to execute() is lua-specific placeholder objects. they are
-transformed into the real i2c operations as part of execute()
-
-doing this instead of the function chaining thing the c++ api does means we
-don't have to figure out how to pass a pointer to uint8_t from lua to c++ and
-have it remain valid across several function calls
-*/
 
 struct I2CCommand {
   enum class Type { start, stop, read, write } type;

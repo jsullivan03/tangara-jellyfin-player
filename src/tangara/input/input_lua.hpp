@@ -13,7 +13,7 @@
 #include "input/input_device.hpp"
 
 namespace lua {
- class LuaThread;
+class LuaThread;
 }
 
 namespace input {
@@ -25,7 +25,8 @@ class LuaInput : public IInputDevice {
   auto tryReloadScript() -> void;
   auto isScriptActive() -> bool;
 
-  auto read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void override;
+  auto read(lv_indev_data_t* data, std::vector<InputEvent>& events)
+      -> void override;
   auto name() -> std::string override;
   auto onLock() -> void override;
   auto onUnlock() -> void override;

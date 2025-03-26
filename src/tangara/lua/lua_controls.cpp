@@ -118,26 +118,6 @@ static auto touchwheel_present(lua_State* L) -> int {
   return 1;
 }
 
-static auto lua_input_status(lua_State* L) -> int {
-  Bridge* instance = Bridge::Get(L);
-  auto lua_input = instance->services().lua_input();
-  lua_newtable(L);
-
-  lua_pushliteral(L, "present");
-  lua_pushboolean(L, input::LuaInput::IsScriptPresent());
-  lua_rawset(L, -3);
-
-  lua_pushliteral(L, "active");
-  lua_pushboolean(L, lua_input && lua_input->isScriptActive());
-  lua_rawset(L, -3);
-
-  lua_pushliteral(L, "script_path");
-  lua_pushstring(L, input::LuaInput::kScriptPath.c_str());
-  lua_rawset(L, -3);
-
-  return 1;
-}
-
 static const struct luaL_Reg kControlsFuncs[] = {
     {"wheel_schemes", wheel_schemes},
     {"button_schemes", button_schemes},
@@ -145,7 +125,6 @@ static const struct luaL_Reg kControlsFuncs[] = {
     {"haptics_modes", haptics_modes},
     {"haptics_present", haptics_present},
     {"touchwheel_present", touchwheel_present},
-    {"lua_input_status", lua_input_status},
     {NULL, NULL}};
 
 static auto lua_controls(lua_State* state) -> int {
