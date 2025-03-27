@@ -106,6 +106,15 @@ auto Playlist::skipTo(size_t position) -> void {
   skipToLocked(position);
 }
 
+auto Playlist::at(size_t position) -> std::string {
+  std::unique_lock<std::mutex> lock(mutex_);
+  auto prev_pos = pos_;
+  skipToLocked(position);
+  auto val = current_value_;
+  skipToLocked(prev_pos);
+  return val;
+}
+
 // Serialise the cache to a file to avoid having to rescan
 // the entire queue when resuming
 auto Playlist::serialiseCache() -> bool {

@@ -623,4 +623,24 @@ auto TrackQueue::deserialise(const std::string& s) -> void {
   notifyChanged(true, Reason::kDeserialised);
 }
 
+auto TrackQueue::saveToNewPlaylist(const std::string& playlist_file) -> bool {
+  const std::shared_lock<std::shared_mutex> lock(mutex_);
+  audio::MutablePlaylist new_playlist(playlist_file);
+  auto res = new_playlist.open();
+  if (!res || new_playlist.size() != 0) {
+    return false;
+  }
+  // Add both the opened playlist contents (if it exists) and the queue contents
+  if (opened_playlist_) {
+    for (int i = 0; i < opened_playlist_->size(); i++) {
+      new_playlist.append(opened_playlist_->at(i));
+    }
+  }
+  for (int i = 0; i < playlist_.size(); i++) {
+    new_playlist.append(playlist_.at(i));
+  }
+  new_playlist.close();
+  return true;
+}
+
 }  // namespace audio

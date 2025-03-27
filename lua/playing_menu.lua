@@ -129,6 +129,18 @@ return screen:new {
     end)
     clear_btn:add_style(styles.list_item)
 
+    local save_btn = menu_items:add_btn(nil, "Save Queue As New Playlist")
+    save_btn:onClicked(function()
+      local playlist_file = "Playlists/new_playlist.m3u"
+      local saved = queue.save_to_playlist("Playlists/new_playlist.m3u")
+      if saved then
+        widgets.PopUp("Saved playlist to: "..playlist_file)
+      else 
+        widgets.PopUp("Save failed :(")
+      end
+    end)
+    save_btn:add_style(styles.list_item)
+
     self.bindings = self.bindings + {
       playback.track:bind(function(track)
         if not track then

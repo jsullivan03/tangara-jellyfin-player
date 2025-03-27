@@ -119,6 +119,8 @@ class TrackQueue {
 
   auto serialise() -> std::string;
   auto deserialise(const std::string&) -> void;
+  
+  auto saveToNewPlaylist(const std::string&) -> bool;
 
   // Cannot be copied or moved.
   TrackQueue(const TrackQueue&) = delete;
