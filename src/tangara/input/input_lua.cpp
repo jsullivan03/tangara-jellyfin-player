@@ -6,10 +6,12 @@
 
 #include "input/input_lua.hpp"
 
+#include "app_console/app_console.hpp"
 #include "esp_log.h"
 #include "ff.h"
 #include "indev/lv_indev.h"
 #include "input_trigger.hpp"
+#include "lua/lua_registry.hpp"
 #include "lua/lua_thread.hpp"
 
 namespace input {
@@ -27,6 +29,7 @@ static char const* const kReadFunc = "input_read_func";
 static char const* const kLockFunc = "input_lock_func";
 static char const* const kUnlockFunc = "input_unlock_func";
 static char const* const kTriggerMetatable = "input_trigger";
+static char const* const kUIThread = "ui_thread";
 
 static auto register_read_func(lua_State* L) -> int {
   lua_pushstring(L, kReadFunc);
@@ -57,11 +60,22 @@ static auto make_trigger(lua_State* L) -> int {
   return 1;
 }
 
+static auto eval_on_ui_thread(lua_State* L) -> int {
+  char const* code = luaL_checkstring(L, 1);
+  lua_getfield(L, LUA_REGISTRYINDEX, kUIThread);
+  auto ui_thread =
+      static_cast<std::shared_ptr<lua::LuaThread>*>(lua_touserdata(L, -1));
+  auto result = (*ui_thread)->RunString(code);
+  lua_pushboolean(L, result);
+  return 1;
+}
+
 static const struct luaL_Reg kInputDriverFuncs[] = {
     {"register_read_func", register_read_func},
     {"register_lock_func", register_lock_func},
     {"register_unlock_func", register_unlock_func},
     {"make_trigger", make_trigger},
+    {"eval_on_ui_thread", eval_on_ui_thread},
     {nullptr, nullptr}};
 
 static auto update_trigger(lua_State* L) -> int {
@@ -80,9 +94,9 @@ static const struct luaL_Reg kTriggerFuncs[] = {{"update", update_trigger},
                                                 {nullptr, nullptr}};
 
 LuaInput::LuaInput(
-    std::function<std::shared_ptr<lua::LuaThread>()> thread_factory)
-    : thread_factory_(thread_factory) {
-}
+    std::function<std::shared_ptr<lua::LuaThread>()> thread_factory,
+    std::shared_ptr<lua::LuaThread> ui_thread)
+    : ui_thread_(ui_thread), thread_factory_(thread_factory) {}
 
 void LuaInput::tryReloadScript() {
   if (!IsScriptPresent()) {
@@ -109,6 +123,10 @@ void LuaInput::tryReloadScript() {
         return 1;
       },
       true);
+
+  lua_pushstring(state, kUIThread);
+  lua_pushlightuserdata(state, &ui_thread_);
+  lua_settable(state, LUA_REGISTRYINDEX);
 
   auto ok = new_thread->RunScript("/sd/" + kScriptPath);
   if (ok) {

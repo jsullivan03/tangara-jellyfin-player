@@ -102,11 +102,12 @@ auto DeviceFactory::createInputs()
   auto lua_input = services_->lua_input();
   if (!lua_input) {
     auto services = services_;
-    lua_input =
-        std::make_shared<LuaInput>([=]() -> std::shared_ptr<lua::LuaThread> {
+    lua_input = std::make_shared<LuaInput>(
+        [=]() -> std::shared_ptr<lua::LuaThread> {
           auto& registry = lua::Registry::instance(*services);
           return registry.newThread();
-        });
+        },
+        lua::Registry::instance(*services).uiThread());
     services_->lua_input(lua_input);
   }
   ret.push_back(lua_input);
