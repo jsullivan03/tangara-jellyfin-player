@@ -82,12 +82,15 @@ static const struct luaL_Reg kTriggerFuncs[] = {{"update", update_trigger},
 LuaInput::LuaInput(
     std::function<std::shared_ptr<lua::LuaThread>()> thread_factory)
     : thread_factory_(thread_factory) {
-  tryReloadScript();
 }
 
 void LuaInput::tryReloadScript() {
   if (!IsScriptPresent()) {
     WARN("tryReloadScript: script not present");
+    return;
+  }
+  if (!thread_factory_) {
+    WARN("tryReloadScript: thread_factory isn't set???");
     return;
   }
   // We load the updated script into a totally new Lua state, so that input
