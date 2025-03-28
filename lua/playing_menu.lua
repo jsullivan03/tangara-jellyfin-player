@@ -14,6 +14,29 @@ local theme = require("theme")
 local track_info = require("track_info")
 local styles = require("styles")
 
+function file_exists(file) 
+  local found = false;
+  local f = io.open("/sd/"..file, "r")
+  if f then
+    found = true
+    f:close()
+  end
+  return found
+end
+
+function get_new_playlist_file() 
+  local prefix = "Playlists/new_playlist"
+  local suffix = ".m3u"
+  local index = 1
+  local filename = ""
+  repeat
+    filename = prefix..index..suffix 
+    index = index + 1
+  until not file_exists(filename)
+  print(filename)
+  return filename
+end
+
 return screen:new {
   create_ui = function(self)
     self.root = lvgl.Object(nil, {
@@ -131,8 +154,8 @@ return screen:new {
 
     local save_btn = menu_items:add_btn(nil, "Save Queue As New Playlist")
     save_btn:onClicked(function()
-      local playlist_file = "Playlists/new_playlist.m3u"
-      local saved = queue.save_to_playlist("Playlists/new_playlist.m3u")
+      local playlist_file = get_new_playlist_file()
+      local saved = queue.save_to_playlist(playlist_file)
       if saved then
         widgets.PopUp("Saved playlist to: "..playlist_file)
       else 
