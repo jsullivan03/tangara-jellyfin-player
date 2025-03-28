@@ -478,7 +478,7 @@ void Uninitialised::react(const system_fsm::BootComplete& ev) {
   sDrainBuffers->first.suspend(true);
 
   sStreamFactory.reset(
-      new FatfsStreamFactory(sServices->database(), sServices->tag_parser()));
+      new FatfsStreamFactory(sServices->database(), sServices->tag_parser(), sServices->readahead_runner()));
   sI2SOutput.reset(new I2SAudioOutput(sServices->gpios(), *sDrainBuffers));
   sBtOutput.reset(new BluetoothAudioOutput(
       sServices->bluetooth(), *sDrainBuffers, sServices->bg_worker()));

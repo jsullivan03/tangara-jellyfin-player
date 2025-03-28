@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "audio/track_queue.hpp"
+#include "audio/readahead_runner.hpp"
 #include "battery/battery.hpp"
 #include "collation.hpp"
 #include "database/database.hpp"
@@ -140,6 +141,15 @@ class ServiceLocator {
     bg_worker_ = std::move(w);
   }
 
+  auto readahead_runner() -> audio::ReadaheadRunner& {
+    assert(readahead_runner_ != nullptr);
+    return *readahead_runner_;
+  }
+
+  auto readahead_runner(std::unique_ptr<audio::ReadaheadRunner> r) -> void {
+    readahead_runner_ = std::move(r);
+  }
+
   // Not copyable or movable.
   ServiceLocator(const ServiceLocator&) = delete;
   ServiceLocator& operator=(const ServiceLocator&) = delete;
@@ -161,6 +171,7 @@ class ServiceLocator {
   std::unique_ptr<locale::ICollator> collator_;
 
   std::unique_ptr<tasks::WorkerPool> bg_worker_;
+  std::unique_ptr<audio::ReadaheadRunner> readahead_runner_;
 
   drivers::SdState sd_;
 };

@@ -89,6 +89,9 @@ auto Booting::entry() -> void {
     return;
   }
 
+  ESP_LOGI(kTag, "starting bg file readahead task");
+  sServices->readahead_runner(std::make_unique<audio::ReadaheadRunner>());
+
   ESP_LOGI(kTag, "installing remaining drivers");
   sServices->samd(std::make_unique<drivers::Samd>(sServices->nvs()));
 

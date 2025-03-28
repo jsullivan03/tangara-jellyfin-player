@@ -6,28 +6,23 @@
 
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include <atomic>
 #include <memory>
 
 #include "freertos/FreeRTOS.h"
-
-#include "ff.h"
 #include "freertos/stream_buffer.h"
 
-#include "audio/audio_source.hpp"
 #include "codec.hpp"
-#include "tasks.hpp"
 
 namespace audio {
-
+class ReadaheadRunner;
 /*
  * Wraps another stream, proactively buffering large chunks of it into memory
  * at a time.
  */
 class ReadaheadSource : public codecs::IStream {
  public:
-  ReadaheadSource(tasks::WorkerPool&, std::unique_ptr<codecs::IStream>);
+  ReadaheadSource(std::unique_ptr<codecs::IStream>, ReadaheadRunner&);
   ~ReadaheadSource();
 
   auto Read(std::span<std::byte> dest) -> ssize_t override;
@@ -46,15 +41,21 @@ class ReadaheadSource : public codecs::IStream {
   ReadaheadSource& operator=(const ReadaheadSource&) = delete;
 
  private:
-  auto BeginReadahead() -> void;
+  friend class ReadaheadRunner;
+  // Only ReadaheadRunner should call this method.
+  auto ReadFile() -> void;
 
-  tasks::WorkerPool& worker_;
   std::unique_ptr<codecs::IStream> wrapped_;
-
-  bool readahead_enabled_;
-  std::atomic<bool> is_refilling_;
-  StreamBufferHandle_t buffer_;
   int64_t tell_;
+
+  StreamBufferHandle_t streambuffer_;
+  StaticStreamBuffer_t streambuffer_static_;
+
+  std::atomic<bool> reading_file_;
+  std::atomic<bool> end_of_file_buffered_;
+  std::atomic<bool> shutting_down_;
+
+  ReadaheadRunner& runner_;
 };
 
 }  // namespace audio

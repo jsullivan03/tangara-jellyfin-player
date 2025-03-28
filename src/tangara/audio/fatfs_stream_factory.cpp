@@ -17,6 +17,7 @@
 
 #include "audio/audio_source.hpp"
 #include "audio/fatfs_source.hpp"
+#include "audio/readahead_source.hpp"
 #include "codec.hpp"
 #include "database/database.hpp"
 #include "database/tag_parser.hpp"
@@ -30,8 +31,9 @@
 namespace audio {
 
 FatfsStreamFactory::FatfsStreamFactory(database::Handle&& handle,
-                                       database::ITagParser& parser)
-    : db_(handle), tag_parser_(parser) {}
+                                       database::ITagParser& parser,
+                                       audio::ReadaheadRunner& runner)
+    : db_(handle), tag_parser_(parser), runner_(runner) {}
 
 auto FatfsStreamFactory::create(database::TrackId id, uint32_t offset)
     -> std::shared_ptr<TaggedStream> {
@@ -70,8 +72,10 @@ auto FatfsStreamFactory::create(std::string path, uint32_t offset)
     return {};
   }
 
+  auto fatfs_src = std::make_unique<FatfsSource>(stream_type.value(), std::move(file));
+  auto readahead_src = std::make_unique<ReadaheadSource>(std::move(fatfs_src), runner_);
   return std::make_shared<TaggedStream>(
-      tags, std::make_unique<FatfsSource>(stream_type.value(), std::move(file)),
+      tags, std::move(readahead_src),
       path, offset);
 }
 

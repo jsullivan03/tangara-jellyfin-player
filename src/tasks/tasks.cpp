@@ -43,6 +43,13 @@ auto AllocateStack<Type::kAudioDecoder>() -> std::span<StackType_t> {
   return {static_cast<StackType_t*>(heap_caps_malloc(size, MALLOC_CAP_SPIRAM)),
     size};
 }
+// The large buffers for the audio file reader task are on the heap; its stack can be small.
+template <>
+auto AllocateStack<Type::kAudioFileReader>() -> std::span<StackType_t> {
+  constexpr std::size_t size = 4 * 1024;
+  return {static_cast<StackType_t*>(heap_caps_malloc(size, MALLOC_CAP_SPIRAM)),
+    size};
+}
 // LVGL requires only a relatively small stack. Lua's stack is allocated
 // separately.
 template <>
@@ -88,6 +95,10 @@ auto Priority<Type::kAudioDecoder>() -> UBaseType_t {
 template <>
 auto Priority<Type::kAudioConverter>() -> UBaseType_t {
   return 15;
+}
+template <>
+auto Priority<Type::kAudioFileReader>() -> UBaseType_t {
+  return 14;
 }
 // After audio issues, UI jank is the most noticeable kind of scheduling-induced
 // slowness that the user is likely to notice or care about. Therefore we place

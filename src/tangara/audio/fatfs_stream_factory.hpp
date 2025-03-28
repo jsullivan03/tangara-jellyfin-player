@@ -16,6 +16,7 @@
 #include "freertos/portmacro.h"
 
 #include "audio/audio_source.hpp"
+#include "audio/readahead_runner.hpp"
 #include "codec.hpp"
 #include "database/database.hpp"
 #include "database/future_fetcher.hpp"
@@ -31,7 +32,7 @@ namespace audio {
  */
 class FatfsStreamFactory {
  public:
-  explicit FatfsStreamFactory(database::Handle&&, database::ITagParser&);
+  explicit FatfsStreamFactory(database::Handle&&, database::ITagParser&, audio::ReadaheadRunner&);
 
   auto create(database::TrackId, uint32_t offset = 0)
       -> std::shared_ptr<TaggedStream>;
@@ -47,6 +48,7 @@ class FatfsStreamFactory {
 
   database::Handle db_;
   database::ITagParser& tag_parser_;
+  audio::ReadaheadRunner& runner_;
 };
 
 }  // namespace audio
