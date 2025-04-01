@@ -539,6 +539,7 @@ void Standby::react(const system_fsm::UnmountRequest& ev) {
   sServices->bg_worker().Dispatch<void>([=]() {
     auto db = sServices->database().lock();
     if (!db) {
+      events::System().Dispatch(UnmountReady{.idle = ev.idle});
       return;
     }
     auto& queue = sServices->track_queue();
