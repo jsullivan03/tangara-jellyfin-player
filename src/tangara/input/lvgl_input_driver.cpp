@@ -231,7 +231,9 @@ auto LvglInputDriver::LuaTrigger::get(lua_State* L, int idx) -> LuaTrigger& {
 }
 
 auto LvglInputDriver::LuaTrigger::luaGc(lua_State* L) -> int {
+  ESP_LOGW("LuaTrigger", "luaGc: L=%p", L);
   LuaTrigger& trigger = LuaTrigger::get(L, 1);
+  ESP_LOGW("LuaTrigger", "luaGc: trigger=%p", &trigger);
   delete &trigger;
   return 0;
 }
@@ -301,6 +303,7 @@ auto LvglInputDriver::pushHooks(lua_State* L) -> int {
       LuaTrigger** lua_obj = reinterpret_cast<LuaTrigger**>(
           lua_newuserdatauv(L, sizeof(LuaTrigger*), 0));
       *lua_obj = new LuaTrigger(*this, *dev, trigger);
+      ESP_LOGW("pushHooks", "new LuaTrigger: %p", *lua_obj);
       luaL_setmetatable(L, kLuaTriggerMetatableName);
       lua_rawset(L, -3);
     }

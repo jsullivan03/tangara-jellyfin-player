@@ -6,12 +6,10 @@
 
 #include "input/input_lua.hpp"
 
-#include "app_console/app_console.hpp"
 #include "esp_log.h"
 #include "ff.h"
 #include "indev/lv_indev.h"
 #include "input_trigger.hpp"
-#include "lua/lua_registry.hpp"
 #include "lua/lua_thread.hpp"
 
 namespace input {
@@ -29,7 +27,6 @@ static char const* const kReadFunc = "input_read_func";
 static char const* const kLockFunc = "input_lock_func";
 static char const* const kUnlockFunc = "input_unlock_func";
 static char const* const kTriggerMetatable = "input_trigger";
-static char const* const kUIThread = "ui_thread";
 
 static auto register_read_func(lua_State* L) -> int {
   lua_pushstring(L, kReadFunc);
@@ -60,22 +57,11 @@ static auto make_trigger(lua_State* L) -> int {
   return 1;
 }
 
-static auto eval_on_ui_thread(lua_State* L) -> int {
-  char const* code = luaL_checkstring(L, 1);
-  lua_getfield(L, LUA_REGISTRYINDEX, kUIThread);
-  auto ui_thread =
-      static_cast<std::shared_ptr<lua::LuaThread>*>(lua_touserdata(L, -1));
-  auto result = (*ui_thread)->RunString(code);
-  lua_pushboolean(L, result);
-  return 1;
-}
-
 static const struct luaL_Reg kInputDriverFuncs[] = {
     {"register_read_func", register_read_func},
     {"register_lock_func", register_lock_func},
     {"register_unlock_func", register_unlock_func},
     {"make_trigger", make_trigger},
-    {"eval_on_ui_thread", eval_on_ui_thread},
     {nullptr, nullptr}};
 
 static auto update_trigger(lua_State* L) -> int {
@@ -93,24 +79,15 @@ static auto update_trigger(lua_State* L) -> int {
 static const struct luaL_Reg kTriggerFuncs[] = {{"update", update_trigger},
                                                 {nullptr, nullptr}};
 
-LuaInput::LuaInput(
-    std::function<std::shared_ptr<lua::LuaThread>()> thread_factory,
-    std::shared_ptr<lua::LuaThread> ui_thread)
-    : ui_thread_(ui_thread), thread_factory_(thread_factory) {}
+LuaInput::LuaInput(std::shared_ptr<lua::LuaThread> ui_thread)
+    : ui_thread_(ui_thread) {}
 
 void LuaInput::tryReloadScript() {
   if (!IsScriptPresent()) {
     WARN("tryReloadScript: script not present");
     return;
   }
-  if (!thread_factory_) {
-    WARN("tryReloadScript: thread_factory isn't set???");
-    return;
-  }
-  // We load the updated script into a totally new Lua state, so that input
-  // doesn't stop working if it fails.
-  auto new_thread = thread_factory_();
-  auto state = new_thread->state();
+  auto state = ui_thread_->state();
   luaL_requiref(
       state, "input_device",
       [](lua_State* L) -> int {
@@ -124,18 +101,8 @@ void LuaInput::tryReloadScript() {
       },
       true);
 
-  lua_pushstring(state, kUIThread);
-  lua_pushlightuserdata(state, &ui_thread_);
-  lua_settable(state, LUA_REGISTRYINDEX);
-
-  auto ok = new_thread->RunScript("/sd/" + kScriptPath);
-  if (ok) {
-    thread_ = new_thread;
-  }
-}
-
-auto LuaInput::isScriptActive() -> bool {
-  return thread_.load() != nullptr;
+  ui_thread_->RunScript("/sd/" + kScriptPath);
+  lua_settop(state, 0);
 }
 
 // read t[key], converting booleans to integer 1 or 0
@@ -184,7 +151,7 @@ static auto do_callback(std::shared_ptr<lua::LuaThread> thread,
 
 auto LuaInput::read(lv_indev_data_t* data, std::vector<InputEvent>& events)
     -> void {
-  do_callback(thread_, kReadFunc, [=](lua_State* L) {
+  do_callback(ui_thread_, kReadFunc, [=](lua_State* L) {
     data->enc_diff += get_int_from_table(L, "encoder_diff").value_or(0);
     if (data->state == LV_INDEV_STATE_RELEASED) {
       data->state = lv_indev_state_t(
@@ -198,10 +165,10 @@ auto LuaInput::name() -> std::string {
 }
 
 auto LuaInput::onLock() -> void {
-  do_callback(thread_, kLockFunc);
+  do_callback(ui_thread_, kLockFunc);
 }
 
 auto LuaInput::onUnlock() -> void {
-  do_callback(thread_, kUnlockFunc);
+  do_callback(ui_thread_, kUnlockFunc);
 }
 }  // namespace input

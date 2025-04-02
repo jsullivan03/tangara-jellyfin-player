@@ -95,6 +95,7 @@ class UiState : public tinyfsm::Fsm<UiState> {
 
   static std::shared_ptr<input::LvglInputDriver> sInput;
   static std::unique_ptr<input::DeviceFactory> sDeviceFactory;
+  static std::unique_ptr<input::LuaInput> sLuaInput;
 
   static std::stack<std::shared_ptr<Screen>> sScreens;
   static std::shared_ptr<Screen> sCurrentScreen;
@@ -165,6 +166,7 @@ class Lua : public UiState {
   void react(const OnLuaError&) override;
   void react(const DumpLuaStack&) override;
   void react(const internal::BackPressed&) override;
+  void react(const system_fsm::SdStateChanged&) override;
 
   using UiState::react;
 

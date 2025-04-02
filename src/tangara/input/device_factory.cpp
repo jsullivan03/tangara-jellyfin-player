@@ -29,6 +29,8 @@ DeviceFactory::DeviceFactory(
     wheel_ =
         std::make_shared<TouchWheel>(services->nvs(), **services->touchwheel());
   }
+  lua_input_ = std::make_shared<LuaInput>(
+      lua::Registry::instance(*services_).uiThread());
   reset_ = std::make_shared<HardReset>(services_->gpios());
 }
 
@@ -99,18 +101,7 @@ auto DeviceFactory::createInputs()
   }
   ret.push_back(reset_);
 
-  auto lua_input = services_->lua_input();
-  if (!lua_input) {
-    auto services = services_;
-    lua_input = std::make_shared<LuaInput>(
-        [=]() -> std::shared_ptr<lua::LuaThread> {
-          auto& registry = lua::Registry::instance(*services);
-          return registry.newThread();
-        },
-        lua::Registry::instance(*services).uiThread());
-    services_->lua_input(lua_input);
-  }
-  ret.push_back(lua_input);
+  ret.push_back(lua_input_);
 
   return ret;
 }

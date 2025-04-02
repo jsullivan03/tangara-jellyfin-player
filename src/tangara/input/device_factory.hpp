@@ -31,6 +31,8 @@ class DeviceFactory {
 
   auto touch_wheel() -> std::shared_ptr<TouchWheel> { return wheel_; }
 
+  auto lua_input() -> std::shared_ptr<LuaInput> { return lua_input_; }
+
  private:
   std::shared_ptr<system_fsm::ServiceLocator> services_;
 
@@ -41,6 +43,10 @@ class DeviceFactory {
   // Another special case, the hard reset input should persist between
   // lock modes, and always be added to the created inputs
   std::shared_ptr<HardReset> reset_;
+
+  // We need to keep a handle to the lua input driver around so we can tell it when to reload.
+  // (You get a special case! And *you* get a special case!)
+  std::shared_ptr<LuaInput> lua_input_;
 };
 
 }  // namespace input

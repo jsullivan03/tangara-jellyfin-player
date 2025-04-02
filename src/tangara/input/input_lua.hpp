@@ -20,11 +20,9 @@ namespace input {
 
 class LuaInput : public IInputDevice {
  public:
-  LuaInput(std::function<std::shared_ptr<lua::LuaThread>()> thread_factory,
-           std::shared_ptr<lua::LuaThread> ui_thread);
+  LuaInput(std::shared_ptr<lua::LuaThread> ui_thread);
 
   auto tryReloadScript() -> void;
-  auto isScriptActive() -> bool;
 
   auto read(lv_indev_data_t* data, std::vector<InputEvent>& events)
       -> void override;
@@ -36,9 +34,7 @@ class LuaInput : public IInputDevice {
   static auto IsScriptPresent() -> bool;
 
  private:
-  std::atomic<std::shared_ptr<lua::LuaThread>> thread_;
   std::shared_ptr<lua::LuaThread> ui_thread_;
-  std::function<std::shared_ptr<lua::LuaThread>()> thread_factory_;
 };
 
 }  // namespace input

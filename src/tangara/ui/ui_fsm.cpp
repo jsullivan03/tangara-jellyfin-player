@@ -80,6 +80,7 @@ std::unique_ptr<drivers::Display> UiState::sDisplay;
 
 std::shared_ptr<input::LvglInputDriver> UiState::sInput;
 std::unique_ptr<input::DeviceFactory> UiState::sDeviceFactory;
+std::unique_ptr<input::LuaInput> UiState::sLuaInput;
 
 std::stack<std::shared_ptr<Screen>> UiState::sScreens;
 std::shared_ptr<Screen> UiState::sCurrentScreen;
@@ -587,6 +588,8 @@ void Splash::react(const system_fsm::BootComplete& ev) {
   sDisplayBrightness.setDirect(brightness);
   sDisplay->SetBrightness(brightness);
 
+  sLuaInput = std::make_unique<input::LuaInput>(
+      lua::Registry::instance(*sServices).uiThread());
   sDeviceFactory = std::make_unique<input::DeviceFactory>(sServices);
   sInput = std::make_shared<input::LvglInputDriver>(sServices->nvs(),
                                                     *sDeviceFactory);
@@ -720,14 +723,15 @@ void Lua::entry() {
                                    {"updating", &sDatabaseUpdating},
                                    {"auto_update", &sDatabaseAutoUpdate},
                                });
-    registry.AddPropertyModule("sd_card", {
-                                              {"mounted", &sSdMounted},
-                                              {"unmount", [&](lua_State*) {
-                                                events::System().Dispatch(
-                                                    UnmountRequest{});
-                                                return 0;
-                                              }},
-                                          });
+    registry.AddPropertyModule(
+        "sd_card", {
+                       {"mounted", &sSdMounted},
+                       {"unmount",
+                        [&](lua_State*) {
+                          events::System().Dispatch(UnmountRequest{});
+                          return 0;
+                        }},
+                   });
     registry.AddPropertyModule("usb",
                                {
                                    {"msc_enabled", &sUsbMassStorageEnabled},
@@ -749,10 +753,11 @@ void Lua::entry() {
 
     if (sServices->sd() == drivers::SdState::kMounted) {
       sLua->RunScript("/sd/config.lua");
-      // if config.lua doesn't exist, this will have left the string "cannot
-      // open /sd/config.lua: No such file or directory" on the stack as an
-      // error, so make that (and anything else config.lua may have left here)
-      // go away
+      sLuaInput->tryReloadScript();
+
+      // If either of the above failed (e.g. config.lua doesn't exist), it
+      // will have left an error on the stack, so make that (and anything else
+      // they may have left here) go away.
       lua_settop(sLua->state(), 0);
     }
     sLua->RunScript("/lua/main.lua");
@@ -899,6 +904,12 @@ void Lua::react(const internal::BackPressed& ev) {
   PopLuaScreen(sLua->state());
 }
 
+void Lua::react(const system_fsm::SdStateChanged& ev) {
+  UiState::react(ev);
+  if (sServices->sd() == drivers::SdState::kMounted) {
+    sLuaInput->tryReloadScript();
+  }
+}
 }  // namespace states
 }  // namespace ui
 
