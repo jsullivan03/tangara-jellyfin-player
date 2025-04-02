@@ -80,7 +80,6 @@ std::unique_ptr<drivers::Display> UiState::sDisplay;
 
 std::shared_ptr<input::LvglInputDriver> UiState::sInput;
 std::unique_ptr<input::DeviceFactory> UiState::sDeviceFactory;
-std::unique_ptr<input::LuaInput> UiState::sLuaInput;
 
 std::stack<std::shared_ptr<Screen>> UiState::sScreens;
 std::shared_ptr<Screen> UiState::sCurrentScreen;
@@ -588,8 +587,6 @@ void Splash::react(const system_fsm::BootComplete& ev) {
   sDisplayBrightness.setDirect(brightness);
   sDisplay->SetBrightness(brightness);
 
-  sLuaInput = std::make_unique<input::LuaInput>(
-      lua::Registry::instance(*sServices).uiThread());
   sDeviceFactory = std::make_unique<input::DeviceFactory>(sServices);
   sInput = std::make_shared<input::LvglInputDriver>(sServices->nvs(),
                                                     *sDeviceFactory);
@@ -753,7 +750,7 @@ void Lua::entry() {
 
     if (sServices->sd() == drivers::SdState::kMounted) {
       sLua->RunScript("/sd/config.lua");
-      sLuaInput->tryReloadScript();
+      sDeviceFactory->lua_input()->tryReloadScript();
 
       // If either of the above failed (e.g. config.lua doesn't exist), it
       // will have left an error on the stack, so make that (and anything else
@@ -907,7 +904,7 @@ void Lua::react(const internal::BackPressed& ev) {
 void Lua::react(const system_fsm::SdStateChanged& ev) {
   UiState::react(ev);
   if (sServices->sd() == drivers::SdState::kMounted) {
-    sLuaInput->tryReloadScript();
+    sDeviceFactory->lua_input()->tryReloadScript();
   }
 }
 }  // namespace states

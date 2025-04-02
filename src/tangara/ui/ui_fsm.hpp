@@ -95,7 +95,6 @@ class UiState : public tinyfsm::Fsm<UiState> {
 
   static std::shared_ptr<input::LvglInputDriver> sInput;
   static std::unique_ptr<input::DeviceFactory> sDeviceFactory;
-  static std::unique_ptr<input::LuaInput> sLuaInput;
 
   static std::stack<std::shared_ptr<Screen>> sScreens;
   static std::shared_ptr<Screen> sCurrentScreen;
