@@ -11,7 +11,6 @@ local browser = require("browser")
 local playing = require("playing")
 local styles = require("styles")
 local filesystem = require("filesystem")
-local font = require("font")
 local theme = require("theme")
 local img = require("images")
 local playback = require("playback")
@@ -51,7 +50,7 @@ return widgets.MenuScreen:new {
     }
     local time_remaining = now_playing:Label {
       text = " ",
-      text_font = font.fusion_10,
+      text_font = font.fusion_10(),
     }
 
     now_playing:onClicked(function() backstack.push(playing:new()) end)

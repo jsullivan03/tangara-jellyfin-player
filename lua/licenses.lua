@@ -4,7 +4,6 @@
 
 local backstack = require("backstack")
 local widgets = require("widgets")
-local font = require("font")
 local styles = require("styles")
 local screen = require("screen")
 local lvgl = require("lvgl")
@@ -22,7 +21,7 @@ local function show_license(text)
         self.root:Label {
           w = lvgl.PCT(100),
           h = lvgl.SIZE_CONTENT,
-          text_font = font.fusion_10,
+          text_font = font.fusion_10(),
           text = line,
         }
         local scroller = self.root:Object { w = 1, h = 1 }
@@ -174,7 +173,7 @@ return function(self)
     row:add_style(styles.list_item)
     row:Label { text = name, flex_grow = 1 }
     local button = row:Button {}
-    button:Label { text = license, text_font = font.fusion_10 }
+    button:Label { text = license, text_font = font.fusion_10() }
     button:onClicked(show_fn)
   end
 

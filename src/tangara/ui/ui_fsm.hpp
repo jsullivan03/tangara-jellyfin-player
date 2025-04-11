@@ -10,6 +10,7 @@
 #include <memory>
 #include <stack>
 
+#include "tasks.hpp"
 #include "tinyfsm.hpp"
 
 #include "audio/audio_events.hpp"
@@ -41,7 +42,9 @@ struct UnmountRequest : tinyfsm::Event {};
 
 class UiState : public tinyfsm::Fsm<UiState> {
  public:
-  static auto InitBootSplash(drivers::IGpios&, drivers::NvsStorage&) -> bool;
+  static auto InitBootSplash(drivers::IGpios&,
+                             drivers::NvsStorage&,
+                             tasks::WorkerPool&) -> bool;
 
   virtual ~UiState() {}
 

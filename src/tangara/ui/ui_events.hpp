@@ -43,6 +43,7 @@ namespace internal {
 struct InitDisplay : tinyfsm::Event {
   drivers::IGpios& gpios;
   drivers::NvsStorage& nvs;
+  tasks::WorkerPool& bg_worker_pool;
 };
 
 struct ReindexDatabase : tinyfsm::Event {};

@@ -6,7 +6,6 @@
 local lvgl = require("lvgl")
 local widgets = require("widgets")
 local backstack = require("backstack")
-local font = require("font")
 local playback = require("playback")
 local queue = require("queue")
 local screen = require("screen")

@@ -11,3 +11,12 @@
 LV_FONT_DECLARE(font_fusion_12);
 LV_FONT_DECLARE(font_fusion_10);
 LV_FONT_DECLARE(font_fusion_8);
+
+#include <atomic>
+#include <string>
+
+#include "tasks.hpp"
+
+auto loadFont(const std::string& path,
+              std::atomic<lv_font_t*>& pointer,
+              tasks::WorkerPool& bg_worker_pool) -> void;

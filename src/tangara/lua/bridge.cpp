@@ -17,7 +17,6 @@
 #include "database/index.hpp"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "font/lv_binfont_loader.h"
 #include "lauxlib.h"
 #include "lua.h"
 #include "lua.hpp"
@@ -25,7 +24,6 @@
 #include "lua/lua_database.hpp"
 #include "lua/lua_gpio.hpp"
 #include "lua/lua_filesystem.hpp"
-#include "lua/lua_font.hpp"
 #include "lua/lua_i2c.hpp"
 #include "lua/lua_nvs.hpp"
 #include "lua/lua_playing_screen_settings.hpp"
@@ -54,10 +52,6 @@ namespace lua {
 [[maybe_unused]] static constexpr char kTag[] = "lua_bridge";
 
 static constexpr char kBridgeKey[] = "bridge";
-
-static auto delete_font_cb(const lv_font_t* font) -> void {
-  // FIXME: luavgl never actually calls this?
-}
 
 auto Bridge::Get(lua_State* state) -> Bridge* {
   lua_pushstring(state, kBridgeKey);
@@ -96,7 +90,6 @@ auto Bridge::installBaseModules(lua_State* L) -> void {
 
 auto Bridge::installLvgl(lua_State* L) -> void {
   luavgl_set_pcall(L, CallProtected);
-  luavgl_set_font_extension(L, loadFont, delete_font_cb);
   luaL_requiref(L, "lvgl", luaopen_lvgl, true);
   lua_pop(L, 1);
 }

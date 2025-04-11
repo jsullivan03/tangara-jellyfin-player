@@ -77,17 +77,19 @@ auto Booting::entry() -> void {
   sServices->gpios(std::unique_ptr<drivers::Gpios>(
       drivers::Gpios::Create(sServices->nvs().LockPolarity())));
 
-  ESP_LOGI(kTag, "starting ui");
-  if (!ui::UiState::InitBootSplash(sServices->gpios(), sServices->nvs())) {
-    events::System().Dispatch(FatalError{});
-    return;
-  }
+  ESP_LOGI(kTag, "mounting LittleFS");
+  drivers::littlefs_mount();
 
   ESP_LOGI(kTag, "starting bg worker");
   sServices->bg_worker(std::make_unique<tasks::WorkerPool>());
 
+  ESP_LOGI(kTag, "starting ui");
+  if (!ui::UiState::InitBootSplash(sServices->gpios(), sServices->nvs(), sServices->bg_worker())) {
+    events::System().Dispatch(FatalError{});
+    return;
+  }
+
   ESP_LOGI(kTag, "installing remaining drivers");
-  drivers::littlefs_mount();
   sServices->samd(std::make_unique<drivers::Samd>(sServices->nvs()));
 
   if (drivers::TouchWheel::IsHardwarePresent()) {
@@ -114,7 +116,6 @@ auto Booting::entry() -> void {
       sServices->nvs(), sServices->bg_worker(), bt_event_cb));
 
   BootComplete ev{.services = sServices};
-  events::Audio().Dispatch(ev);
   events::Ui().Dispatch(ev);
   events::System().Dispatch(ev);
 }

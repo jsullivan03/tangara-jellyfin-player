@@ -8,7 +8,6 @@ local backstack = require("backstack")
 local playing = require("playing")
 local filesystem = require("filesystem")
 local screen = require("screen")
-local font = require("font")
 local theme = require("theme")
 local playback = require("playback")
 local queue = require("queue")
@@ -56,7 +55,7 @@ return screen:new {
     if self.breadcrumb then
       header:Label {
         text = self.breadcrumb,
-        text_font = font.fusion_10
+        text_font = font.fusion_10()
       }
     end
 

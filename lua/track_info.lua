@@ -3,7 +3,6 @@
 -- SPDX-License-Identifier: GPL-3.0-only
 
 local backstack = require("backstack")
-local font = require("font")
 local lvgl = require("lvgl")
 local playback = require("playback")
 local screen = require("screen")
@@ -43,7 +42,7 @@ return screen:new {
         w = lvgl.PCT(100),
         h = lvgl.SIZE_CONTENT,
         text = text,
-        text_font = font.fusion_10,
+        text_font = font.fusion_10(),
         text_align = 1, -- left
       }
       return ret

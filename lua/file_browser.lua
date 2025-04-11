@@ -5,7 +5,6 @@
 local lvgl = require("lvgl")
 local widgets = require("widgets")
 local backstack = require("backstack")
-local font = require("font")
 local queue = require("queue")
 local playing = require("playing")
 local playback = require("playback")
@@ -56,7 +55,7 @@ return screen:new {
     if self.breadcrumb then
       header:Label {
         text = self.breadcrumb,
-        text_font = font.fusion_10
+        text_font = font.fusion_10()
       }
     end
 

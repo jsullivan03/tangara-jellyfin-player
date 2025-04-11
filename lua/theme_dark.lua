@@ -3,7 +3,6 @@
 -- SPDX-License-Identifier: GPL-3.0-only
 
 local lvgl = require("lvgl")
-local font = require("font")
 
 local background_color = "#5a5474"
 local background_muted = "#464258"
@@ -16,7 +15,7 @@ local theme_dark = {
   base = {
     {lvgl.PART.MAIN, lvgl.Style {
       bg_opa = lvgl.OPA(0),
-      text_font = font.fusion_12,
+      text_font = font.fusion_12(),
     }},
   },
   root = {
@@ -197,7 +196,7 @@ local theme_dark = {
    {lvgl.PART.MAIN, lvgl.Style {
       pad_top = 2,
       pad_bottom = 4,
-      text_font = font.fusion_10,
+      text_font = font.fusion_10(),
       text_color = highlight_color,
     }},
   },

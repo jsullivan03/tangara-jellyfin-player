@@ -32,6 +32,7 @@
 #include "misc/lv_color.h"
 #include "misc/lv_utils.h"
 #include "others/snapshot/lv_snapshot.h"
+#include "tasks.hpp"
 #include "tick/lv_tick.h"
 #include "tinyfsm.hpp"
 
@@ -62,6 +63,7 @@
 #include "lua/property.hpp"
 #include "memory_resource.hpp"
 #include "system_fsm/system_events.hpp"
+#include "ui/fonts.hpp"
 #include "ui/lvgl_task.hpp"
 #include "ui/screen.hpp"
 #include "ui/screen_lua.hpp"
@@ -86,6 +88,25 @@ std::shared_ptr<lua::LuaThread> UiState::sLua;
 
 static TimerHandle_t sAlertTimer;
 static lv_obj_t* sAlertContainer;
+
+static std::atomic<lv_font_t*> sFont_fusion_10 = nullptr;
+static std::atomic<lv_font_t*> sFont_fusion_12 = nullptr;
+
+static int get_fusion_10(lua_State *L) {
+  lua_pushlightuserdata(L, (void*)sFont_fusion_10.load());
+  return 1;
+}
+
+static int get_fusion_12(lua_State *L) {
+  lua_pushlightuserdata(L, (void*)sFont_fusion_12.load());
+  return 1;
+}
+
+static const struct luaL_Reg font_methods[] = {
+  {"fusion_10", get_fusion_10},
+  {"fusion_12", get_fusion_12},
+  {NULL,       NULL},
+};
 
 static void alert_timer_callback(TimerHandle_t timer) {
   events::Ui().Dispatch(internal::DismissAlerts{});
@@ -343,11 +364,13 @@ lua::Property UiState::sUsbMassStorageEnabled{
 
 lua::Property UiState::sUsbMassStorageBusy{false};
 
-auto UiState::InitBootSplash(drivers::IGpios& gpios, drivers::NvsStorage& nvs)
-    -> bool {
+auto UiState::InitBootSplash(drivers::IGpios& gpios,
+                             drivers::NvsStorage& nvs,
+                             tasks::WorkerPool& bg_worker_pool) -> bool {
   events::Ui().Dispatch(internal::InitDisplay{
       .gpios = gpios,
       .nvs = nvs,
+      .bg_worker_pool = bg_worker_pool,
   });
   sTask.reset(UiTask::Start());
   return true;
@@ -356,6 +379,17 @@ auto UiState::InitBootSplash(drivers::IGpios& gpios, drivers::NvsStorage& nvs)
 void UiState::react(const internal::InitDisplay& ev) {
   // Init LVGL first, since the display driver registers itself with LVGL.
   lv_init();
+
+  // The fonts together take about 1 MB of SPIRAM, plus LV_MEM_SIZE
+  // has been allocated at this point. To keep peak heap usage
+  // down, fonts are loaded now before the rest of the system starts
+  // allocating memory. The ReadaheadSource buffer is statically
+  // allocated in SPIRAM to avoid malloc failures due to heap fragmentation.
+  // Keeping peak heap usage down allows as big ReadaheadSource buffer
+  // as possible.
+  loadFont("/lua/fonts/fusion10", sFont_fusion_10, ev.bg_worker_pool);
+  loadFont("/lua/fonts/fusion12", sFont_fusion_12, ev.bg_worker_pool);
+
   lv_tick_set_cb(lvgl_tick_cb);
   lv_delay_set_cb(lvgl_delay_cb);
 
@@ -640,6 +674,17 @@ void Lua::entry() {
 
     auto& registry = lua::Registry::instance(*sServices);
     sLua = registry.uiThread();
+
+    sFont_fusion_10.wait(nullptr);
+    sFont_fusion_12.wait(nullptr);
+    auto state = sLua->state();
+    luaL_newlib(state, font_methods);
+    lua_setglobal(state, "font");
+    // This allocates large buffers, so ensure it runs after
+    // the font files have been parsed and freed from memory.
+    system_fsm::BootComplete ev{.services = sServices};
+    events::Audio().Dispatch(ev);
+
     registry.AddPropertyModule("power",
                                {
                                    {"battery_pct", &sBatteryPct},

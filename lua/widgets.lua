@@ -6,7 +6,6 @@ local lvgl = require("lvgl")
 
 local power = require("power")
 local bluetooth = require("bluetooth")
-local font = require("font")
 local backstack = require("backstack")
 local styles = require("styles")
 local database = require("database")
@@ -140,7 +139,7 @@ function widgets.StatusBar(parent, opts)
   local title = root:Label {
     w = lvgl.PCT(100),
     h = lvgl.SIZE_CONTENT,
-    text_font = font.fusion_10,
+    text_font = font.fusion_10(),
     text = "",
     align = lvgl.ALIGN.CENTER,
     flex_grow = 1,
@@ -258,7 +257,7 @@ function widgets.IconBtn(parent, icon, text)
   }
   btn:Label {
     text = text,
-    text_font = font.fusion_10
+    text_font = font.fusion_10()
   }
   return btn
 end
@@ -399,7 +398,7 @@ function widgets.PopUp(text)
         theme.set_subject(container, "pop_up")
         container:Label {
           text = text,
-          text_font = font.fusion_10,
+          text_font = font.fusion_10(),
           w = lvgl.PCT(100),
           h = lvgl.SIZE_CONTENT, 
           long_mode = lvgl.LABEL.LONG_WRAP,
