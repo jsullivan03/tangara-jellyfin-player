@@ -145,7 +145,7 @@ auto Database::Open(ITagParser& parser,
           [&]() -> cpp::result<Database*, DatabaseError> {
             leveldb::DB* db;
             std::unique_ptr<leveldb::Cache> cache{
-                leveldb::NewLRUCache(256 * 1024)};
+                leveldb::NewLRUCache(128 * 1024)};
 
             leveldb::Options options;
             options.env = sEnv.env();
