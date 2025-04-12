@@ -61,14 +61,11 @@ std::shared_ptr<IAudioOutput> AudioState::sOutput;
 std::shared_ptr<I2SAudioOutput> AudioState::sI2SOutput;
 std::shared_ptr<BluetoothAudioOutput> AudioState::sBtOutput;
 
-// For tracks, keep about two seconds' worth of samples at 2ch 48kHz. This
-// is more headroom than we need for small playback, but it doesn't hurt to
-// keep some PSRAM in our pockets for a rainy day.
-constexpr size_t kTrackDrainLatencySamples = 48000 * 2 * 2;
-
-// For system sounds, we intentionally choose codecs that are very fast to
-// decode. This lets us get away with a much smaller drain buffer.
-constexpr size_t kSystemDrainLatencySamples = 48000;
+// CPU processing is generally not the bottleneck for audio; reading from the SD card is.
+// Therefore these buffers can be relatively small, whereas ReadaheadSource's buffer
+// is as big as possible.
+constexpr size_t kTrackDrainLatencySamples = drivers::kI2SBufferLengthFrames * 2 * 32;
+constexpr size_t kSystemDrainLatencySamples = drivers::kI2SBufferLengthFrames * 2 * 8;
 
 std::unique_ptr<drivers::OutputBuffers> AudioState::sDrainBuffers;
 std::optional<IAudioOutput::Format> AudioState::sDrainFormat;
