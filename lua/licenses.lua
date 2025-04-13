@@ -179,6 +179,9 @@ return function(self)
     button:onClicked(show_fn)
   end
 
+  library("Ark Pixel font", "OFL", function()
+    ofl("Copyright (C) 2021 TakWolf")
+  end)
   library("catch2", "BSL", function()
     bsl("2022 Two Blue Cubes Ltd.")
   end)

@@ -200,6 +200,12 @@ SPDX-FileCopyrightText = "1996-2018 Free Software Foundation, Inc."
 SPDX-License-Identifier = "LGPL-2.1-or-later"
 
 [[annotations]]
+path = "tools/fonts/ark/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2021 TakWolf"
+SPDX-License-Identifier = "OFL-1.1-RFN"
+
+[[annotations]]
 path = "tools/fonts/fusion/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022 TakWolf"
