@@ -73,7 +73,7 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
         );
   const auto rate = WavpackGetSampleRate(&wavpack_);
   if (offset && total && input_.get()->CanSeek()) {
-    const uint32_t want = offset * rate - 1;
+    const uint32_t want = offset * rate;
     if (total < want) {
       ESP_LOGE(kTag, "seeking: offset points beyond the end of the file");
       return cpp::fail(Error::kInternalError);
@@ -96,7 +96,11 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       }
       const uint32_t blockIndex = loadLe32(header + 16);
       const uint32_t blockSamples = loadLe32(header + 20);
-      if (want >= blockIndex && want <= blockIndex + blockSamples) {
+      if (want >= blockIndex && want == blockIndex + blockSamples) {
+        input_->SeekTo(size - 24, IStream::SeekFrom::kCurrentPosition);
+        target = 0;
+        break;
+      } else if (want >= blockIndex && want < blockIndex + blockSamples) {
         input_->SeekTo(-32, IStream::SeekFrom::kCurrentPosition);
         target = want - blockIndex;
         break;
