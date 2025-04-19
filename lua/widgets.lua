@@ -112,8 +112,9 @@ function widgets.StatusBar(parent, opts)
   }
 
   if not opts.transparent_bg then
-    theme.set_subject(root, "header");
+    theme.set_subject(root, "header")
   end
+  theme.set_subject(root, "status_bar")
 
   if opts.back_cb then
     local back = root:Button {
@@ -148,6 +149,7 @@ function widgets.StatusBar(parent, opts)
   if opts.title then
     title:set { text = opts.title }
   end
+  theme.set_subject(title, "status_bar_title")
 
   local db_updating = root:Image { src = img.db }
   theme.set_subject(db_updating, "database_indicator")
@@ -160,9 +162,10 @@ function widgets.StatusBar(parent, opts)
 
   local is_charging = nil
   local percent = nil
+  local charge_state = nil
 
   local function update_battery_icon()
-    if is_charging == nil or percent == nil then return end
+    if is_charging == nil or percent == nil or charge_state == nil then return end
     local src
     theme.set_subject(battery_icon, "battery")
     if percent >= 95 then
@@ -184,10 +187,13 @@ function widgets.StatusBar(parent, opts)
       theme.set_subject(battery_icon, "battery_0")
       src = img.bat_0
     end
+    theme.set_subject(battery_icon, "battery_state_" .. charge_state)
     if is_charging then
       theme.set_subject(battery_icon, "battery_charging")
       theme.set_subject(charge_icon, "battery_charge_icon")
+      theme.set_subject(charge_icon, "battery_charge_icon_state_" .. charge_state)
       theme.set_subject(charge_icon_outline, "battery_charge_outline")
+      theme.set_subject(charge_icon_outline, "battery_charge_icon_outline_state_" .. charge_state)
       charge_icon:clear_flag(lvgl.FLAG.HIDDEN)
       charge_icon_outline:clear_flag(lvgl.FLAG.HIDDEN)
     else
@@ -207,6 +213,10 @@ function widgets.StatusBar(parent, opts)
     end),
     power.battery_pct:bind(function(pct)
       percent = pct
+      update_battery_icon()
+    end),
+    power.charge_state:bind(function(state)
+      charge_state = state
       update_battery_icon()
     end),
     power.plugged_in:bind(function(p)
