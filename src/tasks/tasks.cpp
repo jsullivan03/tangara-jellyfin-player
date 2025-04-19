@@ -40,8 +40,8 @@ auto AllocateStack() -> std::span<StackType_t>;
 template <>
 auto AllocateStack<Type::kAudioDecoder>() -> std::span<StackType_t> {
   constexpr std::size_t size = 20 * 1024;
-  static StackType_t sStack[size];
-  return {sStack, size};
+  return {static_cast<StackType_t*>(heap_caps_malloc(size, MALLOC_CAP_SPIRAM)),
+    size};
 }
 // LVGL requires only a relatively small stack. Lua's stack is allocated
 // separately.
@@ -55,8 +55,8 @@ template <>
 // PCM conversion and resampling uses a very small amount of stack.
 auto AllocateStack<Type::kAudioConverter>() -> std::span<StackType_t> {
   constexpr std::size_t size = 4 * 1024;
-  static StackType_t sStack[size];
-  return {sStack, size};
+  return {static_cast<StackType_t*>(heap_caps_malloc(size, MALLOC_CAP_SPIRAM)),
+    size};
 }
 // Background workers receive huge stacks in PSRAM. This is mostly to faciliate
 // use of LevelDB from any bg worker; Leveldb is designed for non-embedded use

@@ -70,7 +70,7 @@ Decoder::Decoder(std::shared_ptr<SampleProcessor> processor)
   ESP_LOGI(kTag, "allocating codec buffer, %u KiB", kCodecBufferLength / 1024);
   codec_buffer_ = {
       reinterpret_cast<sample::Sample*>(heap_caps_calloc(
-          kCodecBufferLength, sizeof(sample::Sample), MALLOC_CAP_DMA)),
+          kCodecBufferLength, sizeof(sample::Sample), MALLOC_CAP_SPIRAM)),
       kCodecBufferLength};
 }
 
