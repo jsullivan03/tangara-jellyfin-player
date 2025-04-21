@@ -45,7 +45,7 @@ WavPackDecoder::WavPackDecoder() : input_(), buf_() {
   buf_ = static_cast<int32_t*>(
       heap_caps_malloc(
           kBufSize * sizeof(int32_t),
-          MALLOC_CAP_INTERNAL | MALLOC_CAP_CACHE_ALIGNED
+          MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT
   ));
 }
 
