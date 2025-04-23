@@ -13,13 +13,17 @@
 
 namespace sample {
 
-static uint64_t sSeed1{0};
-static uint64_t sSeed2{0};
-
 auto shiftWithDither(int64_t src, uint_fast8_t bits) -> Sample {
   // FIXME: Use a better dither.
-  int16_t noise = static_cast<int16_t>(komirand(&sSeed1, &sSeed2) & 1);
-  return (src >> bits) ^ noise;
+  static uint64_t sSeed1{0};
+  static uint64_t sSeed2{0};
+  static uint64_t noise;
+  static uint_fast8_t pos = 0;
+  if (pos++ % 64 == 0)
+    noise = komirand(&sSeed1, &sSeed2);
+  else
+    noise >>= 1;
+  return (src >> bits) ^ (noise & 1);
 }
 
 }  // namespace sample
