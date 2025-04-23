@@ -1,0 +1,4 @@
+[mapping:libwavpack]
+archive: libwavpack.a
+entries:
+	* (noflash)
