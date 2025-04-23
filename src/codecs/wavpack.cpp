@@ -154,8 +154,14 @@ auto WavPackDecoder::DecodeTo(std::span<sample::Sample> output)
     ESP_LOGE(kTag, "CRC error");
     return cpp::fail(Error::kMalformedData);
   }
-  for (size_t i = 0; i < samples; i++)
-    output[i] = sample::FromSigned(buf_[i], bitdepth_);
+  if (bitdepth_ == 16)
+    for (size_t i = 0; i < samples; i++)
+      output[i] = buf_[i];
+  else if (bitdepth_ > 16)
+    for (size_t i = 0; i < samples; i++)
+      output[i] = sample::shiftWithDither(buf_[i], bitdepth_ - 16);
+  else for (size_t i = 0; i < samples; i++)
+    output[i] = buf_[i] << (16 - bitdepth_);
   return OutputInfo{
       .samples_written = samples,
       .is_stream_finished = samples == 0,
