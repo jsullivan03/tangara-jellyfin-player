@@ -305,6 +305,9 @@ auto Playlist::nextItem(std::span<TCHAR> buf)
     if (line.ends_with('\n')) {
       line = line.substr(0, line.size() - 1);
     }
+    if (line.ends_with('\r')) {
+      line = line.substr(0, line.size() - 1);
+    }
     return line;
   }
 
