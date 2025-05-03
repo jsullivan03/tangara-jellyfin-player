@@ -133,18 +133,13 @@ static auto do_callback(std::shared_ptr<lua::LuaThread> thread,
   auto L = thread->state();
   lua_pushstring(L, callback_name);
   lua_gettable(L, LUA_REGISTRYINDEX);
-  if (!lua_isfunction(L, -1)) {
-    return;
-  }
-  auto err = lua_pcall(L, 0, with_result ? 1 : 0, 0);
-  if (err == LUA_OK) {
-    if (with_result) {
-      with_result(thread->state());
+  if (lua_isfunction(L, -1)) {
+    int err = lua::CallProtected(L, 0, with_result ? 1 : 0);
+    if (err == LUA_OK) {
+      if (with_result) {
+        with_result(thread->state());
+      }
     }
-  } else {
-    auto err_str = lua_tostring(L, -1);
-    WARN("lua input callback failed (%d, %s)", err,
-         err_str ? err_str : "(error isn't a string)");
   }
   lua_settop(L, 0);
 }
