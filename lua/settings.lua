@@ -416,6 +416,7 @@ settings.ThemeSettings = SettingsScreen:new {
         align_content = "flex-start",
       },
       pad_row = 4,
+      pad_top = 1,
     }
     theme_container:add_style(styles.list_item)
     local theme_chooser = theme_container:Dropdown {
