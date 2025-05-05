@@ -31,10 +31,10 @@ static const Getter g[] =
 	{tagm4a, Fm4a},
 	{tagopus, Fopus},
 	{tagwav, Fwav},
-	{tagit, Fit},
-	{tagxm, Fxm},
-	{tags3m, Fs3m},
-	{tagmod, Fmod},
+	// {tagit, Fit},
+	// {tagxm, Fxm},
+	// {tags3m, Fs3m},
+	// {tagmod, Fmod},
 };
 
 void
