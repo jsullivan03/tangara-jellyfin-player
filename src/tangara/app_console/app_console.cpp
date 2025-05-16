@@ -44,6 +44,7 @@
 #include "database/track.hpp"
 #include "events/event_queue.hpp"
 #include "lua/lua_registry.hpp"
+#include "lvgl/src/stdlib/lv_mem.h"
 #include "system_fsm/service_locator.hpp"
 #include "system_fsm/system_events.hpp"
 #include "ui/ui_events.hpp"
@@ -371,6 +372,14 @@ int CmdHeaps(int argc, char** argv) {
   std::cout << (heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM) / 1024)
             << " KiB free at lowest" << std::endl;
   std::cout << (heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024)
+            << " KiB largest free block" << std::endl;
+
+  lv_mem_monitor_t lvgl_heap_stats;
+  lv_mem_monitor(&lvgl_heap_stats);
+  std::cout << "heap stats (LVGL):" << std::endl;
+  std::cout << lvgl_heap_stats.free_size / 1024
+            << " KiB free" << std::endl;
+  std::cout << lvgl_heap_stats.free_biggest_size / 1024
             << " KiB largest free block" << std::endl;
 
   return 0;
