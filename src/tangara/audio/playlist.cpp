@@ -308,6 +308,40 @@ auto Playlist::nextItem(std::span<TCHAR> buf)
     if (line.ends_with('\r')) {
       line = line.substr(0, line.size() - 1);
     }
+
+    const char *kMacFilePrefix = "file:///Volumes/";
+    // Handle absolute URIs that came from VLC on Mac by stripping the leading file:///Volumes/Foo/.
+    if (line.find(kMacFilePrefix) == 0) {
+      size_t second_slash = line.find("/", strlen(kMacFilePrefix));
+      if (second_slash != std::string::npos) {
+        line = line.substr(second_slash + 1);
+      }
+    }
+
+    mutated_ = "";
+    // Does this look like a URL-encoded path? Decode it to a filename.
+    // Tangara handles filenames, not URIs.
+    if (line.find('%') != std::string::npos) {
+      mutated_.reserve(line.size());
+      for (size_t n = 0; n < line.size(); ++n) {
+        if (n < (line.size() - 2) && line[n] == '%' &&
+            (isdigit(line[n+1]) || (line[n+1] >= 'a' && line[n+1] <= 'f') || (line[n+1] >= 'A' && line[n+1] <= 'F')) &&
+            (isdigit(line[n+2]) || (line[n+2] >= 'a' && line[n+2] <= 'f') || (line[n+2] >= 'A' && line[n+2] <= 'F'))) {
+          char value = 0;
+          if (isdigit(line[n+1])) value += (line[n+1] - '0') << 4;
+          if (isdigit(line[n+2])) value += (line[n+2] - '0') << 0;
+          if (line[n+1] >= 'a' && line[n+1] <= 'f') value += (0x0a + line[n+1] - 'a') << 4;
+          if (line[n+2] >= 'a' && line[n+2] <= 'f') value += (0x0a + line[n+2] - 'a') << 0;
+          if (line[n+1] >= 'A' && line[n+1] <= 'F') value += (0x0A + line[n+1] - 'A') << 4;
+          if (line[n+2] >= 'A' && line[n+2] <= 'F') value += (0x0A + line[n+2] - 'A') << 0;
+          mutated_ += value;
+          n += 2;
+        } else {
+          mutated_ += line[n];
+        }
+      }
+      line = mutated_;
+    }
     return line;
   }
 
