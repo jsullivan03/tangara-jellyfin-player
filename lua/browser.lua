@@ -110,7 +110,9 @@ return screen:new {
           if not track then return end
           if (track.play_count > 0) then
             return img.listened
-          else
+        elseif track.saved_position > 0 then
+            return img.partially_listened
+        else
             return img.unlistened
           end
         end
