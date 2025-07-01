@@ -325,15 +325,8 @@ auto Playlist::nextItem(std::span<TCHAR> buf)
       mutated_.reserve(line.size());
       for (size_t n = 0; n < line.size(); ++n) {
         if (n < (line.size() - 2) && line[n] == '%' &&
-            (isdigit(line[n+1]) || (line[n+1] >= 'a' && line[n+1] <= 'f') || (line[n+1] >= 'A' && line[n+1] <= 'F')) &&
-            (isdigit(line[n+2]) || (line[n+2] >= 'a' && line[n+2] <= 'f') || (line[n+2] >= 'A' && line[n+2] <= 'F'))) {
-          char value = 0;
-          if (isdigit(line[n+1])) value += (line[n+1] - '0') << 4;
-          if (isdigit(line[n+2])) value += (line[n+2] - '0') << 0;
-          if (line[n+1] >= 'a' && line[n+1] <= 'f') value += (0x0a + line[n+1] - 'a') << 4;
-          if (line[n+2] >= 'a' && line[n+2] <= 'f') value += (0x0a + line[n+2] - 'a') << 0;
-          if (line[n+1] >= 'A' && line[n+1] <= 'F') value += (0x0A + line[n+1] - 'A') << 4;
-          if (line[n+2] >= 'A' && line[n+2] <= 'F') value += (0x0A + line[n+2] - 'A') << 0;
+            std::isxdigit(line[n+1]) && std::isxdigit(line[n+2])) {
+          char value = std::stoi(std::string(line.substr(n+1, 2)), 0, 16);
           mutated_ += value;
           n += 2;
         } else {
