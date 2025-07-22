@@ -28,7 +28,7 @@ static const Getter g[] =
 	{tagid3v1, Fmp3},
 	{tagvorbis, Fogg},
 	{tagflac, Fflac},
-	{tagm4a, Fm4a},
+	{tagm4a, Funknown},
 	{tagopus, Fopus},
 	{tagwav, Fwav},
 	// {tagit, Fit},

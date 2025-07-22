@@ -178,6 +178,9 @@ return function(self)
     button:onClicked(show_fn)
   end
 
+  library("ALAC decoder", "MIT", function()
+    MIT("Copyright (c) 2005 David Hammerton")
+  end)
   library("Ark Pixel font", "OFL", function()
     ofl("Copyright (C) 2021 TakWolf")
   end)

@@ -90,6 +90,8 @@ auto FatfsStreamFactory::ContainerToStreamType(database::Container enc)
       return codecs::StreamType::kOpus;
     case database::Container::kWavPack:
       return codecs::StreamType::kWavPack;
+    case database::Container::kAlac:
+      return codecs::StreamType::kAlac;
     case database::Container::kUnsupported:
     default:
       return {};
