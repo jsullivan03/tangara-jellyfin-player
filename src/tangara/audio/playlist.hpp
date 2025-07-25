@@ -51,6 +51,7 @@ class Playlist {
 
  protected:
   const std::string filepath_;
+  std::string mutated_;
 
   mutable std::mutex mutex_;
   size_t total_size_;
