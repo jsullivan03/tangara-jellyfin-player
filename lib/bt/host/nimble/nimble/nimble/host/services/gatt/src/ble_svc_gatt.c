@@ -23,6 +23,7 @@
 #include "host/ble_hs.h"
 #include "services/gatt/ble_svc_gatt.h"
 
+#if MYNEWT_VAL(BLE_GATTS)
 #if MYNEWT_VAL(BLE_GATT_CACHING)
 static uint16_t ble_svc_gatt_db_hash_handle;
 static uint16_t ble_svc_gatt_client_supp_feature_handle;
@@ -232,4 +233,27 @@ ble_svc_gatt_init(void)
 
     rc = ble_gatts_add_svcs(ble_svc_gatt_defs);
     SYSINIT_PANIC_ASSERT(rc == 0);
+
+    if (MYNEWT_VAL(BLE_EATT_CHAN_NUM) > 0 && ble_hs_cfg.eatt) {
+        ble_svc_gatt_local_srv_sup_feat |= (1 << BLE_SVC_GATT_SRV_SUP_FEAT_EATT_BIT);
+    }
+
+    if (MYNEWT_VAL(BLE_EATT_CHAN_NUM) > 0 && ble_hs_cfg.eatt) {
+        ble_svc_gatt_local_cl_sup_feat |= (1 << BLE_SVC_GATT_CLI_SUP_FEAT_EATT_BIT);
+    }
+
+    if (MYNEWT_VAL(BLE_ATT_SVR_NOTIFY_MULTI) > 0) {
+        ble_svc_gatt_local_cl_sup_feat |= (1 << BLE_SVC_GATT_CLI_SUP_FEAT_MULT_NTF_BIT);
+    }
+
+    if (MYNEWT_VAL(BLE_GATT_CACHING) > 0) {
+        ble_svc_gatt_local_cl_sup_feat |= (1 << BLE_SVC_GATT_CLI_SUP_FEAT_ROBUST_CATCHING_BIT);
+    }
 }
+
+void
+ble_svc_gatt_deinit(void)
+{
+    ble_gatts_free_svcs();
+}
+#endif

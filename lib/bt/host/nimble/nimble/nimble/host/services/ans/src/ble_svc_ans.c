@@ -26,6 +26,7 @@
 #include "host/ble_gap.h"
 #include "services/ans/ble_svc_ans.h"
 
+#if MYNEWT_VAL(BLE_GATTS)
 /* Max length of new alert info string */
 #define BLE_SVC_ANS_INFO_STR_MAX_LEN        18
 /* Max length of a new alert notification, max string length + 2 bytes
@@ -390,8 +391,12 @@ ble_svc_ans_new_alert_notify(uint8_t cat_id, const char * info_str)
             memcpy(&ble_svc_ans_new_alert_val[2], info_str, info_str_len);
         }
     }
+#if NIMBLE_BLE_CONNECT
     return ble_gatts_notify(ble_svc_ans_conn_handle,
                             ble_svc_ans_new_alert_val_handle);
+#else
+    return 0;
+#endif
 }
 
 /**
@@ -407,8 +412,12 @@ ble_svc_ans_unr_alert_notify(uint8_t cat_id)
 {
     ble_svc_ans_unr_alert_stat[0] = cat_id;
     ble_svc_ans_unr_alert_stat[1] = ble_svc_ans_unr_alert_cnt[cat_id];
+#if NIMBLE_BLE_CONNECT
     return ble_gatts_notify(ble_svc_ans_conn_handle,
                             ble_svc_ans_unr_alert_val_handle);
+#else
+    return 0;
+#endif
 }
 
 /**
@@ -462,3 +471,4 @@ ble_svc_ans_init(void)
     ble_svc_ans_new_alert_cat = MYNEWT_VAL(BLE_SVC_ANS_NEW_ALERT_CAT);
     ble_svc_ans_unr_alert_cat = MYNEWT_VAL(BLE_SVC_ANS_UNR_ALERT_CAT);
 }
+#endif

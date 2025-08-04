@@ -129,6 +129,23 @@ void BTA_AvRegister(tBTA_AV_CHNL chnl, const char *p_service_name, UINT8 app_id,
     }
 }
 
+void BTA_AvRegSEP(tBTA_AV_CHNL chnl, UINT8 seid, UINT8 tsep, tBTA_AV_CODEC codec_type, UINT8 *p_codec_info, tBTA_AV_DATA_CBACK *p_data_cback)
+{
+    tBTA_AV_API_REG_SEP  *p_buf;
+
+    if ((p_buf = (tBTA_AV_API_REG_SEP *) osi_malloc(sizeof(tBTA_AV_API_REG_SEP))) != NULL) {
+        p_buf->hdr.layer_specific   = chnl;
+        p_buf->hdr.event = BTA_AV_API_REG_SEP_EVT;
+
+        p_buf->seid = seid;
+        p_buf->tsep = tsep;
+        p_buf->codec_type = codec_type;
+        memcpy(p_buf->codec_info, p_codec_info, AVDT_CODEC_SIZE);
+        p_buf->p_data_cback = p_data_cback;
+        bta_sys_sendmsg(p_buf);
+    }
+}
+
 /*******************************************************************************
 **
 ** Function         BTA_AvDeregister
@@ -612,5 +629,78 @@ void BTA_AvMetaCmd(UINT8 rc_handle, UINT8 label, tBTA_AV_CMD cmd_code, BT_HDR *p
         bta_sys_sendmsg(p_buf);
     }
 }
+
+#if BTA_AV_CA_INCLUDED
+
+/*******************************************************************************
+**
+** Function         BTA_AvCaOpen
+**
+** Description      Open a Cover Art OBEX connection to peer device. This function
+**                  can only be used if peer device TG support Cover Art feature and
+**                  AV is enabled with feature BTA_AV_FEAT_METADATA.
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_AvCaOpen(UINT8 rc_handle, UINT16 mtu)
+{
+    tBTA_AV_API_CA_OPEN  *p_buf;
+
+    if ((p_buf = (tBTA_AV_API_CA_OPEN *) osi_malloc(sizeof(tBTA_AV_API_CA_OPEN))) != NULL) {
+        p_buf->hdr.event = BTA_AV_API_CA_OPEN_EVT;
+        p_buf->hdr.layer_specific   = rc_handle;
+        p_buf->mtu = mtu;
+        bta_sys_sendmsg(p_buf);
+    }
+}
+
+/*******************************************************************************
+**
+** Function         BTA_AvCaClose
+**
+** Description      Close a Cover Art OBEX connection.
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_AvCaClose(UINT8 rc_handle)
+{
+    tBTA_AV_API_CA_CLOSE  *p_buf;
+
+    if ((p_buf = (tBTA_AV_API_CA_CLOSE *) osi_malloc(sizeof(tBTA_AV_API_CA_CLOSE))) != NULL) {
+        p_buf->hdr.event = BTA_AV_API_CA_CLOSE_EVT;
+        p_buf->hdr.layer_specific   = rc_handle;
+        bta_sys_sendmsg(p_buf);
+    }
+}
+
+/*******************************************************************************
+**
+** Function         BTA_AvCaGet
+**
+** Description      Start the process to get image properties, get image or get
+**                  linked thumbnail. This function can only be used if Cover Art
+**                  OBEX connection is established.
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_AvCaGet(UINT8 rc_handle, tBTA_AV_GET_TYPE type, UINT8 *image_handle, UINT8 *image_descriptor, UINT16 image_descriptor_len)
+{
+    tBTA_AV_API_CA_GET  *p_buf;
+
+    if ((p_buf = (tBTA_AV_API_CA_GET *) osi_malloc(sizeof(tBTA_AV_API_CA_GET))) != NULL) {
+        p_buf->hdr.event = BTA_AV_API_CA_GET_EVT;
+        p_buf->hdr.layer_specific   = rc_handle;
+        p_buf->type = type;
+        memcpy(p_buf->image_handle, image_handle, BTA_AV_CA_IMG_HDL_LEN);
+        p_buf->image_descriptor = image_descriptor;
+        p_buf->image_descriptor_len = image_descriptor_len;
+        bta_sys_sendmsg(p_buf);
+    }
+}
+
+#endif /* BTA_AV_CA_INCLUDED */
 
 #endif /* BTA_AV_INCLUDED */

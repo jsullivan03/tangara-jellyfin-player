@@ -109,6 +109,17 @@ static const char *TAG = "Timer";
 struct os_mempool ble_freertos_ev_pool;
 static os_membuf_t *ble_freertos_ev_buf = NULL;
 
+#else
+
+struct os_mempool ble_freertos_ev_pool;
+static os_membuf_t ble_freertos_ev_buf[
+    OS_MEMPOOL_SIZE(BLE_TOTAL_EV_COUNT, sizeof (struct ble_npl_event_freertos))
+];
+
+#endif
+
+#if CONFIG_BT_CONTROLLER_ENABLED
+
 struct os_mempool ble_freertos_evq_pool;
 static os_membuf_t *ble_freertos_evq_buf = NULL;
 
@@ -122,11 +133,6 @@ struct os_mempool ble_freertos_mutex_pool;
 static os_membuf_t *ble_freertos_mutex_buf = NULL;
 
 #else
-
-struct os_mempool ble_freertos_ev_pool;
-static os_membuf_t ble_freertos_ev_buf[
-    OS_MEMPOOL_SIZE(BLE_TOTAL_EV_COUNT, sizeof (struct ble_npl_event_freertos))
-];
 
 struct os_mempool ble_freertos_evq_pool;
 static os_membuf_t ble_freertos_evq_buf[
@@ -1148,6 +1154,9 @@ int npl_freertos_mempool_init(void)
     if(!ble_freertos_ev_buf) {
         goto _error;
     }
+#endif
+
+#if CONFIG_BT_CONTROLLER_ENABLED
     ble_freertos_evq_buf  = malloc(OS_MEMPOOL_SIZE(BLE_TOTAL_EVQ_COUNT, sizeof (struct ble_npl_eventq_freertos)) * sizeof(os_membuf_t));
     if(!ble_freertos_evq_buf) {
         goto _error;
@@ -1203,11 +1212,7 @@ int npl_freertos_mempool_init(void)
     }
 _error:
 
-#if SOC_ESP_NIMBLE_CONTROLLER && CONFIG_BT_CONTROLLER_ENABLED
-    if(ble_freertos_ev_buf) {
-        free(ble_freertos_ev_buf);
-	ble_freertos_ev_buf = NULL;
-    }
+#if CONFIG_BT_CONTROLLER_ENABLED
     if(ble_freertos_evq_buf) {
         free(ble_freertos_evq_buf);
 	ble_freertos_evq_buf = NULL;
@@ -1224,12 +1229,18 @@ _error:
         free(ble_freertos_mutex_buf);
 	ble_freertos_mutex_buf = NULL;
     }
+#endif
+
+#if SOC_ESP_NIMBLE_CONTROLLER && CONFIG_BT_CONTROLLER_ENABLED
+    if(ble_freertos_ev_buf) {
+        free(ble_freertos_ev_buf);
+	ble_freertos_ev_buf = NULL;
+    }
     return -1;
-#else
+#endif
 
    BLE_LL_ASSERT(rc == 0);
    return rc;
-#endif
 }
 
 void npl_freertos_mempool_deinit(void)
@@ -1239,6 +1250,9 @@ void npl_freertos_mempool_deinit(void)
         free(ble_freertos_ev_buf);
 	ble_freertos_ev_buf = NULL;
     }
+#endif
+
+#if CONFIG_BT_CONTROLLER_ENABLED
     if(ble_freertos_evq_buf) {
         free(ble_freertos_evq_buf);
 	ble_freertos_evq_buf = NULL;

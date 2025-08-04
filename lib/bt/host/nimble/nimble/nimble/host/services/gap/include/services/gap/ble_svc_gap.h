@@ -34,6 +34,8 @@ extern "C" {
 #define BLE_SVC_GAP_CHR_UUID16_APPEARANCE                   0x2a01
 #define BLE_SVC_GAP_CHR_UUID16_PERIPH_PREF_CONN_PARAMS      0x2a04
 #define BLE_SVC_GAP_CHR_UUID16_CENTRAL_ADDRESS_RESOLUTION   0x2aa6
+#define BLE_SVC_GAP_CHR_UUID16_RPA_ONLY                     0x2AC9
+#define BLE_SVC_GAP_CHR_UUID16_LE_GATT_SECURITY_LEVELS      0x2BF5
 
 #if MYNEWT_VAL(ENC_ADV_DATA)
 #define BLE_SVC_GAP_CHR_UUID16_KEY_MATERIAL                 0x2B88
@@ -57,6 +59,7 @@ int ble_svc_gap_device_key_material_set(uint8_t *session_key, uint8_t *iv);
 #endif
 
 void ble_svc_gap_init(void);
+void ble_svc_gap_deinit(void);
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,9 @@
 #include "sysinit/sysinit.h"
 #include "syscfg/syscfg.h"
 
+
 #if MYNEWT_VAL(BLE_SVC_HID_SERVICE)
+#if MYNEWT_VAL(BLE_GATTS)
 #include "host/ble_hs.h"
 #include "host/ble_gap.h"
 #include "services/hid/ble_svc_hid.h"
@@ -180,24 +182,34 @@ void
 fill_boot_kbd_inp(uint8_t instance)
 {
     struct ble_gatt_chr_def *chr, demo_chr;
+    uint16_t write_flags;
 
     if (!hid_instances[instance].kbd_inp_present) {
         return;
     }
+
+    write_flags = BLE_GATT_CHR_F_WRITE |
+#if MYNEWT_VAL(BLE_SM_LVL) == 2
+                  BLE_GATT_CHR_F_WRITE_ENC |
+#elif MYNEWT_VAL(BLE_SM_LVL) == 3
+                  BLE_GATT_CHR_F_WRITE_ENC | BLE_GATT_CHR_F_WRITE_AUTHEN
+#endif
+                  0;
+    write_flags = (hid_instances[instance].kbd_inp_write_perm ? write_flags : 0);
+
     demo_chr = (struct ble_gatt_chr_def) {
         /*** Report Map characteristic */
         .uuid = uuid_boot_kbd_inp,
         .access_cb = ble_svc_hid_access,
         .val_handle = &hid_instances[instance].kbd_inp_handle,
         .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY |
-                 BLE_GATT_CHR_F_WRITE |
 #if MYNEWT_VAL(BLE_SM_LVL) == 2
-                 BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC |
+                 BLE_GATT_CHR_F_READ_ENC |
 #elif MYNEWT_VAL(BLE_SM_LVL) == 3
-                 BLE_GATT_CHR_F_READ_AUTHEN | BLE_GATT_CHR_F_WRITE_AUTHEN |
-                 BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC |
+                 BLE_GATT_CHR_F_READ_AUTHEN |
+                 BLE_GATT_CHR_F_READ_ENC |
 #endif
-                 0,
+                 write_flags,
     };
 
     chr = ble_svc_hid_get_chr_block();
@@ -237,24 +249,34 @@ void
 fill_boot_mouse_inp(uint8_t instance)
 {
     struct ble_gatt_chr_def *chr, demo_chr;
+    uint16_t write_flags;
 
     if (!hid_instances[instance].mouse_inp_present) {
         return;
     }
+
+    write_flags = BLE_GATT_CHR_F_WRITE |
+#if MYNEWT_VAL(BLE_SM_LVL) == 2
+                  BLE_GATT_CHR_F_WRITE_ENC |
+#elif MYNEWT_VAL(BLE_SM_LVL) == 3
+                  BLE_GATT_CHR_F_WRITE_ENC | BLE_GATT_CHR_F_WRITE_AUTHEN
+#endif
+                  0;
+    write_flags = (hid_instances[instance].mouse_inp_write_perm ? write_flags : 0);
+
     demo_chr = (struct ble_gatt_chr_def) {
         /*** Report Map characteristic */
         .uuid = uuid_boot_mouse_inp,
         .access_cb = ble_svc_hid_access,
         .val_handle = &hid_instances[instance].mouse_inp_handle,
         .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY |
-                 BLE_GATT_CHR_F_WRITE |
 #if MYNEWT_VAL(BLE_SM_LVL) == 2
-                 BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC |
+                 BLE_GATT_CHR_F_READ_ENC |
 #elif MYNEWT_VAL(BLE_SM_LVL) == 3
-                 BLE_GATT_CHR_F_READ_AUTHEN | BLE_GATT_CHR_F_WRITE_AUTHEN |
-                 BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC |
+                 BLE_GATT_CHR_F_READ_AUTHEN |
+                 BLE_GATT_CHR_F_READ_ENC |
 #endif
-                 0,
+                 write_flags,
     };
 
     chr = ble_svc_hid_get_chr_block();
@@ -691,4 +713,5 @@ ble_svc_hid_init(void)
     rc = ble_gatts_add_svcs(ble_svc_hid_defs);
     SYSINIT_PANIC_ASSERT(rc == 0);
 }
+#endif
 #endif // CONFIG_BT_NIMBLE_HID_SERVICE

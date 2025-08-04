@@ -95,12 +95,19 @@ void ble_gap_rx_scan_req_rcvd(const struct ble_hci_ev_le_subev_scan_req_rcvd *ev
 #endif
 void ble_gap_rx_adv_report(struct ble_gap_disc_desc *desc);
 void ble_gap_rx_rd_rem_sup_feat_complete(const struct ble_hci_ev_le_subev_rd_rem_used_feat *ev);
+void ble_gap_rx_rd_rem_ver_info_complete(const struct ble_hci_ev_rd_rem_ver_info_cmp *ev);
+void ble_gap_event_connect_call(uint16_t conn_handle, int status);
 #if MYNEWT_VAL(BLE_CONN_SUBRATING)
 void ble_gap_rx_subrate_change(const struct ble_hci_ev_le_subev_subrate_change *ev);
 #endif
 #if MYNEWT_VAL(BLE_POWER_CONTROL)
 void ble_gap_rx_transmit_power_report(const struct ble_hci_ev_le_subev_transmit_power_report *ev);
 void ble_gap_rx_le_pathloss_threshold(const struct ble_hci_ev_le_subev_path_loss_threshold *ev);
+#endif
+#if MYNEWT_VAL(BLE_AOA_AOD)
+void ble_gap_rx_connless_iq_report(const struct ble_hci_ev_le_subev_connless_iq_rpt *ev);
+void ble_gap_rx_conn_iq_report(const struct ble_hci_ev_le_subev_conn_iq_rpt *ev);
+void ble_gap_rx_cte_req_failed(const struct ble_hci_ev_le_subev_cte_req_failed *ev);
 #endif
 
 struct ble_gap_conn_complete
@@ -116,8 +123,17 @@ struct ble_gap_conn_complete
     uint8_t master_clk_acc;
     uint8_t local_rpa[BLE_DEV_ADDR_LEN];
     uint8_t peer_rpa[BLE_DEV_ADDR_LEN];
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+   uint8_t adv_handle;
+   uint16_t sync_handle;
+#endif
 };
 
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+void ble_gap_rx_periodic_adv_subev_data_req(const struct ble_hci_ev_le_subev_periodic_adv_subev_data_req *ev);
+void ble_gap_rx_periodic_adv_response(const struct ble_gap_periodic_adv_response resp);
+void ble_gap_rx_conn_comp_failed(const struct ble_gap_conn_complete *evt);
+#endif
 int ble_gap_rx_conn_complete(struct ble_gap_conn_complete *evt, uint8_t instance);
 void ble_gap_rx_disconn_complete(const struct ble_hci_ev_disconn_cmp *ev);
 void ble_gap_rx_update_complete(const struct ble_hci_ev_le_subev_conn_upd_complete *ev);
@@ -143,6 +159,7 @@ int ble_gap_repeat_pairing_event(const struct ble_gap_repeat_pairing *rp);
 void ble_gap_pairing_complete_event(uint16_t conn_handle, int status);
 void ble_gap_vs_hci_event(const void *buf, uint8_t len);
 int ble_gap_authorize_event(uint16_t conn_handle, uint16_t attr_handle, int is_read);
+void ble_gap_eatt_event(uint16_t conn_handle, uint8_t status, uint16_t cid);
 int ble_gap_master_in_progress(void);
 
 void ble_gap_preempt(void);

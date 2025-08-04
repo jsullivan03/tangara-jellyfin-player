@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -184,6 +184,7 @@ esp_err_t esp_bt_gap_set_cod(esp_bt_cod_t cod, esp_bt_cod_mode_t mode)
     }
 
     switch (mode) {
+    case ESP_BT_SET_COD_RESERVED_2:
     case ESP_BT_SET_COD_MAJOR_MINOR:
     case ESP_BT_SET_COD_SERVICE_CLASS:
     case ESP_BT_CLR_COD_SERVICE_CLASS:
@@ -321,7 +322,7 @@ esp_err_t esp_bt_gap_set_security_param(esp_bt_sp_param_t param_type,
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (!(bluedriod_config_get()->get_ssp_enabled())) {
+    if (!(bluedroid_config_get()->get_ssp_enabled())) {
         ESP_LOGE(TAG, "%s is not supported when `ssp_en` in `esp_bluedroid_config_t` is disabled!", __func__);
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -346,7 +347,7 @@ esp_err_t esp_bt_gap_ssp_passkey_reply(esp_bd_addr_t bd_addr, bool accept, uint3
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (!(bluedriod_config_get()->get_ssp_enabled())) {
+    if (!(bluedroid_config_get()->get_ssp_enabled())) {
         ESP_LOGE(TAG, "%s is not supported when `ssp_en` in `esp_bluedroid_config_t` is disabled!", __func__);
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -370,7 +371,7 @@ esp_err_t esp_bt_gap_ssp_confirm_reply(esp_bd_addr_t bd_addr, bool accept)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (!(bluedriod_config_get()->get_ssp_enabled())) {
+    if (!(bluedroid_config_get()->get_ssp_enabled())) {
         ESP_LOGE(TAG, "%s is not supported when `ssp_en` in `esp_bluedroid_config_t` is disabled!", __func__);
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -551,6 +552,22 @@ esp_err_t esp_bt_gap_get_device_name(void)
     msg.act = BTC_GAP_BT_ACT_GET_DEV_NAME;
 
     return (btc_transfer_context(&msg, NULL, 0, NULL, NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
+esp_err_t esp_bt_gap_get_profile_status(esp_bt_gap_profile_status_t *profile_status)
+{
+    if (profile_status == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    memset(profile_status, 0, sizeof(esp_bt_gap_profile_status_t));
+    btc_gap_bt_status_get(profile_status);
+
+    return ESP_OK;
 }
 
 #endif /* #if BTC_GAP_BT_INCLUDED == TRUE */

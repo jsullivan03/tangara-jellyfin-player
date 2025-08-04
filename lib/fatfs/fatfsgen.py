@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
-
 import os
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any
+from typing import List
+from typing import Optional
 
 from fatfs_utils.boot_sector import BootSector
 from fatfs_utils.exceptions import NoFreeClusterException
@@ -12,10 +13,24 @@ from fatfs_utils.fat import FAT
 from fatfs_utils.fatfs_state import FATFSState
 from fatfs_utils.fs_object import Directory
 from fatfs_utils.long_filename_utils import get_required_lfn_entries_count
-from fatfs_utils.utils import (BYTES_PER_DIRECTORY_ENTRY, FATFS_INCEPTION, FATFS_MIN_ALLOC_UNIT,
-                               RESERVED_CLUSTERS_COUNT, FATDefaults, get_args_for_partition_generator,
-                               get_fat_sectors_count, get_non_data_sectors_cnt, read_filesystem,
-                               required_clusters_count)
+from fatfs_utils.utils import BYTES_PER_DIRECTORY_ENTRY
+from fatfs_utils.utils import FATDefaults
+from fatfs_utils.utils import FATFS_INCEPTION
+from fatfs_utils.utils import FATFS_MIN_ALLOC_UNIT
+from fatfs_utils.utils import get_args_for_partition_generator
+from fatfs_utils.utils import get_fat_sectors_count
+from fatfs_utils.utils import get_non_data_sectors_cnt
+from fatfs_utils.utils import read_filesystem
+from fatfs_utils.utils import required_clusters_count
+from fatfs_utils.utils import RESERVED_CLUSTERS_COUNT
+
+
+def duplicate_fat_decorator(func):  # type: ignore
+    def wrapper(self, *args, **kwargs) -> None:  # type: ignore
+        func(self, *args, **kwargs)
+        if isinstance(self, FATFS):
+            self.duplicate_fat()
+    return wrapper
 
 
 class FATFS:
@@ -40,14 +55,15 @@ class FATFS:
                  volume_label: str = FATDefaults.VOLUME_LABEL,
                  file_sys_type: str = FATDefaults.FILE_SYS_TYPE,
                  root_entry_count: int = FATDefaults.ROOT_ENTRIES_COUNT,
-                 explicit_fat_type: int = None,
+                 explicit_fat_type: Optional[int] = None,
                  media_type: int = FATDefaults.MEDIA_TYPE) -> None:
         # root directory bytes should be aligned by sector size
-        assert (root_entry_count * BYTES_PER_DIRECTORY_ENTRY) % sector_size == 0
+        assert (int(root_entry_count) * BYTES_PER_DIRECTORY_ENTRY) % sector_size == 0
         # number of bytes in the root dir must be even multiple of BPB_BytsPerSec
-        assert ((root_entry_count * BYTES_PER_DIRECTORY_ENTRY) // sector_size) % 2 == 0
+        if (int(root_entry_count) > 128):
+            assert ((int(root_entry_count) * BYTES_PER_DIRECTORY_ENTRY) // sector_size) % 2 == 0
 
-        root_dir_sectors_cnt: int = (root_entry_count * BYTES_PER_DIRECTORY_ENTRY) // sector_size
+        root_dir_sectors_cnt: int = (int(root_entry_count) * BYTES_PER_DIRECTORY_ENTRY) // sector_size
 
         self.state: FATFSState = FATFSState(sector_size=sector_size,
                                             explicit_fat_type=explicit_fat_type,
@@ -79,6 +95,7 @@ class FATFS:
                                                    fatfs_state=self.state)
         self.root_directory.init_directory()
 
+    @duplicate_fat_decorator
     def create_file(self, name: str,
                     extension: str = '',
                     path_from_root: Optional[List[str]] = None,
@@ -102,6 +119,7 @@ class FATFS:
                                      object_timestamp_=object_timestamp_,
                                      is_empty=is_empty)
 
+    @duplicate_fat_decorator
     def create_directory(self, name: str,
                          path_from_root: Optional[List[str]] = None,
                          object_timestamp_: datetime = FATFS_INCEPTION) -> None:
@@ -126,6 +144,7 @@ class FATFS:
                                           path_from_root=path_from_root,
                                           object_timestamp_=object_timestamp_)
 
+    @duplicate_fat_decorator
     def write_content(self, path_from_root: List[str], content: bytes) -> None:
         """
         fat fs invokes root directory to recursively find the required file and writes the content
@@ -137,10 +156,24 @@ class FATFS:
         boot_sector_.generate_boot_sector()
         return boot_sector_.binary_image
 
+    def duplicate_fat(self) -> None:
+        """
+        Duplicate FAT table if 2 FAT tables are required
+        """
+        boot_sec_st = self.state.boot_sector_state
+        if boot_sec_st.fat_tables_cnt == 2:
+            fat_start = boot_sec_st.reserved_sectors_cnt * boot_sec_st.sector_size
+            fat_end = fat_start + boot_sec_st.sectors_per_fat_cnt * boot_sec_st.sector_size
+            second_fat_shift = boot_sec_st.sectors_per_fat_cnt * boot_sec_st.sector_size
+            self.state.binary_image[fat_start + second_fat_shift: fat_end + second_fat_shift] = (
+                self.state.binary_image[fat_start: fat_end]
+            )
+
     def write_filesystem(self, output_path: str) -> None:
         with open(output_path, 'wb') as output:
             output.write(bytearray(self.state.binary_image))
 
+    @duplicate_fat_decorator
     def _generate_partition_from_folder(self,
                                         folder_relative_path: str,
                                         folder_path: str = '',
@@ -225,17 +258,19 @@ def main() -> None:
         args.partition_size = max(FATFS_MIN_ALLOC_UNIT * args.sector_size,
                                   (clusters + fats + get_non_data_sectors_cnt(RESERVED_CLUSTERS_COUNT,
                                                                               fats,
+                                                                              args.fat_count,
                                                                               root_dir_sectors)
                                    ) * args.sector_size
                                   )
 
-    fatfs = FATFS(sector_size=args.sector_size,
+    fatfs = FATFS(size=args.partition_size,
+                  fat_tables_cnt=args.fat_count,
                   sectors_per_cluster=args.sectors_per_cluster,
-                  size=args.partition_size,
-                  root_entry_count=args.root_entry_count,
-                  explicit_fat_type=args.fat_type,
+                  sector_size=args.sector_size,
                   long_names_enabled=args.long_name_support,
-                  use_default_datetime=args.use_default_datetime)
+                  use_default_datetime=args.use_default_datetime,
+                  root_entry_count=args.root_entry_count,
+                  explicit_fat_type=args.fat_type)
 
     fatfs.generate(args.input_directory)
     fatfs.write_filesystem(args.output_file)
