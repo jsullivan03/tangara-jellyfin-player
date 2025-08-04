@@ -46,6 +46,7 @@ enum class Container {
   kFlac = 4,
   kOpus = 5,
   kWavPack = 6,
+  kAlac = 7,
 };
 
 enum class MediaType {
