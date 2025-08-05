@@ -367,6 +367,7 @@ function widgets.InfiniteList(parent, iterator, opts)
       end
       last_selected = this_item
     end)
+    btn:onevent(lvgl.EVENT.LONG_PRESSED, opts.context_callback(item))
     btn:add_style(styles.list_item)
     return btn
   end

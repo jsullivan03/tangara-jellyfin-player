@@ -86,5 +86,17 @@ auto togglePlayPause() -> HookCallback {
                       }};
 }
 
+auto openContextMenu() -> HookCallback {
+  return HookCallback{.name = "open_context_menu", .fn = [&](lv_indev_data_t* d) {
+                        auto indev = lv_indev_active();
+                        if (!indev) return;
+                        auto g = lv_indev_get_group(indev);
+                        if (!g) return;
+                        auto obj = lv_group_get_focused(g);
+                        if (!obj) return;
+                        lv_obj_send_event(obj, LV_EVENT_LONG_PRESSED, NULL);
+                      }};
+}
+
 }  // namespace actions
 }  // namespace input

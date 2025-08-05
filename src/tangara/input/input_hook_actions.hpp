@@ -32,5 +32,7 @@ auto skipBack() -> HookCallback;
 auto volumeUp() -> HookCallback;
 auto volumeDown() -> HookCallback;
 
+auto openContextMenu() -> HookCallback;
+
 }  // namespace actions
 }  // namespace input
