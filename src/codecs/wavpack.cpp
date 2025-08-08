@@ -66,6 +66,7 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
   channels_ = WavpackGetReducedChannels(&wavpack_);
   bitdepth_ = WavpackGetBitsPerSample(&wavpack_);
   size_ = kBufSize / channels_;
+  const auto size = input->Size();
   const std::optional total = WavpackGetNumSamples(&wavpack_) == -1
       ? std::nullopt
       : std::optional(
@@ -114,6 +115,7 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       return cpp::fail(Error::kMalformedData);
     }
 
+    input_->SetPreambleFinished();
     uint32_t samples = 0;
     for (size_t i = 0, n = target / size_; i < n; i++)
       samples += WavpackUnpackSamples(&wavpack_, buf_, size_);
@@ -130,9 +132,9 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
   } else if (offset && (!total || !input_.get()->CanSeek())) {
     ESP_LOGE(kTag, "seeking: can’t seek");
     return cpp::fail(Error::kInternalError);
-  }
+  } else
+    input_->SetPreambleFinished();
 
-  const auto size = input->Size();
   return OutputFormat{
       .num_channels = channels_,
       .sample_rate_hz = rate,
