@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <cstdint>
 #include <optional>
+#include "esp_err.h"
 
 namespace drivers {
 namespace wm8523 {
@@ -45,6 +46,7 @@ enum class Register : uint8_t {
   kZeroDetect = 8,
 };
 
+auto Init() -> esp_err_t;
 auto ReadRegister(Register reg) -> std::optional<uint16_t>;
 auto WriteRegister(Register reg, uint16_t data) -> bool;
 auto WriteRegister(Register reg, uint8_t msb, uint8_t lsb) -> bool;

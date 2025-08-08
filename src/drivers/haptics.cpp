@@ -15,6 +15,7 @@
 #include "assert.h"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "drivers/nvs.hpp"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -30,6 +31,19 @@ static constexpr char kTag[] = "haptics";
 static constexpr uint8_t kHapticsAddress = 0x5A;
 
 Haptics::Haptics(NvsStorage& nvs) {
+  i2c_device_config_t config = {
+      .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+      .device_address = kHapticsAddress,
+      .scl_speed_hz = 100'000,
+      .scl_wait_us = 0,
+      .flags =
+          {
+              // FIXME: Why does the driver sometimes NACK?
+              .disable_ack_check = true,
+          },
+  };
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_handle(), &config, &i2c_));
+
   // Bring the driver out of standby, and put it into calibration mode.
   WriteRegister(Register::kMode, 0b00000111);
 
@@ -134,13 +148,8 @@ Haptics::Haptics(NvsStorage& nvs) {
 Haptics::~Haptics() {}
 
 void Haptics::WriteRegister(Register reg, uint8_t val) {
-  uint8_t regRaw = static_cast<uint8_t>(reg);
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kHapticsAddress, I2C_MASTER_WRITE)
-      .write_ack(regRaw, val)
-      .stop();
-  esp_err_t res = transaction.Execute(1);
+  uint8_t cmd[] = {static_cast<uint8_t>(reg), val};
+  esp_err_t res = i2c_master_transmit(i2c_, cmd, 2, 100);
   if (res != ESP_OK) {
     ESP_LOGW(kTag, "write failed: %s", esp_err_to_name(res));
   }
@@ -148,20 +157,13 @@ void Haptics::WriteRegister(Register reg, uint8_t val) {
 
 auto Haptics::ReadRegister(Register reg) -> uint8_t {
   uint8_t regRaw = static_cast<uint8_t>(reg);
-  uint8_t ret = 0;
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kHapticsAddress, I2C_MASTER_WRITE)
-      .write_ack(regRaw)
-      .start()
-      .write_addr(kHapticsAddress, I2C_MASTER_READ)
-      .read(&ret, I2C_MASTER_NACK)
-      .stop();
-  esp_err_t res = transaction.Execute(1);
+  uint8_t cmd[] = {regRaw};
+  uint8_t data[] = {0};
+  esp_err_t res = i2c_master_transmit_receive(i2c_, cmd, 1, data, 1, 100);
   if (res != ESP_OK) {
     ESP_LOGW(kTag, "read failed: %s", esp_err_to_name(res));
   }
-  return ret;
+  return data[0];
 }
 
 auto Haptics::PlayWaveformEffect(Effect effect) -> void {
@@ -249,14 +251,6 @@ auto Haptics::PowerDown() -> void {
 auto Haptics::Reset() -> void {
   WriteRegister(Register::kMode, static_cast<uint8_t>(Mode::kInternalTrigger) |
                                      ModeMask::kDevReset);
-}
-
-auto Haptics::PowerUp() -> void {
-  // FIXME: technically overwriting the RESERVED bits of Mode, but eh
-  uint8_t newMask = static_cast<uint8_t>(Mode::kInternalTrigger) &
-                    (~ModeMask::kStandby) & (~ModeMask::kDevReset);
-  WriteRegister(Register::kMode,
-                static_cast<uint8_t>(RegisterDefaults::kMode) | newMask);
 }
 
 auto Haptics::EffectToLabel(Effect effect) -> std::string {

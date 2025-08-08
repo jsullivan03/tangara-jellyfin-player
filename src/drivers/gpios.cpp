@@ -5,11 +5,13 @@
  */
 
 #include "drivers/gpios.hpp"
+#include <stdint.h>
 
 #include <cstdint>
 
 #include "assert.h"
 #include "driver/gpio.h"
+#include "driver/i2c_master.h"
 #include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_intr_alloc.h"
@@ -78,6 +80,14 @@ Gpios::Gpios(bool invert_lock)
       inputs_(0),
       invert_lock_switch_(invert_lock) {
   gpio_set_direction(kIntPin, GPIO_MODE_INPUT);
+  i2c_device_config_t config = {
+      .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+      .device_address = kPca8575Address,
+      .scl_speed_hz = 400'000,
+      .scl_wait_us = 0,
+      .flags = {.disable_ack_check = false},
+  };
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_handle(), &config, &i2c_));
 }
 
 Gpios::~Gpios() {}
@@ -105,15 +115,9 @@ auto Gpios::ShouldRead() -> bool {
 
 auto Gpios::Flush() -> bool {
   std::pair<uint8_t, uint8_t> ports_ab = unpack(ports_);
-
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kPca8575Address, I2C_MASTER_WRITE)
-      .write_ack(ports_ab.first, ports_ab.second)
-      .stop();
-
+  uint8_t data[] = {ports_ab.first, ports_ab.second};
   has_written_ = true;
-  return transaction.Execute() == ESP_OK;
+  return i2c_master_transmit(i2c_, data, 2, 100) == ESP_OK;
 }
 
 auto Gpios::Get(Pin pin) const -> bool {
@@ -130,20 +134,12 @@ auto Gpios::IsLocked() const -> bool {
 }
 
 auto Gpios::Read() -> bool {
-  uint8_t input_a, input_b;
-
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kPca8575Address, I2C_MASTER_READ)
-      .read(&input_a, I2C_MASTER_ACK)
-      .read(&input_b, I2C_MASTER_LAST_NACK)
-      .stop();
-
-  esp_err_t ret = transaction.Execute();
+  uint8_t data[] = {0, 0};
+  esp_err_t ret = i2c_master_receive(i2c_, data, 2, 100);
   if (ret != ESP_OK) {
     return false;
   }
-  inputs_ = pack(input_a, input_b);
+  inputs_ = pack(data[0], data[1]);
   return true;
 }
 

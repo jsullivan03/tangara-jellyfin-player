@@ -4,9 +4,12 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include "drivers/wm8523.hpp"
+#include <stdint.h>
 
 #include <cstdint>
 
+#include "driver/i2c_master.h"
+#include "driver/i2c_types.h"
 #include "esp_err.h"
 
 #include "drivers/i2c.hpp"
@@ -35,22 +38,26 @@ const uint16_t kDefaultMaxVolume = kLineLevelReferenceVolume + 12;
 const uint16_t kZeroDbVolume = 0x190;
 
 static const uint8_t kAddress = 0b0011010;
+static i2c_master_dev_handle_t sI2C;
+
+auto Init() -> esp_err_t {
+  i2c_device_config_t config = {
+      .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+      .device_address = kAddress,
+      .scl_speed_hz = 400'000,
+      .scl_wait_us = 0,
+      .flags = {.disable_ack_check = false},
+  };
+  return i2c_master_bus_add_device(i2c_handle(), &config, &sI2C);
+}
 
 auto ReadRegister(Register reg) -> std::optional<uint16_t> {
-  uint8_t msb, lsb;
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kAddress, I2C_MASTER_WRITE)
-      .write_ack(static_cast<uint8_t>(reg))
-      .start()
-      .write_addr(kAddress, I2C_MASTER_READ)
-      .read(&msb, I2C_MASTER_ACK)
-      .read(&lsb, I2C_MASTER_LAST_NACK)
-      .stop();
-  if (transaction.Execute() != ESP_OK) {
+  uint8_t cmd[] = {static_cast<uint8_t>(reg)};
+  uint8_t data[] = {0, 0};
+  if (i2c_master_transmit_receive(sI2C, cmd, 1, data, 2, 100) != ESP_OK) {
     return {};
   }
-  return (msb << 8) | lsb;
+  return (data[0] << 8) | data[1];
 }
 
 auto WriteRegister(Register reg, uint16_t data) -> bool {
@@ -58,12 +65,8 @@ auto WriteRegister(Register reg, uint16_t data) -> bool {
 }
 
 auto WriteRegister(Register reg, uint8_t msb, uint8_t lsb) -> bool {
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kAddress, I2C_MASTER_WRITE)
-      .write_ack(static_cast<uint8_t>(reg), msb, lsb)
-      .stop();
-  return transaction.Execute() == ESP_OK;
+  uint8_t cmd[] = {static_cast<uint8_t>(reg), msb, lsb};
+  return i2c_master_transmit(sI2C, cmd, 3, 100) == ESP_OK;
 }
 
 }  // namespace wm8523
