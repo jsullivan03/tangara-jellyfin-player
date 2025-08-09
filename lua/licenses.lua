@@ -179,7 +179,7 @@ return function(self)
   end
 
   library("ALAC decoder", "MIT", function()
-    MIT("Copyright (c) 2005 David Hammerton")
+    mit("Copyright (c) 2005 David Hammerton")
   end)
   library("Ark Pixel font", "OFL", function()
     ofl("Copyright (C) 2021 TakWolf")
