@@ -21,11 +21,11 @@ namespace codecs {
 [[maybe_unused]] static const char kTag[] = "flac";
 
 static void* onMalloc(size_t sz, void* pUserData) {
-  return heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
+  return heap_caps_malloc(sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
 static void* onRealloc(void* p, size_t sz, void* pUserData) {
-  return heap_caps_realloc(p, sz, MALLOC_CAP_SPIRAM);
+  return heap_caps_realloc(p, sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
 static void onFree(void* p, void* pUserData) {
