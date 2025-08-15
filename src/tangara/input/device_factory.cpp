@@ -25,7 +25,11 @@ DeviceFactory::DeviceFactory(
     : services_(services) {
   if (services->touchwheel()) {
     wheel_ =
-        std::make_shared<TouchWheel>(services->nvs(), **services->touchwheel());
+        std::make_shared<TouchWheel>(services->nvs(), **services->touchwheel(), services->track_queue());
+    auto wheel_mode = services_->nvs().WheelInput();
+    if (wheel_mode == drivers::NvsStorage::WheelInputModes::kWheelWithButtons) {
+      wheel_->activate_buttons(true);
+    }
   }
   reset_ = std::make_shared<HardReset>(services_->gpios());
 }
@@ -73,6 +77,17 @@ auto DeviceFactory::createInputs()
       }
       break;
     case drivers::NvsStorage::WheelInputModes::kRotatingWheel:
+      if (wheel_) {
+        wheel_->activate_buttons(false);
+        ret.push_back(wheel_);
+      }
+      break;
+    case drivers::NvsStorage::WheelInputModes::kWheelWithButtons:
+      if (wheel_) {
+        wheel_->activate_buttons(true);
+        ret.push_back(wheel_);
+      }
+      break;
     default:  // Don't break input over a bad enum value.
       if (wheel_) {
         ret.push_back(wheel_);

@@ -628,6 +628,8 @@ auto NvsStorage::WheelInput() -> WheelInputModes {
       return WheelInputModes::kDirectionalWheel;
     case static_cast<uint8_t>(WheelInputModes::kRotatingWheel):
       return WheelInputModes::kRotatingWheel;
+    case static_cast<uint8_t>(WheelInputModes::kWheelWithButtons):
+      return WheelInputModes::kWheelWithButtons;
     default:
       return WheelInputModes::kRotatingWheel;
   }
