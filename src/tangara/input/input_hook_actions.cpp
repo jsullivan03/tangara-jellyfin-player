@@ -86,7 +86,7 @@ auto togglePlayPause() -> HookCallback {
                       }};
 }
 
-auto openContextMenu() -> HookCallback {
+auto longPress() -> HookCallback {
   return HookCallback{.name = "open_context_menu", .fn = [&](lv_indev_data_t* d) {
                         auto indev = lv_indev_active();
                         if (!indev) return;
