@@ -41,7 +41,6 @@ fusion_10() {
     --font ark/ark-pixel-10px-proportional/ark-pixel-10px-proportional-latin.ttf \
     -r 0x100-0x17F \
     -r 0x180-0x24F \
-    -r 0x370-0x3FF \
     --font fusion/fusion-pixel-10px-proportional/fusion-pixel-10px-proportional-ja.ttf \
     -r 0x3000-0x303f,0x3040-0x309F,0x30A0-0x30FF \
     -r 0xFF00-0xFFEF,0x4E00-0x9FAF \
