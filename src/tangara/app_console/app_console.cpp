@@ -470,8 +470,10 @@ int CmdBtList(int argc, char** argv) {
     }
     AppConsole::sServices->bluetooth().pairedDevice(devices[index]);
   } else {
-    std::cout << "mac\t\tname" << std::endl;
+    std::cout << "index\tmac\t\tname" << std::endl;
+    auto idx = 0;
     for (const auto& device : devices) {
+      std::cout << std::setfill(' ') << std::setw(5) << idx++ << "\t";
       for (size_t i = 0; i < device.mac.size(); i++) {
         std::cout << std::hex << std::setfill('0') << std::setw(2)
                   << static_cast<int>(device.mac[i]);
