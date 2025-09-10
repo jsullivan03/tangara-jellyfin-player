@@ -201,26 +201,29 @@ lua::Property UiState::sPlaybackPosition{
       return true;
     }};
 
-lua::Property UiState::sQueuePosition{0, [](const lua::LuaValue& val){
-                                      if (!std::holds_alternative<int>(val)) {
-                                        return false;
-                                      }
-                                      int new_val = std::get<int>(val);
-                                      // val-1 because Lua uses 1-based indexing
-                                      return sServices->track_queue().currentPosition(new_val-1);
-                                    }};
+lua::Property UiState::sQueuePosition{
+    0, [](const lua::LuaValue& val) {
+      if (!std::holds_alternative<int>(val)) {
+        return false;
+      }
+      int new_val = std::get<int>(val);
+      // val-1 because Lua uses 1-based indexing
+      return sServices->track_queue().currentPosition(new_val - 1);
+    }};
 lua::Property UiState::sQueueSize{0};
-lua::Property UiState::sQueueRepeatMode{0, [](const lua::LuaValue& val) {
-                                      if (!std::holds_alternative<int>(val)) {
-                                        return false;
-                                      }
-                                      int new_val = std::get<int>(val);
-                                      if (new_val < 0 || new_val >= 3) {
-                                        return false;
-                                      }
-                                      sServices->track_queue().repeatMode(static_cast<audio::TrackQueue::RepeatMode>(new_val));
-                                      return true;
-                                    }};
+lua::Property UiState::sQueueRepeatMode{
+    0, [](const lua::LuaValue& val) {
+      if (!std::holds_alternative<int>(val)) {
+        return false;
+      }
+      int new_val = std::get<int>(val);
+      if (new_val < 0 || new_val >= 3) {
+        return false;
+      }
+      sServices->track_queue().repeatMode(
+          static_cast<audio::TrackQueue::RepeatMode>(new_val));
+      return true;
+    }};
 lua::Property UiState::sQueueRandom{false, [](const lua::LuaValue& val) {
                                       if (!std::holds_alternative<bool>(val)) {
                                         return false;
@@ -301,7 +304,8 @@ lua::Property UiState::sDisplayTextToSpeech{
         return false;
       }
       sServices->nvs().UITextToSpeech(std::get<bool>(val));
-      sServices->tts().feed(tts::TtsEnabledChanged{.tts_enabled = std::get<bool>(val)});
+      sServices->tts().feed(
+          tts::TtsEnabledChanged{.tts_enabled = std::get<bool>(val)});
       return true;
     }};
 
@@ -646,16 +650,16 @@ void Lua::entry() {
                          {"paired_device", &sBluetoothPairedDevice},
                          {"discovered_devices", &sBluetoothDiscoveredDevices},
                          {"known_devices", &sBluetoothKnownDevices},
-                         {"enable", 
-                            [&](lua_State* s) {
-                              sBluetoothEnabled.set(true);
-                              return 0;
-                         }},
-                         {"disable", 
-                            [&](lua_State* s) {
-                              sBluetoothEnabled.set(false);
-                              return 0;
-                         }},
+                         {"enable",
+                          [&](lua_State* s) {
+                            sBluetoothEnabled.set(true);
+                            return 0;
+                          }},
+                         {"disable",
+                          [&](lua_State* s) {
+                            sBluetoothEnabled.set(false);
+                            return 0;
+                          }},
                      });
     registry.AddPropertyModule(
         "playback",
@@ -720,6 +724,12 @@ void Lua::entry() {
     }
 
     registry.AddPropertyModule(
+        "playing_screen_settings",
+        {
+            {"long_text_scheme", &sInput->longTextMode()},
+        });
+
+    registry.AddPropertyModule(
         "backstack",
         {
             {"push", [&](lua_State* s) { return PushLuaScreen(s, false); }},
@@ -741,14 +751,15 @@ void Lua::entry() {
                                    {"updating", &sDatabaseUpdating},
                                    {"auto_update", &sDatabaseAutoUpdate},
                                });
-    registry.AddPropertyModule("sd_card", {
-                                              {"mounted", &sSdMounted},
-                                              {"unmount", [&](lua_State*) {
-                                                events::System().Dispatch(
-                                                    UnmountRequest{});
-                                                return 0;
-                                              }},
-                                          });
+    registry.AddPropertyModule(
+        "sd_card", {
+                       {"mounted", &sSdMounted},
+                       {"unmount",
+                        [&](lua_State*) {
+                          events::System().Dispatch(UnmountRequest{});
+                          return 0;
+                        }},
+                   });
     registry.AddPropertyModule("usb",
                                {
                                    {"msc_enabled", &sUsbMassStorageEnabled},
@@ -894,10 +905,10 @@ auto Lua::SetRepeatMode(const lua::LuaValue& val) -> bool {
     return false;
   }
   int mode = std::get<int>(val);
-  sServices->track_queue().repeatMode(static_cast<audio::TrackQueue::RepeatMode>(mode));
+  sServices->track_queue().repeatMode(
+      static_cast<audio::TrackQueue::RepeatMode>(mode));
   return true;
 }
-
 
 void Lua::exit() {
   lv_group_set_default(NULL);

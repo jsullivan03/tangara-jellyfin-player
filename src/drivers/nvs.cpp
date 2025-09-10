@@ -8,6 +8,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <optional>
+#include <print>
 
 #include "cppbor.h"
 #include "cppbor_parse.h"
@@ -48,6 +51,7 @@ static constexpr char kKeyLraCalibration[] = "lra_cali";
 static constexpr char kKeyDbAutoIndex[] = "dbautoindex";
 static constexpr char kKeyQueueRepeatMode[] = "queue_rpt";
 static constexpr char kKeyFastCharge[] = "fastchg";
+static constexpr char kKeyLongText[] = "long_text_mode";
 
 static auto nvs_get_string(nvs_handle_t nvs, const char* key)
     -> std::optional<std::string> {
@@ -283,6 +287,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       locked_input_mode_(kKeyLockedInput),
       output_mode_(kKeyOutput),
       haptics_mode_(kKeyHaptics),
+      long_text_mode_{kKeyLongText},
       theme_{kKeyInterfaceTheme},
       bt_preferred_(kKeyBluetoothPreferred),
       bt_names_(kKeyBluetoothNames),
@@ -316,6 +321,7 @@ auto NvsStorage::Read() -> void {
   locked_input_mode_.read(handle_);
   output_mode_.read(handle_);
   haptics_mode_.read(handle_);
+  long_text_mode_.read(handle_);
   theme_.read(handle_);
   bt_preferred_.read(handle_);
   bt_names_.read(handle_);
@@ -344,6 +350,7 @@ auto NvsStorage::Write() -> bool {
   locked_input_mode_.write(handle_);
   output_mode_.write(handle_);
   haptics_mode_.write(handle_);
+  long_text_mode_.write(handle_);
   theme_.write(handle_);
   bt_preferred_.write(handle_);
   bt_names_.write(handle_);
@@ -511,7 +518,8 @@ auto NvsStorage::OutputMode(Output out) -> void {
 
 auto NvsStorage::HapticsMode() -> HapticsModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  int val = haptics_mode_.get().value_or(static_cast<uint8_t>(HapticsModes::kMinimal));
+  int val = haptics_mode_.get().value_or(
+      static_cast<uint8_t>(HapticsModes::kMinimal));
   return intToHapticsMode(val);
 }
 
@@ -533,6 +541,34 @@ auto NvsStorage::HapticsMode(HapticsModes mode) -> void {
   haptics_mode_.set(static_cast<uint8_t>(mode));
 }
 
+auto NvsStorage::LongTextMode() -> LongTextModes {
+  std::lock_guard<std::mutex> lock{mutex_};
+  int val = long_text_mode_.get().value_or(
+      static_cast<uint8_t>(LongTextModes::kDefault));
+  return intToLongTextMode(val);
+}
+
+auto NvsStorage::intToLongTextMode(int raw) -> LongTextModes {
+  switch (raw) {
+    case static_cast<int>(LongTextModes::kDefault):
+      return LongTextModes::kDefault;
+    case static_cast<int>(LongTextModes::kTruncate):
+      return LongTextModes::kTruncate;
+    case static_cast<int>(LongTextModes::kScroll):
+      return LongTextModes::kScroll;
+    case static_cast<int>(LongTextModes::kScrollCircular):
+      return LongTextModes::kScrollCircular;
+    case static_cast<int>(LongTextModes::kClip):
+      return LongTextModes::kClip;
+    default:
+      return LongTextModes::kDefault;
+  }
+}
+
+auto NvsStorage::LongTextMode(LongTextModes mode) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  long_text_mode_.set(static_cast<uint8_t>(mode));
+}
 
 auto NvsStorage::FastCharge() -> bool {
   std::lock_guard<std::mutex> lock{mutex_};
@@ -642,7 +678,8 @@ auto NvsStorage::WheelInput(WheelInputModes mode) -> void {
 
 auto NvsStorage::ButtonInput() -> ButtonInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (button_input_mode_.get().value_or(static_cast<uint8_t>(ButtonInputModes::kVolumeOnly))) {
+  switch (button_input_mode_.get().value_or(
+      static_cast<uint8_t>(ButtonInputModes::kVolumeOnly))) {
     case static_cast<uint8_t>(ButtonInputModes::kDisabled):
       return ButtonInputModes::kDisabled;
     case static_cast<uint8_t>(ButtonInputModes::kVolumeOnly):
@@ -663,7 +700,8 @@ auto NvsStorage::ButtonInput(ButtonInputModes mode) -> void {
 
 auto NvsStorage::LockedInput() -> ButtonInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (locked_input_mode_.get().value_or(static_cast<uint8_t>(ButtonInputModes::kDisabled))) {
+  switch (locked_input_mode_.get().value_or(
+      static_cast<uint8_t>(ButtonInputModes::kDisabled))) {
     case static_cast<uint8_t>(ButtonInputModes::kDisabled):
       return ButtonInputModes::kDisabled;
     case static_cast<uint8_t>(ButtonInputModes::kVolumeOnly):
@@ -671,7 +709,7 @@ auto NvsStorage::LockedInput() -> ButtonInputModes {
     case static_cast<uint8_t>(ButtonInputModes::kMediaControls):
       return ButtonInputModes::kMediaControls;
     case static_cast<uint8_t>(ButtonInputModes::kNavigation):
-      return ButtonInputModes::kNavigation; 
+      return ButtonInputModes::kNavigation;
     default:
       return ButtonInputModes::kDisabled;
   }

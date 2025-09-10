@@ -80,12 +80,12 @@ class UiState : public tinyfsm::Fsm<UiState> {
   void react(const internal::DismissAlerts&);
 
   void react(const database::event::UpdateStarted&);
-  void react(const database::event::UpdateProgress&){};
+  void react(const database::event::UpdateProgress&) {};
   void react(const database::event::UpdateFinished&);
 
   void react(const system_fsm::BluetoothEvent&);
 
-  void react(const internal::ReindexDatabase&){};
+  void react(const internal::ReindexDatabase&) {};
 
  protected:
   void PushScreen(std::shared_ptr<Screen>, bool);

@@ -11,6 +11,7 @@ local queue = require("queue")
 local screen = require("screen")
 local theme = require("theme")
 local playing_menu = require("playing_menu")
+local playing_screen_settings = require("playing_screen_settings")
 
 local img = require("images")
 
@@ -86,6 +87,13 @@ return screen:new {
       text = "",
       text_align = 2,
     }
+
+    if playing_screen_settings.long_text_scheme:get() then
+      local long_text_mode = playing_screen_settings.long_text_scheme:get()
+      artist:set{long_mode = long_text_mode}
+      album:set{long_mode = long_text_mode}
+      title:set{long_mode=long_text_mode}
+    end
 
     local playlist = self.root:Object {
       flex = {
@@ -263,7 +271,7 @@ return screen:new {
             text = format_time(pos)
           }
           local track = playback.track:get()
-          if not track then 
+          if not track then
             scrubber:set{value = 0}
             return
           end
@@ -293,14 +301,17 @@ return screen:new {
         else
           end_time:set { text = format_time(playback.position:get()) }
         end
-        title:set { text = track.title }
-        if track.album then
-          album:set { text = string.sub(track.album, 1, 58) }
-          album:clear_flag(lvgl.FLAG.HIDDEN)
-        else
-          album:add_flag(lvgl.FLAG.HIDDEN)
+
+        if not (track.title == title:get_text()) then
+          title:set { text = track.title }
+          if track.album then
+            album:set { text = string.sub(track.album, 1, 58) }
+            album:clear_flag(lvgl.FLAG.HIDDEN)
+          else
+            album:add_flag(lvgl.FLAG.HIDDEN)
+          end
+          artist:set { text = track.artist or "Unknown Artist" }
         end
-        artist:set { text = track.artist or "Unknown Artist" }
       end),
       queue.position:bind(function(pos)
         if not pos then return end
