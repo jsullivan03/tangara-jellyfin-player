@@ -147,6 +147,22 @@ auto ReadaheadSource::ReadFile() -> void {
 auto ReadaheadSource::SetPreambleFinished() -> void {
   assert(!streambuffer_);
   streambuffer_ = xStreamBufferCreateStatic(kReadaheadStreamBufferSize, 1, sReadaheadStreamBufferStorage, &streambuffer_static_);
+
+  // SD card reads can get very slow at the beginning of the file, so
+  // block on partially filling the streambuffer to reduce cache misses when playback starts.
+  // Don't completely fill it because that would frequently create a noticeable delay when loading tracks.
+  // This partial filling sometimes results in a noticeable delay when loading tracks, however, that is better
+  // than starting to play then hearing a few stutters at the beginning of the track before the cache fills up.
+  // When the read speed is not super slow, this should not cause a noticeable delay.
+  static constexpr size_t kPrefillSize = 1024 * 128;
+  static_assert(kPrefillSize % kFileReadBufferSize == 0, "kPrefillSize must be an integer multiple of kFileReadBufferSize");
+  for (int i = 0; i < kPrefillSize / kFileReadBufferSize; i++) {
+    size_t read = wrapped_->Read(sFileReadBuffer);
+    if (read > 0) {
+      xStreamBufferSend(streambuffer_, sFileReadBuffer.data(), read, portMAX_DELAY);
+    }
+  }
+
   // ReadaheadRunner executes ReadaheadSource::ReadFile in another task
   runner_.RunInstance(this);
 }
