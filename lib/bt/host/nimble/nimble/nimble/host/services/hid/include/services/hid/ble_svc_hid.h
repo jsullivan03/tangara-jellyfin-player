@@ -21,6 +21,10 @@
 #ifndef H_BLE_SVC_HID_
 #define H_BLE_SVC_HID_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* 16 Bit Battery Service UUID */
 #define BLE_SVC_HID_UUID16                                   0x1812
 
@@ -65,6 +69,8 @@ struct ble_svc_hid_params{
     unsigned int kbd_inp_present : 1;
     unsigned int kbd_out_present : 1;
     unsigned int mouse_inp_present : 1;
+    unsigned int kbd_inp_write_perm:1;
+    unsigned int mouse_inp_write_perm:1;
     /* protocol mode char */
     uint8_t proto_mode;
     uint16_t proto_mode_handle;
@@ -107,6 +113,10 @@ struct ble_svc_hid_params{
 void ble_svc_hid_init(void);
 int ble_svc_hid_add(struct ble_svc_hid_params params);
 void ble_svc_hid_reset(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 #endif // CONFIG_BT_NIMBLE_HID_SERVICE

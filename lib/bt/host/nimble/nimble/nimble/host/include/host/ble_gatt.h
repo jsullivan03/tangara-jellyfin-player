@@ -28,6 +28,7 @@
  */
 
 #include <inttypes.h>
+#include "nimble/ble.h"
 #include "host/ble_att.h"
 #include "host/ble_uuid.h"
 #include "host/ble_esp_gatt.h"
@@ -188,7 +189,7 @@ struct ble_hs_cfg;
 #define BLE_GATT_SVC_TYPE_SECONDARY                     2
 
 /** @} */
-/** 
+/**
  * Client Presentation Format
  * GATT Format Types
  * Ref: Assigned Numbers Specification
@@ -386,6 +387,16 @@ struct ble_hs_cfg;
 #define BLE_GATT_CHR_BT_SIG_DESC_INTERNAL               0x010F
 #define BLE_GATT_CHR_BT_SIG_DESC_EXTERNAL               0x0110
 
+/*** @server. */
+/** Represents one notification tuple in a multi notification PDU */
+struct ble_gatt_notif {
+    /** The attribute handle on which to notify. */
+    uint16_t handle;
+
+    /** The notification value. */
+    struct os_mbuf * value;
+};
+
 /*** @client. */
 /** Represents a GATT error. */
 struct ble_gatt_error {
@@ -408,6 +419,22 @@ struct ble_gatt_svc {
     ble_uuid_any_t uuid;
 };
 
+#if (MYNEWT_VAL(BLE_INCL_SVC_DISCOVERY) || MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES))
+/** Represents a GATT Service. */
+struct ble_gatt_incl_svc {
+    /** The handle of the GATT include service. */
+    uint16_t handle;
+
+    /** The start handle of the GATT include service. */
+    uint16_t start_handle;
+
+    /** The end handle of the GATT include service. */
+    uint16_t end_handle;
+
+    /** The UUID of the GATT service. */
+    ble_uuid_any_t uuid;
+};
+#endif
 
 /** Represents a GATT attribute. */
 struct ble_gatt_attr {
@@ -458,6 +485,12 @@ typedef int ble_gatt_disc_svc_fn(uint16_t conn_handle,
                                  const struct ble_gatt_svc *service,
                                  void *arg);
 
+#if (MYNEWT_VAL(BLE_INCL_SVC_DISCOVERY) || MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES))
+typedef int ble_gatt_disc_incl_svc_fn(uint16_t conn_handle,
+                                      const struct ble_gatt_error *error,
+                                      const struct ble_gatt_incl_svc *incl_svc,
+                                      void *arg);
+#endif
 /**
  * The host will free the attribute mbuf automatically after the callback is
  * executed.  The application can take ownership of the mbuf and prevent it
@@ -561,10 +594,15 @@ int ble_gattc_disc_svc_by_uuid(uint16_t conn_handle, const ble_uuid_t *uuid,
  *
  * @return                      0 on success; nonzero on failure.
  */
+#if MYNEWT_VAL(BLE_INCL_SVC_DISCOVERY) || MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES)
+int ble_gattc_find_inc_svcs(uint16_t conn_handle, uint16_t start_handle,
+                            uint16_t end_handle,
+                            ble_gatt_disc_incl_svc_fn *cb, void *cb_arg);
+#else
 int ble_gattc_find_inc_svcs(uint16_t conn_handle, uint16_t start_handle,
                             uint16_t end_handle,
                             ble_gatt_disc_svc_fn *cb, void *cb_arg);
-
+#endif
 /**
  * Initiates GATT procedure: Discover All Characteristics of a Service.
  *
@@ -852,6 +890,33 @@ int ble_gatts_notify_custom(uint16_t conn_handle, uint16_t att_handle,
                             struct os_mbuf *om);
 
 /**
+ * Sends a "free-form" multiple handle variable length characteristic
+ * notification. This function consumes supplied mbufs regardless of the
+ * outcome. Notifications are sent in order of supplied entries.
+ * Function tries to send minimum amount of PDUs. If PDU can't contain all
+ * of the characteristic values, multiple notifications are sent. If only one
+ * handle-value pair fits into PDU, or only one characteristic remains in the
+ * list, regular characteristic notification is sent.
+ *
+ * If GATT client doesn't support receiving multiple handle notifications,
+ * this will use GATT notification for each characteristic, separately.
+ *
+ * If value of characteristic is not specified it will be read from local
+ * GATT database.
+ *
+ * @param conn_handle           The connection over which to execute the
+ *                                  procedure.
+ * @param chr_count             Number of characteristics to notify about.
+ * @param tuples                Handle-value pairs in form of `ble_gatt_notif`
+ *                                  structures.
+ *
+ * @return                      0 on success; nonzero on failure.
+ */
+int ble_gatts_notify_multiple_custom(uint16_t conn_handle,
+                                     size_t chr_count,
+                                     struct ble_gatt_notif *tuples);
+
+/**
  * Deprecated. Should not be used. Use ble_gatts_notify_custom instead.
  */
 int ble_gattc_notify_custom(uint16_t conn_handle, uint16_t att_handle,
@@ -916,6 +981,8 @@ int ble_gatts_indicate(uint16_t conn_handle, uint16_t chr_val_handle);
  * Deprecated. Should not be used. Use ble_gatts_indicate instead.
  */
 int ble_gattc_indicate(uint16_t conn_handle, uint16_t chr_val_handle);
+
+void ble_gattc_cache_conn_undisc_all(ble_addr_t peer_addr);
 
 /** Initialize the BLE GATT client. */
 int ble_gattc_init(void);
@@ -1102,6 +1169,12 @@ struct ble_gatt_access_ctxt {
          */
         const struct ble_gatt_dsc_def *dsc;
     };
+
+    /**
+     * An offset in case of BLE_ATT_OP_READ_BLOB_REQ.
+     * If the value is greater than zero it's an indication of a long attribute read.
+     */
+    uint16_t offset;
 };
 
 /**
@@ -1210,7 +1283,7 @@ STAILQ_HEAD(ble_gatts_clt_cfg_list, ble_gatts_clt_cfg);
  *                              BLE_HS_ENOMEM on heap exhaustion.
  */
 int ble_gatts_add_svcs(const struct ble_gatt_svc_def *svcs);
-
+void ble_gatts_free_svcs(void);
 #if MYNEWT_VAL(BLE_DYNAMIC_SERVICE)
 /**
  * Adds a set of services for registration.  All services added
@@ -1338,6 +1411,14 @@ typedef void (*ble_gatt_svc_foreach_fn)(const struct ble_gatt_svc_def *svc,
  * database in human readable form.
  */
 void ble_gatts_show_local(void);
+
+#if MYNEWT_VAL(BLE_SVC_GAP_GATT_SECURITY_LEVEL)
+/**
+ * Calculates and returns the maximum
+ * Security Mode 1 Level requirement.
+ */
+uint8_t ble_gatts_security_mode_1_level(void);
+#endif
 
 /**
  * Resets the GATT server to its initial state.  On success, this function

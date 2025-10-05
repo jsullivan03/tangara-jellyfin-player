@@ -21,17 +21,11 @@
 #include "mesh/common.h"
 #include "pvnr_mgmt.h"
 
+#if CONFIG_BLE_MESH_V11_SUPPORT
 #include "mesh_v1.1/utils.h"
+#endif
 
 #ifdef CONFIG_BLE_MESH_FRIEND
-
-/* We reserve one extra buffer for each friendship, since we need to be able
- * to resend the last sent PDU, which sits separately outside of the queue.
- */
-#define FRIEND_BUF_COUNT    ((CONFIG_BLE_MESH_FRIEND_QUEUE_SIZE + 1) * \
-                              CONFIG_BLE_MESH_FRIEND_LPN_COUNT)
-
-#define FRIEND_ADV(buf)     CONTAINER_OF(BLE_MESH_ADV(buf), struct friend_adv, adv)
 
 /* PDUs from Friend to the LPN should only be transmitted once with the
  * smallest possible interval (20ms).
@@ -55,14 +49,6 @@ struct friend_pdu_info {
     uint32_t iv_index;
 };
 
-NET_BUF_POOL_FIXED_DEFINE(friend_buf_pool, FRIEND_BUF_COUNT,
-                          BLE_MESH_ADV_DATA_SIZE, NULL);
-
-static struct friend_adv {
-    struct bt_mesh_adv adv;
-    uint16_t app_idx;
-} adv_pool[FRIEND_BUF_COUNT];
-
 enum {
     BLE_MESH_FRIENDSHIP_TERMINATE_ESTABLISH_FAIL,
     BLE_MESH_FRIENDSHIP_TERMINATE_POLL_TIMEOUT,
@@ -79,12 +65,6 @@ static bool friend_init = false;
 static struct bt_mesh_subnet *friend_subnet_get(uint16_t net_idx)
 {
     return bt_mesh_subnet_get(net_idx);
-}
-
-static struct bt_mesh_adv *adv_alloc(int id)
-{
-    adv_pool[id].app_idx = BLE_MESH_KEY_UNUSED;
-    return &adv_pool[id].adv;
 }
 
 static bool is_lpn_unicast(struct bt_mesh_friend *frnd, uint16_t addr)
@@ -183,7 +163,7 @@ static void friend_clear(struct bt_mesh_friend *frnd, uint8_t reason)
         /* Cancel the sending if necessary */
         if (frnd->pending_buf) {
             bt_mesh_adv_buf_ref_debug(__func__, frnd->last, 2U, BLE_MESH_BUF_REF_EQUAL);
-            BLE_MESH_ADV(frnd->last)->busy = 0U;
+            bt_mesh_atomic_set(&BLE_MESH_ADV_BUSY(frnd->last), 0);
         } else {
             bt_mesh_adv_buf_ref_debug(__func__, frnd->last, 1U, BLE_MESH_BUF_REF_EQUAL);
         }
@@ -366,8 +346,7 @@ static struct net_buf *create_friend_pdu(struct bt_mesh_friend *frnd,
 {
     struct net_buf *buf = NULL;
 
-    buf = bt_mesh_adv_create_from_pool(&friend_buf_pool, adv_alloc,
-                                       BLE_MESH_ADV_DATA, K_NO_WAIT);
+    buf = bt_mesh_adv_create_from_pool(BLE_MESH_ADV_FRIEND, K_NO_WAIT);
     if (!buf) {
         return NULL;
     }
@@ -1321,6 +1300,8 @@ int bt_mesh_friend_init(void)
         }
     }
 
+    bt_mesh_frnd_adv_init();
+
     friend_init = true;
 
     return 0;
@@ -1347,8 +1328,7 @@ int bt_mesh_friend_deinit(void)
         k_delayed_work_free(&frnd->clear.timer);
     }
 
-    bt_mesh_unref_buf_from_pool(&friend_buf_pool);
-    memset(adv_pool, 0, sizeof(adv_pool));
+    bt_mesh_frnd_adv_deinit();
 
     friend_init = false;
 

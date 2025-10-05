@@ -621,13 +621,15 @@ auto NvsStorage::AmpLeftBias(int_fast8_t val) -> void {
 
 auto NvsStorage::WheelInput() -> WheelInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (wheel_input_mode_.get().value_or(3)) {
+  switch (wheel_input_mode_.get().value_or(2)) {
     case static_cast<uint8_t>(WheelInputModes::kDisabled):
       return WheelInputModes::kDisabled;
     case static_cast<uint8_t>(WheelInputModes::kDirectionalWheel):
       return WheelInputModes::kDirectionalWheel;
     case static_cast<uint8_t>(WheelInputModes::kRotatingWheel):
       return WheelInputModes::kRotatingWheel;
+    case static_cast<uint8_t>(WheelInputModes::kWheelWithButtons):
+      return WheelInputModes::kWheelWithButtons;
     default:
       return WheelInputModes::kRotatingWheel;
   }

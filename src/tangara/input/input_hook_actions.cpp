@@ -68,6 +68,12 @@ auto nextTrack(audio::TrackQueue& queue) -> HookCallback {
                       }};
 }
 
+auto skipBack() -> HookCallback {
+  return HookCallback{.name = "skip_back", .fn = [&](lv_indev_data_t* d) {
+    events::Ui().Dispatch(ui::SeekBack{.seconds = 25});
+  }};
+}
+
 auto prevTrack(audio::TrackQueue& queue) -> HookCallback {
   return HookCallback{.name = "prev_track", .fn = [&](lv_indev_data_t* d) {
                         queue.previous();

@@ -406,24 +406,39 @@ settings.ThemeSettings = SettingsScreen:new {
       selected_idx = idx
     end
 
-    local theme_chooser = self.content:Dropdown {
+    local theme_container = self.content:Object {
+      w = lvgl.PCT(100),
+      h = lvgl.SIZE_CONTENT,
+      flex = {
+        flex_direction = "column",
+        justify_content = "flex-start",
+        align_items = "space-evenly",
+        align_content = "flex-start",
+      },
+      pad_row = 4,
+      pad_top = 1,
+    }
+    theme_container:add_style(styles.list_item)
+    local theme_chooser = theme_container:Dropdown {
       options = options,
       symbol = img.chevron,
     }
-
     local theme_chooser_desc = widgets.Description(theme_chooser, "Theme")
-    theme_chooser:set({ selected = selected_idx })
-
-    theme_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+    local theme_reload = function()
       local option = theme_chooser:get('selected_str')
       local selectedTheme = themeOptions[option]
       if (selectedTheme) then
         theme.load_theme(tostring(selectedTheme))
         backstack.reset(main_menu:new())
       end
-    end)
-
+    end
+    theme_chooser:set({ selected = selected_idx })
+    theme_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, theme_reload)
     theme_chooser:focus()
+
+    local theme_reload_btn = theme_container:Button {}
+    theme_reload_btn:Label { text = "Reload" }
+    theme_reload_btn:onClicked(theme_reload)
   end
 }
 

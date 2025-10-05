@@ -27,6 +27,8 @@ auto togglePlayPause() -> HookCallback;
 auto nextTrack(audio::TrackQueue& queue) -> HookCallback;
 auto prevTrack(audio::TrackQueue& queue) -> HookCallback;
 
+auto skipBack() -> HookCallback;
+
 auto volumeUp() -> HookCallback;
 auto volumeDown() -> HookCallback;
 

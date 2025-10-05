@@ -35,6 +35,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "esp_attr.h"
+
 // Macros that apply byte-swapping.
 
 #if defined( __GNUC__ ) || defined( __clang__ )
@@ -142,7 +144,7 @@
  * @return Endianness-corrected 32-bit value from memory.
  */
 
-static inline uint32_t kh_lu32ec( const uint8_t* const p )
+static IRAM_ATTR inline uint32_t kh_lu32ec( const uint8_t* const p )
 {
 	uint32_t v;
 	memcpy( &v, p, 4 );
@@ -160,7 +162,7 @@ static inline uint32_t kh_lu32ec( const uint8_t* const p )
  * @return Endianness-corrected 64-bit value from memory.
  */
 
-static inline uint64_t kh_lu64ec( const uint8_t* const p )
+static IRAM_ATTR inline uint64_t kh_lu64ec( const uint8_t* const p )
 {
 	uint64_t v;
 	memcpy( &v, p, 8 );
@@ -179,7 +181,7 @@ static inline uint64_t kh_lu64ec( const uint8_t* const p )
  * @return Final byte-padded value from the message.
  */
 
-static inline uint64_t kh_lpu64ec_l3( const uint8_t* const Msg,
+static IRAM_ATTR inline uint64_t kh_lpu64ec_l3( const uint8_t* const Msg,
 	const size_t MsgLen )
 {
 	const int ml8 = -(int) ( MsgLen * 8 );
@@ -211,7 +213,7 @@ static inline uint64_t kh_lpu64ec_l3( const uint8_t* const Msg,
  * @return Final byte-padded value from the message.
  */
 
-static inline uint64_t kh_lpu64ec_nz( const uint8_t* const Msg,
+static IRAM_ATTR inline uint64_t kh_lpu64ec_nz( const uint8_t* const Msg,
 	const size_t MsgLen )
 {
 	const int ml8 = -(int) ( MsgLen * 8 );
@@ -252,7 +254,7 @@ static inline uint64_t kh_lpu64ec_nz( const uint8_t* const Msg,
  * @return Final byte-padded value from the message.
  */
 
-static inline uint64_t kh_lpu64ec_l4( const uint8_t* const Msg,
+static IRAM_ATTR inline uint64_t kh_lpu64ec_l4( const uint8_t* const Msg,
 	const size_t MsgLen )
 {
 	const int ml8 = -(int) ( MsgLen * 8 );
@@ -280,7 +282,7 @@ static inline uint64_t kh_lpu64ec_l4( const uint8_t* const Msg,
 	 * @param[out] rh The higher half of the 128-bit result.
 	 */
 
-	static inline void kh_m128( const uint64_t m1, const uint64_t m2,
+	static IRAM_ATTR inline void kh_m128( const uint64_t m1, const uint64_t m2,
 		uint64_t* const rl, uint64_t* const rh )
 	{
 		const __uint128_t r = (__uint128_t) m1 * m2;
@@ -293,7 +295,7 @@ static inline uint64_t kh_lpu64ec_l4( const uint8_t* const Msg,
 
 	#include <intrin.h>
 
-	static inline void kh_m128( const uint64_t m1, const uint64_t m2,
+	static IRAM_ATTR inline void kh_m128( const uint64_t m1, const uint64_t m2,
 		uint64_t* const rl, uint64_t* const rh )
 	{
 		*rl = _umul128( m1, m2, rh );
@@ -305,12 +307,12 @@ static inline uint64_t kh_lpu64ec_l4( const uint8_t* const Msg,
 	// from https://go.dev/src/runtime/softfloat64.go
 	// Licensed under BSD-style license.
 
-	static inline uint64_t kh__emulu( const uint32_t x, const uint32_t y )
+	static IRAM_ATTR inline uint64_t kh__emulu( const uint32_t x, const uint32_t y )
 	{
 		return( x * (uint64_t) y );
 	}
 
-	static inline void kh_m128( const uint64_t u, const uint64_t v,
+	static IRAM_ATTR inline void kh_m128( const uint64_t u, const uint64_t v,
 		uint64_t* const rl, uint64_t* const rh )
 	{
 		*rl = u * v;
@@ -406,7 +408,7 @@ static inline uint64_t kh_lpu64ec_l4( const uint8_t* const Msg,
  * @return 64-bit hash value.
  */
 
-static inline uint64_t komihash_epi( const uint8_t* Msg, size_t MsgLen,
+static IRAM_ATTR inline uint64_t komihash_epi( const uint8_t* Msg, size_t MsgLen,
 	uint64_t Seed1, uint64_t Seed5 )
 {
 	uint64_t r1h, r2h;
@@ -463,7 +465,7 @@ static inline uint64_t komihash_epi( const uint8_t* Msg, size_t MsgLen,
  * @return 64-bit hash of the input data.
  */
 
-static inline uint64_t komihash( const void* const Msg0, size_t MsgLen,
+static IRAM_ATTR inline uint64_t komihash( const void* const Msg0, size_t MsgLen,
 	const uint64_t UseSeed )
 {
 	const uint8_t* Msg = (const uint8_t*) Msg0;
@@ -571,7 +573,7 @@ static inline uint64_t komihash( const void* const Msg0, size_t MsgLen,
  * @return The next uniformly-random 64-bit value.
  */
 
-static inline uint64_t komirand( uint64_t* const Seed1, uint64_t* const Seed2 )
+static IRAM_ATTR inline uint64_t komirand( uint64_t* const Seed1, uint64_t* const Seed2 )
 {
 	uint64_t rh;
 
@@ -615,7 +617,7 @@ typedef struct {
  * little-endian systems.
  */
 
-static inline void komihash_stream_init( komihash_stream_t* const ctx,
+static IRAM_ATTR inline void komihash_stream_init( komihash_stream_t* const ctx,
 	const uint64_t UseSeed )
 {
 	ctx -> Seed[ 0 ] = UseSeed;
@@ -633,7 +635,7 @@ static inline void komihash_stream_init( komihash_stream_t* const ctx,
  * @param MsgLen Message's length, in bytes, can be zero.
  */
 
-static inline void komihash_stream_update( komihash_stream_t* const ctx,
+static IRAM_ATTR inline void komihash_stream_update( komihash_stream_t* const ctx,
 	const void* const Msg0, size_t MsgLen )
 {
 	const uint8_t* Msg = (const uint8_t*) Msg0;
@@ -772,7 +774,7 @@ static inline void komihash_stream_update( komihash_stream_t* const ctx,
  * @return 64-bit hash value.
  */
 
-static inline uint64_t komihash_stream_final( komihash_stream_t* const ctx )
+static IRAM_ATTR inline uint64_t komihash_stream_final( komihash_stream_t* const ctx )
 {
 	const uint8_t* Msg = ctx -> Buf;
 	size_t MsgLen = ctx -> BufFill;
@@ -817,7 +819,7 @@ static inline uint64_t komihash_stream_final( komihash_stream_t* const ctx )
  * @return 64-bit hash value.
  */
 
-static inline uint64_t komihash_stream_oneshot( const void* const Msg,
+static IRAM_ATTR inline uint64_t komihash_stream_oneshot( const void* const Msg,
 	const size_t MsgLen, const uint64_t UseSeed )
 {
 	komihash_stream_t ctx;

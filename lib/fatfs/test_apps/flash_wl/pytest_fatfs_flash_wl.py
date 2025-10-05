@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2022-2025 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: CC0-1.0
-
 import pytest
 from pytest_embedded import Dut
+from pytest_embedded_idf.utils import idf_parametrize
 
 
-@pytest.mark.supported_targets
 @pytest.mark.generic
 @pytest.mark.parametrize(
     'config',
@@ -13,27 +12,23 @@ from pytest_embedded import Dut
         'default',
         'release',
         'fastseek',
-    ]
+        'auto_fsync',
+        'dyn_buffers',
+    ],
 )
+@idf_parametrize('target', ['esp32', 'esp32c3'], indirect=['target'])
 def test_fatfs_flash_wl_generic(dut: Dut) -> None:
-    dut.expect_exact('Press ENTER to see the list of tests')
-    dut.write('')
-    dut.expect_exact('Enter test for running.')
-    dut.write('*')
-    dut.expect_unity_test_output(timeout=180)
+    dut.run_all_single_board_cases(timeout=240)
 
 
-@pytest.mark.supported_targets
+@pytest.mark.generic
 @pytest.mark.psram
 @pytest.mark.parametrize(
     'config',
     [
         'psram',
-    ]
+    ],
 )
+@idf_parametrize('target', ['esp32'], indirect=['target'])
 def test_fatfs_flash_wl_psram(dut: Dut) -> None:
-    dut.expect_exact('Press ENTER to see the list of tests')
-    dut.write('')
-    dut.expect_exact('Enter test for running.')
-    dut.write('*')
-    dut.expect_unity_test_output(timeout=180)
+    dut.run_all_single_board_cases(timeout=180)

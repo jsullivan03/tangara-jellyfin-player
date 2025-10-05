@@ -148,9 +148,7 @@ void AudioState::react(const QueueUpdate& ev) {
 
 void AudioState::react(const SetTrack& ev) {
   if (std::holds_alternative<std::monostate>(ev.new_track)) {
-    ESP_LOGI(kTag, "playback finished, awaiting drain");
     sDecoder->open({});
-    sStreamCues.clear();
     return;
   }
 
@@ -212,6 +210,7 @@ void AudioState::react(const TtsPlaybackChanged& ev) {
 }
 
 void AudioState::react(const internal::DecodingFinished& ev) {
+  ESP_LOGD(kTag, "end of file decoded; awaiting playback of buffered audio");
   // If we just finished playing whatever's at the front of the queue, then we
   // need to advanve and start playing the next one ASAP in order to continue
   // gaplessly.
@@ -288,9 +287,11 @@ void AudioState::react(const system_fsm::BluetoothEvent& ev) {
         if (bt.connectionState() !=
             drivers::Bluetooth::ConnectionState::kConnected) {
           // If BT Disconnected, move to standby state
-          events::Audio().Dispatch(audio::OutputModeChanged{
-              .set_to = drivers::NvsStorage::Output::kHeadphones});
-          transit<states::Standby>();
+          if (sOutput == sBtOutput) {
+            events::Audio().Dispatch(audio::OutputModeChanged{
+                .set_to = drivers::NvsStorage::Output::kHeadphones});
+            transit<states::Standby>();
+          }
           return;
         }
         auto dev = sServices->bluetooth().pairedDevice();
@@ -539,6 +540,7 @@ void Standby::react(const system_fsm::UnmountRequest& ev) {
   sServices->bg_worker().Dispatch<void>([=]() {
     auto db = sServices->database().lock();
     if (!db) {
+      events::System().Dispatch(UnmountReady{.idle = ev.idle});
       return;
     }
     auto& queue = sServices->track_queue();

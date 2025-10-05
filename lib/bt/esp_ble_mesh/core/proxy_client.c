@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2017-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -21,14 +21,17 @@
 #include "pvnr_mgmt.h"
 #include "mesh/adapter.h"
 
+#if CONFIG_BLE_MESH_V11_SUPPORT
 #include "mesh_v1.1/utils.h"
+#endif
 
 #if (CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_PB_GATT) || \
-     CONFIG_BLE_MESH_GATT_PROXY_CLIENT
+     CONFIG_BLE_MESH_GATT_PROXY_CLIENT || \
+     (CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT)
 
 static struct bt_mesh_proxy_server {
     struct bt_mesh_conn *conn;
-
+    bt_mesh_addr_t addr;
     enum __attribute__((packed)) {
         CLI_NONE,
         CLI_PROV,
@@ -83,6 +86,22 @@ static void proxy_sar_timeout(struct k_work *work)
     bt_mesh_gattc_disconnect(server->conn);
 }
 
+#if (CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT)
+int bt_mesh_rpr_srv_set_waiting_prov_link(struct bt_mesh_prov_link *link,
+                                          bt_mesh_addr_t *addr)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(waiting_conn_link);i++) {
+        if (waiting_conn_link[i].link == NULL) {
+            waiting_conn_link[i].link = link;
+            memcpy(&waiting_conn_link[i].addr, addr, sizeof(bt_mesh_addr_t));
+            return 0;
+        }
+    }
+
+    return -ENOBUFS;
+}
+#endif /* CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT */
+
 #if CONFIG_BLE_MESH_GATT_PROXY_CLIENT
 /**
  * The following callbacks are used to notify proper information
@@ -112,22 +131,6 @@ void bt_mesh_proxy_client_set_filter_status_cb(proxy_client_recv_filter_status_c
 {
     proxy_client_filter_status_recv_cb = cb;
 }
-
-#if (CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT)
-int bt_mesh_rpr_srv_set_waiting_prov_link(struct bt_mesh_prov_link *link,
-                                          bt_mesh_addr_t *addr)
-{
-    for (size_t i = 0; i < ARRAY_SIZE(waiting_conn_link);i++) {
-        if (waiting_conn_link[i].link == NULL) {
-            waiting_conn_link[i].link = link;
-            memcpy(&waiting_conn_link[i].addr, addr, sizeof(bt_mesh_addr_t));
-            return 0;
-        }
-    }
-
-    return -ENOBUFS;
-}
-#endif /* CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT */
 
 static void filter_status(struct bt_mesh_proxy_server *server,
                           struct bt_mesh_net_rx *rx,
@@ -264,7 +267,9 @@ static void proxy_complete_pdu(struct bt_mesh_proxy_server *server)
         } else
 #endif
         {
+#if CONFIG_BLE_MESH_PROVISIONER
             bt_mesh_provisioner_pb_gatt_recv(server->conn, &server->buf);
+#endif
         }
         break;
 #endif
@@ -460,6 +465,7 @@ static void proxy_connected(bt_mesh_addr_t *addr, struct bt_mesh_conn *conn, int
 
     server->conn = bt_mesh_conn_ref(conn);
     server->conn_type = CLI_NONE;
+    memcpy(&server->addr, addr, sizeof(bt_mesh_addr_t));
     net_buf_simple_reset(&server->buf);
 
 #if CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT
@@ -492,6 +498,7 @@ static void proxy_disconnected(bt_mesh_addr_t *addr, struct bt_mesh_conn *conn, 
         if (bt_mesh_prov_node_get_link()->conn == conn) {
             for (size_t i = 0; i < ARRAY_SIZE(waiting_conn_link); i++) {
                 if (waiting_conn_link[i].link->conn == conn) {
+                    waiting_conn_link[i].link = NULL;
                     memset(&waiting_conn_link[i].addr, 0, sizeof(bt_mesh_addr_t));
                     break;
                 }
@@ -501,7 +508,9 @@ static void proxy_disconnected(bt_mesh_addr_t *addr, struct bt_mesh_conn *conn, 
         } else
 #endif /* CONFIG_BLE_MESH_RPR_SRV */
         {
+#if CONFIG_BLE_MESH_PROVISIONER
             bt_mesh_provisioner_pb_gatt_close(conn, reason);
+#endif /* CONFIG_BLE_MESH_PROVISIONER */
         }
     }
 #endif /* CONFIG_BLE_MESH_PB_GATT && (CONFIG_BLE_MESH_PROVISIONER || CONFIG_BLE_MESH_RPR_SRV) */
@@ -548,7 +557,9 @@ static ssize_t prov_write_ccc(bt_mesh_addr_t *addr, struct bt_mesh_conn *conn)
         }
 #endif
 
+#if CONFIG_BLE_MESH_PROVISIONER
         return bt_mesh_provisioner_pb_gatt_open(conn, addr->val);
+#endif
     }
 
     return -ENOMEM;
@@ -619,6 +630,12 @@ static ssize_t proxy_write_ccc(bt_mesh_addr_t *addr, struct bt_mesh_conn *conn)
         return 0;
     }
 
+#if CONFIG_BLE_MESH_BQB_TEST
+    /* notify maybe received first */
+    if (server->conn_type == CLI_PROXY) {
+        return 0;
+    }
+#endif
     return -EINVAL;
 }
 
@@ -630,6 +647,16 @@ static ssize_t proxy_recv_ntf(struct bt_mesh_conn *conn, uint8_t *data, uint16_t
         BT_ERR("No Proxy Server object found");
         return -ENOTCONN;
     }
+
+#if CONFIG_BLE_MESH_BQB_TEST
+    /* update conn type if notify received before write ccc */
+    if (server->conn_type == CLI_NONE) {
+        server->conn_type = CLI_PROXY;
+        if (proxy_client_connect_cb) {
+            proxy_client_connect_cb(&server->addr, server - servers, server->net_idx);
+        }
+    }
+#endif
 
     if (server->conn_type == CLI_PROXY) {
         return proxy_recv(conn, NULL, data, len, 0, 0);
@@ -692,10 +719,12 @@ int bt_mesh_proxy_client_gatt_disable(void)
 static struct bt_mesh_prov_conn_cb conn_callbacks = {
     .connected = proxy_connected,
     .disconnected = proxy_disconnected,
-#if CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_PB_GATT
+#if (CONFIG_BLE_MESH_PROVISIONER || CONFIG_BLE_MESH_RPR_SRV) && \
+     CONFIG_BLE_MESH_PB_GATT
     .prov_write_descr = prov_write_ccc,
     .prov_notify = prov_recv_ntf,
-#endif /* CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_PB_GATT */
+#endif /* (CONFIG_BLE_MESH_PROVISIONER || CONFIG_BLE_MESH_RPR_SRV) && \
+           CONFIG_BLE_MESH_PB_GATT */
 #if CONFIG_BLE_MESH_GATT_PROXY_CLIENT
     .proxy_write_descr = proxy_write_ccc,
     .proxy_notify = proxy_recv_ntf,
@@ -816,6 +845,23 @@ int bt_mesh_proxy_client_disconnect(uint8_t conn_handle)
 
     bt_mesh_gattc_disconnect(conn);
     return 0;
+}
+
+uint16_t bt_mesh_proxy_client_get_conn_count(void)
+{
+    uint16_t count = 0;
+
+    for (size_t i = 0; i < ARRAY_SIZE(servers); i++) {
+        struct bt_mesh_proxy_server *server = &servers[i];
+
+        if (!server->conn || server->conn_type != CLI_PROXY) {
+            continue;
+        }
+
+        count++;
+    }
+
+    return count;
 }
 
 bool bt_mesh_proxy_client_relay(struct net_buf_simple *buf, uint16_t dst)
@@ -1123,4 +1169,5 @@ int bt_mesh_proxy_client_deinit(void)
 #endif /* CONFIG_BLE_MESH_DEINIT */
 
 #endif /* (CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_PB_GATT) || \
-           CONFIG_BLE_MESH_GATT_PROXY_CLIENT */
+           CONFIG_BLE_MESH_GATT_PROXY_CLIENT || \
+           (CONFIG_BLE_MESH_RPR_SRV && CONFIG_BLE_MESH_PB_GATT) */

@@ -330,7 +330,7 @@ void btm_ble_remove_resolving_list_entry_complete(UINT8 *p, UINT16 evt_len)
     BTM_TRACE_DEBUG("%s status = %d", __func__, status);
 
     if (!btm_ble_deq_resolving_pending(pseudo_bda)) {
-        BTM_TRACE_ERROR("%s no pending resolving list operation", __func__);
+        BTM_TRACE_DEBUG("%s no pending resolving list operation", __func__);
         return;
     }
 
@@ -683,20 +683,22 @@ BOOLEAN btm_ble_suspend_resolving_list_activity(void)
 
     p_ble_cb->suspended_rl_state = BTM_BLE_RL_IDLE;
 
+#if (BLE_42_ADV_EN == TRUE)
     if (p_ble_cb->inq_var.adv_mode == BTM_BLE_ADV_ENABLE) {
         btm_ble_stop_adv();
         p_ble_cb->suspended_rl_state |= BTM_BLE_RL_ADV;
     }
+#endif // #if (BLE_42_ADV_EN == TRUE)
 
     if (BTM_BLE_IS_SCAN_ACTIVE(p_ble_cb->scan_activity)) {
         btm_ble_stop_scan();
         p_ble_cb->suspended_rl_state |= BTM_BLE_RL_SCAN;
     }
-
+#if (tGATT_BG_CONN_DEV == TRUE)
     if (btm_ble_suspend_bg_conn()) {
         p_ble_cb->suspended_rl_state |= BTM_BLE_RL_INIT;
     }
-
+#endif // #if (tGATT_BG_CONN_DEV == TRUE)
     return TRUE;
 }
 
@@ -714,19 +716,21 @@ BOOLEAN btm_ble_suspend_resolving_list_activity(void)
 void btm_ble_resume_resolving_list_activity(void)
 {
     tBTM_BLE_CB *p_ble_cb = &btm_cb.ble_ctr_cb;
-
+#if (BLE_42_ADV_EN == TRUE)
     if (p_ble_cb->suspended_rl_state & BTM_BLE_RL_ADV) {
         btm_ble_start_adv();
     }
-
+#endif // #if (BLE_42_ADV_EN == TRUE)
+#if (BLE_42_SCAN_EN == TRUE)
     if (p_ble_cb->suspended_rl_state & BTM_BLE_RL_SCAN) {
         btm_ble_start_scan();
     }
-
+#endif // #if (BLE_42_SCAN_EN == TRUE)
+#if (tGATT_BG_CONN_DEV == TRUE)
     if  (p_ble_cb->suspended_rl_state & BTM_BLE_RL_INIT) {
         btm_ble_resume_bg_conn();
     }
-
+#endif // #if (tGATT_BG_CONN_DEV == TRUE)
     p_ble_cb->suspended_rl_state = BTM_BLE_RL_IDLE;
 }
 
@@ -1146,6 +1150,9 @@ void btm_ble_add_default_entry_to_resolving_list(void)
      */
     BD_ADDR peer_addr = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
     BT_OCTET16 peer_irk = {0x0};
+
+    // Remove the existing entry in resolving list When resetting the device identity
+    btsnd_hcic_ble_rm_device_resolving_list(BLE_ADDR_PUBLIC, peer_addr);
 
     btsnd_hcic_ble_add_device_resolving_list (BLE_ADDR_PUBLIC, peer_addr, peer_irk, btm_cb.devcb.id_keys.irk);
 }

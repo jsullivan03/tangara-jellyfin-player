@@ -38,6 +38,7 @@ enum
 	Fopus,
 	Fwav,
 	Fwavpack,
+	Falac,
 	Fit,
 	Fxm,
 	Fs3m,

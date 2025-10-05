@@ -52,7 +52,7 @@ SampleProcessor::SampleProcessor(drivers::PcmBuffer& sink)
     : commands_(xQueueCreate(2, sizeof(Args))),
       source_(xStreamBufferCreateWithCaps(kSourceBufferLength + 1,
                                           sizeof(sample::Sample),
-                                          MALLOC_CAP_DMA)),
+                                          MALLOC_CAP_SPIRAM)),
       sink_(sink),
       unprocessed_samples_(0) {
   tasks::StartPersistent<tasks::Type::kAudioConverter>([&]() { Main(); });
@@ -354,7 +354,7 @@ Buffer::Buffer()
     : storage_(reinterpret_cast<sample::Sample*>(
           heap_caps_calloc(kSampleBufferLength,
                            sizeof(sample::Sample),
-                           MALLOC_CAP_DMA))),
+                           MALLOC_CAP_SPIRAM))),
       buffer_(storage_, kSampleBufferLength),
       samples_in_buffer_() {}
 

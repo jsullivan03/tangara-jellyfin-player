@@ -600,6 +600,7 @@ struct ble_hci_le_set_ext_adv_params_cp {
     uint8_t sid;
     uint8_t scan_req_notif;
 } __attribute__((packed));
+
 struct ble_hci_le_set_ext_adv_params_rp {
     int8_t  tx_power;
 } __attribute__((packed));
@@ -714,6 +715,18 @@ struct ble_hci_le_ext_create_conn_cp {
     struct conn_params conn_params[0];
 } __attribute__((packed));
 
+#define BLE_HCI_LE_EXT_CREATE_CONN_V2             (0x0085)
+struct ble_hci_le_ext_create_conn_v2_cp {
+    uint8_t adv_handle;
+    uint8_t subevent;
+    uint8_t filter_policy;
+    uint8_t own_addr_type;
+    uint8_t peer_addr_type;
+    uint8_t peer_addr[6];
+    uint8_t init_phy_mask;
+    struct conn_params conn_params[0];
+} __attribute__((packed));
+
 #define BLE_HCI_LE_PERIODIC_ADV_CREATE_SYNC_OPT_FILTER      0x01
 #define BLE_HCI_LE_PERIODIC_ADV_CREATE_SYNC_OPT_DISABLED    0x02
 #define BLE_HCI_LE_PERIODIC_ADV_CREATE_SYNC_OPT_DUPLICATES  0x04
@@ -784,14 +797,88 @@ struct ble_hci_le_set_privacy_mode_cp {
 
 #define BLE_HCI_OCF_LE_RX_TEST_V3                        (0x004F)
 #define BLE_HCI_OCF_LE_TX_TEST_V3                        (0x0050)
+
 #define BLE_HCI_OCF_LE_SET_CONNLESS_CTE_TX_PARAMS        (0x0051)
+struct ble_hci_le_set_connless_cte_tx_params_cp {
+    uint8_t adv_handle;
+    uint8_t cte_length;
+    uint8_t cte_type;
+    uint8_t cte_count;
+    uint8_t switching_pattern_len;
+    uint8_t switching_pattern[0];
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_SET_CONNLESS_CTE_TX_ENABLE        (0x0052)
+struct ble_hci_le_set_connless_cte_tx_enable_cp {
+    uint8_t adv_handle;
+    uint8_t cte_enable;
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_SET_CONNLESS_IQ_SAMPLING_ENABLE   (0x0053)
+struct ble_hci_le_set_connless_iq_sampling_enable_cp {
+    uint16_t sync_handle;
+    uint8_t sampling_enable;
+    uint8_t slot_durations;
+    uint8_t max_sampled_ctes;
+    uint8_t switching_pattern_len;
+    uint8_t antenna_ids[0];
+} __attribute__((packed));
+
+struct ble_hci_le_set_connless_iq_sampling_enable_rp {
+    uint16_t sync_handle;
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_SET_CONN_CTE_RX_PARAMS            (0x0054)
+struct ble_hci_le_set_conn_cte_rx_params_cp {
+    uint16_t conn_handle;
+    uint8_t sampling_enable;
+    uint8_t slot_durations;
+    uint8_t switching_pattern_len;
+    uint8_t antenna_ids[0];
+} __attribute__((packed));
+struct ble_hci_le_set_conn_cte_rx_params_rp {
+    uint16_t conn_handle;
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_SET_CONN_CTE_TX_PARAMS            (0x0055)
+struct ble_hci_le_set_conn_cte_tx_params_cp {
+    uint16_t conn_handle;
+    uint8_t cte_types;
+    uint8_t switching_pattern_len;
+    uint8_t antenna_ids[0];
+} __attribute__((packed));
+struct ble_hci_le_set_conn_cte_tx_params_rp {
+    uint16_t conn_handle;
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_SET_CONN_CTE_REQ_ENABLE           (0x0056)
+struct ble_gap_conn_cte_req_enable_cp {
+    uint16_t conn_handle;
+    uint8_t enable;
+    uint16_t cte_request_interval;
+    uint8_t requested_cte_length;
+    uint8_t requested_cte_type;
+} __attribute__((packed));
+struct ble_gap_conn_cte_req_enable_rp {
+    uint16_t conn_handle;
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_SET_CONN_CTE_RESP_ENABLE          (0x0057)
+struct ble_hci_le_set_conn_cte_rsp_enable_cp {
+    uint16_t conn_handle;
+    uint8_t enable;
+} __attribute__((packed));
+struct ble_hci_le_set_conn_cte_rsp_enable_rp {
+    uint16_t conn_handle;
+} __attribute__((packed));
+
 #define BLE_HCI_OCF_LE_RD_ANTENNA_INFO                   (0x0058)
+struct ble_hci_le_rd_antenna_info_rp {
+    uint8_t switch_sampling_rates;
+    uint8_t num_antennae;
+    uint8_t max_switch_pattern_len;
+    uint8_t max_cte_len;
+} __attribute__((packed));
 
 #define BLE_HCI_OCF_LE_PERIODIC_ADV_RECEIVE_ENABLE       (0x0059)
 struct ble_hci_le_periodic_adv_receive_enable_cp {
@@ -1137,7 +1224,7 @@ struct ble_hci_le_set_transmit_power_report_enable_cp {
     uint8_t remote_enable;
 } __attribute__((packed));
 
-#define BLE_HCI_OCF_LE_SET_DATA_ADDR_CHANGE	         (0x007C)
+#define BLE_HCI_OCF_LE_SET_DATA_ADDR_CHANGE             (0x007C)
 struct ble_hci_le_set_data_addr_change_cp {
     uint8_t adv_handle;
     uint8_t change_reason;
@@ -1157,8 +1244,66 @@ struct ble_hci_le_subrate_req_cp {
     uint16_t conn_handle;
     uint16_t subrate_min;
     uint16_t subrate_max;
+    uint16_t max_latency;
     uint16_t cont_num;
     uint16_t supervision_tmo;
+} __attribute__((packed));
+
+#define BLE_HCI_OCF_LE_SET_EXT_ADV_PARAM_V2             (0x007F)
+struct ble_hci_le_set_ext_adv_params_v2_cp {
+    struct ble_hci_le_set_ext_adv_params_cp cmd;
+    uint8_t pri_phy_opt;
+    uint8_t sec_phy_opt;
+} __attribute__((packed));
+
+#define BLE_HCI_OCF_LE_SET_PERIODIC_ADV_SUBEV_DATA  (0x0082)
+struct periodic_adv_subevents {
+    uint8_t subevent;
+    uint8_t response_slot_start;
+    uint8_t response_slot_count;
+    uint8_t subevent_data_length;
+    uint8_t subevent_data[0];
+} __attribute__((packed));
+
+struct ble_hci_le_set_periodic_adv_subev_data_cp {
+    uint8_t adv_handle;
+    uint8_t num_subevents;
+    struct periodic_adv_subevents subevents[0];
+} __attribute__((packed));
+
+#define BLE_HCI_OCF_LE_SET_PERIODIC_ADV_RESPONSE_DATA  (0x0083)
+struct ble_hci_le_set_periodic_adv_response_data {
+    uint16_t sync_handle;
+    uint16_t request_event;
+    uint8_t request_subevent;
+    uint8_t response_subevent;
+    uint8_t response_slot;
+    uint8_t response_data_length;
+    uint8_t response_data[0];
+} __attribute__((packed));
+
+#define BLE_HCI_OCF_LE_SET_PERIODIC_ADV_SYNC_SUBEVENT  (0x0084)
+struct ble_hci_le_set_periodic_adv_sync_subevent {
+    uint16_t sync_handle;
+    uint16_t periodic_adv_properties;
+    uint8_t num_subevents;
+    uint8_t subevents[0];
+} __attribute__((packed));
+struct ble_hci_le_set_periodic_adv_sync_subevent_rp {
+    uint16_t sync_handle;
+} __attribute__((packed));
+
+#define BLE_HCI_OCF_LE_SET_PERIODIC_ADV_PARAMS_V2            (0x0086)
+struct ble_hci_le_set_periodic_adv_params_v2 {
+    uint8_t  adv_handle;
+    uint16_t min_itvl;
+    uint16_t max_itvl;
+    uint16_t props;
+    uint8_t num_subevents;
+    uint8_t subevent_interval;
+    uint8_t response_slot_delay;
+    uint8_t response_slot_spacing;
+    uint8_t num_response_slots;
 } __attribute__((packed));
 
 /* --- Vendor specific commands (OGF 0x003F) */
@@ -1238,6 +1383,11 @@ struct ble_hci_vs_duplicate_exception_list_cp {
 
 #define BLE_HCI_OCF_VS_SET_CHAN_SELECT                  (MYNEWT_VAL(BLE_HCI_VS_OCF_OFFSET) + (0x0112))
 
+#define BLE_HCI_OCF_VS_SET_EVT_MASK                     (MYNEWT_VAL(BLE_HCI_VS_OCF_OFFSET) + (0x0116))
+struct ble_hci_vs_set_event_mask_cp {
+    uint32_t event_mask;
+} __attribute__((packed));
+
 /* Command Specific Definitions */
 /* --- Set controller to host flow control (OGF 0x03, OCF 0x0031) --- */
 #define BLE_HCI_CTLR_TO_HOST_FC_OFF         (0)
@@ -1278,8 +1428,17 @@ struct ble_hci_vs_duplicate_exception_list_cp {
 #define BLE_HCI_ADV_PEER_ADDR_MAX           (1)
 
 /* --- LE advertising channel tx power (OCF 0x0007) */
-#define BLE_HCI_ADV_CHAN_TXPWR_MIN             (-20)
-#define BLE_HCI_ADV_CHAN_TXPWR_MAX             (10)
+#if MYNEWT_VAL(BLE_VERSION) == 50
+#define BLE_HCI_ADV_CHAN_TXPWR_MIN          (-20)
+#define BLE_HCI_ADV_CHAN_TXPWR_MAX          (10)
+#elif MYNEWT_VAL(BLE_VERSION) == 51
+#define BLE_HCI_ADV_CHAN_TXPWR_MIN          (-20)
+#define BLE_HCI_ADV_CHAN_TXPWR_MAX          (20)
+#elif MYNEWT_VAL(BLE_VERSION) >= 52
+#define BLE_HCI_ADV_CHAN_TXPWR_MIN          (-127)
+#define BLE_HCI_ADV_CHAN_TXPWR_MAX          (20)
+#endif
+
 
 /* --- LE set scan enable (OCF 0x000c) */
 
@@ -1392,7 +1551,11 @@ struct ble_hci_vs_duplicate_exception_list_cp {
 #define BLE_HCI_SUGG_DEF_DATALEN_TX_OCTETS_MIN      (0x001b)
 #define BLE_HCI_SUGG_DEF_DATALEN_TX_OCTETS_MAX      (0x00fb)
 #define BLE_HCI_SUGG_DEF_DATALEN_TX_TIME_MIN        (0x0148)
+#if BLE_50_FEATURE_SUPPORT
 #define BLE_HCI_SUGG_DEF_DATALEN_TX_TIME_MAX        (0x4290)
+#else
+#define BLE_HCI_SUGG_DEF_DATALEN_TX_TIME_MAX        (0x0848)
+#endif
 
 /* --- LE read maximum default PHY (OCF 0x0030) */
 #define BLE_HCI_LE_PHY_1M                   (1)
@@ -1463,10 +1626,21 @@ struct ble_hci_vs_duplicate_exception_list_cp {
 #define BLE_HCI_PERIODIC_DATA_STATUS_COMPLETE   0x00
 #define BLE_HCI_PERIODIC_DATA_STATUS_INCOMPLETE 0x01
 #define BLE_HCI_PERIODIC_DATA_STATUS_TRUNCATED  0x02
+#define BLE_HCI_PERIODIC_DATA_STATUS_RX_FAILED  0xFF
 
 /* --- LE set privacy mode (OCF 0x004E) */
 #define BLE_HCI_PRIVACY_NETWORK                     (0)
 #define BLE_HCI_PRIVACY_DEVICE                      (1)
+
+/* --- LE set cte type (OCF 0x0051) */
+#define BLE_HCI_CTE_TYPE_AOA                        (0)
+#define BLE_HCI_CTE_TYPE_AOD_1US                    (1)
+#define BLE_HCI_CTE_TYPE_AOD_2US                    (2)
+
+/* --- LE set allow cte rsp types (OCF 0x0055) */
+#define BLE_HCI_CTE_RSP_ALLOW_AOA_MASK              (0x01)
+#define BLE_HCI_CTE_RSP_ALLOW_AOD_1US_MASK          (0x02)
+#define BLE_HCI_CTE_RSP_ALLOW_AOD_2US_MASK          (0x04)
 
 /* Event Codes */
 #define BLE_HCI_EVCODE_INQUIRY_CMP          (0x01)
@@ -1638,6 +1812,8 @@ struct ble_hci_ev_vs_css_slot_changed {
 
 #define BLE_HCI_VS_SUBEV_ID_LLCP_TRACE          (0x17)
 
+#define BLE_HCI_VS_SUBEV_LE_SLEEP_WAKE_UP       (0xC3)
+
 /* LE sub-event codes */
 #define BLE_HCI_LE_SUBEV_CONN_COMPLETE          (0x01)
 struct ble_hci_ev_le_subev_conn_complete {
@@ -1728,6 +1904,7 @@ struct ble_hci_ev_le_subev_gen_dhkey_complete {
 } __attribute__((packed));
 
 #define BLE_HCI_LE_SUBEV_ENH_CONN_COMPLETE      (0x0A)
+#define BLE_HCI_LE_SUBEV_ENH_CONN_COMPLETE_V2   (0x29)
 struct ble_hci_ev_le_subev_enh_conn_complete {
     uint8_t  subev_code;
     uint8_t  status;
@@ -1741,6 +1918,10 @@ struct ble_hci_ev_le_subev_enh_conn_complete {
     uint16_t conn_latency;
     uint16_t supervision_timeout;
     uint8_t  mca;
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+    uint8_t adv_handle;
+    uint16_t sync_handle;
+#endif
 } __attribute__((packed));
 
 #define BLE_HCI_LE_SUBEV_DIRECT_ADV_RPT         (0x0B)
@@ -1789,7 +1970,8 @@ struct ble_hci_ev_le_subev_ext_adv_rpt {
     struct ext_adv_report reports[0];
 } __attribute__((packed));
 
-#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_ESTAB     (0x0E)
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_ESTAB    (0x0E)
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_ESTAB_V2 (0x24)
 struct ble_hci_ev_le_subev_periodic_adv_sync_estab {
     uint8_t  subev_code;
     uint8_t  status;
@@ -1800,15 +1982,41 @@ struct ble_hci_ev_le_subev_periodic_adv_sync_estab {
     uint8_t  phy;
     uint16_t interval;
     uint8_t  aca;
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+    uint8_t  num_subevents;
+    uint8_t  subevent_interval;
+    uint8_t  response_slot_delay;
+    uint8_t  response_slot_spacing;
+#endif
 } __attribute__((packed));
 
 #define BLE_HCI_LE_SUBEV_PERIODIC_ADV_RPT            (0x0F)
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_RPT_V2         (0x25)
 struct ble_hci_ev_le_subev_periodic_adv_rpt {
     uint8_t  subev_code;
     uint16_t sync_handle;
     int8_t   tx_power;
     int8_t   rssi;
     uint8_t  cte_type;
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+    uint16_t event_counter;
+    uint8_t  subevent;
+#endif
+    uint8_t  data_status;
+    uint8_t  data_len;
+    uint8_t  data[0];
+} __attribute__((packed));
+
+struct ble_hci_ev_le_subev_periodic_adv_rpt_v2 {
+    uint8_t  subev_code;
+    uint16_t sync_handle;
+    int8_t   tx_power;
+    int8_t   rssi;
+    uint8_t  cte_type;
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+    uint16_t event_counter;
+    uint8_t  subevent;
+#endif // MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
     uint8_t  data_status;
     uint8_t  data_len;
     uint8_t  data[0];
@@ -1849,11 +2057,47 @@ struct ble_hci_ev_le_subev_chan_sel_alg {
     uint8_t  csa;
 } __attribute__((packed));
 
-#define BLE_HCI_LE_SUBEV_CONNLESS_IQ_RPT        (0x15)
-#define BLE_HCI_LE_SUBEV_CONN_IQ_RPT            (0x16)
-#define BLE_HCI_LE_SUBEV_CTE_REQ_FAILED         (0x17)
 
-#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_TRANSFER   (0x18)
+#define BLE_HCI_LE_SUBEV_CONNLESS_IQ_RPT        (0x15)
+struct ble_hci_ev_le_subev_connless_iq_rpt {
+    uint8_t  subev_code;
+    uint16_t sync_handle;
+    uint8_t  channel_index;
+    int16_t  rssi;
+    uint8_t  rssi_antenna_id;
+    uint8_t  cte_type;
+    uint8_t  slot_durations;
+    uint8_t  packet_status;
+    uint16_t periodic_event_counter;
+    uint8_t  sample_count;
+    int8_t   iq_samples[0];
+} __attribute__((packed));
+
+#define BLE_HCI_LE_SUBEV_CONN_IQ_RPT            (0x16)
+struct ble_hci_ev_le_subev_conn_iq_rpt {
+    uint8_t  subev_code;
+    uint16_t conn_handle;
+    uint8_t  rx_phy;
+    uint8_t  data_channel_index;
+    int16_t  rssi;
+    uint8_t  rssi_antenna_id;
+    uint8_t  cte_type;
+    uint8_t  slot_durations;
+    uint8_t  packet_status;
+    uint16_t conn_event_counter;
+    uint8_t  sample_count;
+    int8_t   iq_samples[0];
+} __attribute__((packed));
+
+#define BLE_HCI_LE_SUBEV_CTE_REQ_FAILED         (0x17)
+struct ble_hci_ev_le_subev_cte_req_failed {
+    uint8_t  subev_code;
+    uint8_t  status;
+    uint16_t conn_handle;
+} __attribute__((packed));
+
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_TRANSFER     (0x18)
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_TRANSFER_V2  (0x26)
 struct ble_hci_ev_le_subev_periodic_adv_sync_transfer {
     uint8_t  subev_code;
     uint8_t  status;
@@ -1866,6 +2110,12 @@ struct ble_hci_ev_le_subev_periodic_adv_sync_transfer {
     uint8_t  phy;
     uint16_t interval;
     uint8_t  aca;
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_WITH_RESPONSES)
+    uint8_t  num_subevents;
+    uint8_t  subevent_interval;
+    uint8_t  response_slot_delay;
+    uint8_t  response_slot_spacing;
+#endif
 } __attribute__((packed));
 
 #define BLE_HCI_LE_SUBEV_CIS_ESTABLISHED        (0x19)
@@ -2001,6 +2251,34 @@ struct ble_hci_ev_le_subev_subrate_change {
     uint16_t periph_latency;
     uint16_t cont_num;
     uint16_t supervision_tmo;
+} __attribute__((packed));
+
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_SUBEV_DATA_REQ  (0x27)
+struct ble_hci_ev_le_subev_periodic_adv_subev_data_req {
+    uint8_t subev_code;
+    uint8_t adv_handle;
+    uint8_t subevent_start;
+    uint8_t subevent_data_count;
+} __attribute__((packed));
+
+#define BLE_HCI_LE_SUBEV_PERIODIC_ADV_RESP_REPORT     (0x28)
+struct periodic_adv_response {
+    int8_t tx_power;
+    int8_t rssi;
+    uint8_t cte_type;
+    uint8_t response_slot;
+    uint8_t data_status;
+    uint8_t data_length;
+    uint8_t data[0];
+} __attribute__((packed));
+
+struct ble_hci_ev_le_subev_periodic_adv_resp_rep {
+    uint8_t subev_code;
+    uint8_t adv_handle;
+    uint8_t subevent;
+    uint8_t tx_status;
+    uint8_t num_responses;
+    struct periodic_adv_response responses[0];
 } __attribute__((packed));
 
 #if (BLE_ADV_REPORT_FLOW_CONTROL == TRUE)

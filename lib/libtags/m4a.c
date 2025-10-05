@@ -59,9 +59,16 @@ tagm4a(Tagctx *ctx)
 				sz -= 8;
 				skip = beuint(d) - 8;
 
-				if(memcmp(&d[4], "mp4a", 4) == 0){ /* audio */
+				if(memcmp(&d[4], "mp4a", 4) == 0 || memcmp(&d[4], "alac", 4) == 0){ /* audio */
 					n = 6+2 + 2+4+2 + 2+2 + 2+2 + 4; /* read a bunch at once */
 					/* reserved+id, ver+rev+vendor, channels+bps, ?+?, sample rate */
+					switch(d[4]) {
+					case 'a':
+						ctx->format = Falac;
+						break;
+					case 'm':
+						ctx->format = Fm4a;
+					}
 					if(ctx->read(ctx, d, n) != n)
 						return -1;
 					skip -= n;
@@ -85,6 +92,8 @@ tagm4a(Tagctx *ctx)
 			type = Talbum;
 		else if(memcmp(d, "\251ART", 4) == 0)
 			type = Tartist;
+		else if(memcmp(d, "aART", 4) == 0)
+			type = Talbumartist;
 		else if(memcmp(d, "\251gen", 4) == 0 || memcmp(d, "gnre", 4) == 0)
 			type = Tgenre;
 		else if(memcmp(d, "\251day", 4) == 0)

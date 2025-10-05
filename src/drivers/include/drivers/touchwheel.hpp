@@ -43,6 +43,7 @@ class TouchWheel {
   auto LowPowerMode(bool en) -> void;
 
  private:
+  i2c_master_dev_handle_t i2c_;
   TouchWheelData data_;
 
   enum Register {

@@ -161,7 +161,7 @@ tagape(Tagctx *ctx)
 	if(leuint(footer+VersionOffset) != 2000)
 		return -1;
 	if(tagIsHeader(leuint(footer+FlagsOffset)))
-			return -1;
+		return -1;
 
 	if(ctx->seek(ctx, -FooterSize-leuint(footer+SizeOffset), 2) < 0)
 		return -1;

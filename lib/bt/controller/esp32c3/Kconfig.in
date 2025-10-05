@@ -66,7 +66,7 @@ endchoice
 config BT_CTRL_HCI_TL
     int
     default 0 if BT_CTRL_HCI_MODE_UART_H4
-    default 1 if BT_CTRL_HCI_M0DE_VHCI
+    default 1 if BT_CTRL_HCI_MODE_VHCI
     default 1
     help
         HCI mode as VHCI or UART(H4)
@@ -76,20 +76,23 @@ config BT_CTRL_ADV_DUP_FILT_MAX
     range 1 500
     default 30
     help
-        The maximum number of suplicate scan filter
+        The maximum number of 5.0 extend duplicate
 
 choice BT_BLE_CCA_MODE
     prompt "BLE CCA mode"
     default BT_BLE_CCA_MODE_NONE
     help
         Define BT BLE CCA mode
+        Note that if CCA feature is enabled, the hardware may not transmit packets due to channel busy.
+        Therefore, it may potentially lead to an increase in the time taken for scanning advertising packet
+        and establishing connections, or a decrease in the throughput rate of the connection.
 
     config BT_BLE_CCA_MODE_NONE
         bool "NONE"
     config BT_BLE_CCA_MODE_HW
         bool "Hardware"
     config BT_BLE_CCA_MODE_SW
-        bool "Software"
+        bool "Software (experimental)"
 endchoice
 
 config BT_BLE_CCA_MODE
@@ -101,9 +104,11 @@ config BT_BLE_CCA_MODE
 config BT_CTRL_HW_CCA_VAL
     int "CCA threshold value"
     range 20 100
-    default 20
+    default 75
     help
         It is the threshold value of HW CCA, if the value is 30, it means CCA threshold is -30 dBm.
+        If the channel assessment result exceeds the CCA threshold (e.g. -75 dBm), indicating the channel is busy,
+        the hardware will not transmit packets on that channel.
 
 config BT_CTRL_HW_CCA_EFF
     int
@@ -200,8 +205,8 @@ choice BT_CTRL_DFT_TX_POWER_LEVEL
         bool "+15dBm"
     config BT_CTRL_DFT_TX_POWER_LEVEL_P18
         bool "+18dBm"
-    config BT_CTRL_DFT_TX_POWER_LEVEL_P21
-        bool "+21dBm"
+    config BT_CTRL_DFT_TX_POWER_LEVEL_P20
+        bool "+20dBm"
 endchoice
 
 config BT_CTRL_DFT_TX_POWER_LEVEL_EFF
@@ -221,11 +226,12 @@ config BT_CTRL_DFT_TX_POWER_LEVEL_EFF
     default 12 if BT_CTRL_DFT_TX_POWER_LEVEL_P12
     default 13 if BT_CTRL_DFT_TX_POWER_LEVEL_P15
     default 14 if BT_CTRL_DFT_TX_POWER_LEVEL_P18
-    default 15 if BT_CTRL_DFT_TX_POWER_LEVEL_P21
+    default 15 if BT_CTRL_DFT_TX_POWER_LEVEL_P20
     default 0
 
 config BT_CTRL_BLE_ADV_REPORT_FLOW_CTRL_SUPP
     bool "BLE adv report flow control supported"
+    depends on BT_CTRL_BLE_SCAN
     default y
     help
         The function is mainly used to enable flow control for advertising reports. When it is enabled,
@@ -402,10 +408,10 @@ menu "MODEM SLEEP Options"
                 bluetooth can work under light sleep enabled. Main crystal has a relatively better performance
                 than other bluetooth low power clock sources.
         config BT_CTRL_LPCLK_SEL_EXT_32K_XTAL
-            bool "External 32kHz crystal"
-            depends on RTC_CLK_SRC_EXT_CRYS
+            bool "External 32kHz crystal/oscillator"
+            depends on RTC_CLK_SRC_EXT_CRYS || RTC_CLK_SRC_EXT_OSC
             help
-                External 32kHz crystal has a nominal frequency of 32.768kHz and provides good frequency
+                External 32kHz crystal/oscillator has a nominal frequency of 32.768kHz and provides good frequency
                 stability. If used as Bluetooth low power clock, External 32kHz can support Bluetooth
                 modem sleep to be used with both DFS and light sleep.
 
@@ -444,7 +450,7 @@ config BT_CTRL_SLEEP_CLOCK_EFF
 config BT_CTRL_HCI_TL_EFF
     int
     default 0 if BT_CTRL_HCI_MODE_UART_H4
-    default 1 if BT_CTRL_HCI_M0DE_VHCI
+    default 1 if BT_CTRL_HCI_MODE_VHCI
     default 1
 
 config BT_CTRL_AGC_RECORRECT_EN
@@ -465,7 +471,7 @@ config BT_CTRL_SCAN_BACKOFF_UPPERLIMITMAX
     default n
     help
         Disable active scan backoff. The bluetooth spec requires that scanners should run a backoff procedure to
-        minimize collision of scan request PDUs from nultiple scanners. If scan backoff is disabled, in active
+        minimize collision of scan request PDUs from multiple scanners. If scan backoff is disabled, in active
         scanning, scan request PDU will be sent every time when HW receives scannable ADV PDU.
 
 config BT_BLE_ADV_DATA_LENGTH_ZERO_AUX
@@ -489,3 +495,138 @@ config BT_CTRL_LE_PING_EN
     help
         If this option is disabled, The Controller will not start the LE authenticated payload timer.
         This option is used for some compatibility problems related to LE ping procedure.
+
+menu "BLE disconnects when Instant Passed (0x28) occurs"
+    config BT_CTRL_BLE_LLCP_CONN_UPDATE
+        bool "BLE ACL connection update procedure"
+        default n
+        help
+            If this option is enabled, Controller will terminate the connection
+            when Instant Passed (0x28) error occurs during connection update procedure.
+
+    config BT_CTRL_BLE_LLCP_CHAN_MAP_UPDATE
+        bool "BLE ACL channel map update procedure"
+        default n
+        help
+            If this option is enabled, Controller will terminate the connection
+            when Instant Passed (0x28) error occurs in channel map update procedure.
+
+    config BT_CTRL_BLE_LLCP_PHY_UPDATE
+        bool "BLE ACL PHY update procedure"
+        default n
+        help
+            If this option is enabled, Controller will terminate the connection
+            when Instant Passed (0x28) error occurs in PHY update procedure.
+endmenu
+config BT_CTRL_RUN_IN_FLASH_ONLY
+    bool "Put all BLE Controller code in flash"
+    default n
+    help
+        If this option is enabled, all code for the Bluetooth controller will be moved from ROM and IRAM
+        to flash, saving over 20K bytes of memory. However, it will require more flash resources and the
+        performance of Bluetooth will decrease If this option is enabled, Bluetooth may not work properly
+        during erasing flash. It is recommended to turn on the auto suspend function of flash. After auto
+        suspend is turned on, Bluetooth interrupts can be executed normally during erasing flash, with less
+        impact on Bluetooth performance.
+
+config BT_CTRL_DTM_ENABLE
+    bool "Enable direct test mode feature"
+    default y
+
+config BT_CTRL_BLE_MASTER
+    bool "Enable BLE connection feature"
+    default y
+    help
+        If this option is disabled, it is not recommended to use connectable ADV.
+
+config BT_CTRL_BLE_TEST
+    bool "Enable BLE QA test feature (Not Used)"
+    default n
+
+config BT_CTRL_BLE_SCAN
+    bool "Enable BLE scan feature"
+    default y
+
+config BT_CTRL_BLE_SECURITY_ENABLE
+    bool "Enable BLE security feature"
+    default y
+
+config BT_CTRL_BLE_ADV
+    bool "Enable BLE ADV feature"
+    default y
+
+config BT_CTRL_CHECK_CONNECT_IND_ACCESS_ADDRESS
+    bool "Enable enhanced Access Address check in CONNECT_IND"
+    default n
+    help
+        Enabling this option will add stricter verification of the Access Address in the CONNECT_IND PDU.
+        This improves security by ensuring that only connection requests with valid Access Addresses are accepted.
+        If disabled, only basic checks are applied, improving compatibility.
+
+menu "Controller debug log Options (Experimental)"
+    config BT_CTRL_LE_LOG_EN
+        depends on BT_CTRL_RUN_IN_FLASH_ONLY
+        bool "Enable BLE debug log"
+        default n
+
+    config BT_CTRL_LE_HCI_LOG_EN
+        depends on BT_CTRL_LE_LOG_EN
+        bool "Enable BLE HCI log"
+        default n
+
+    config BT_CTRL_LE_LOG_DUMP_ONLY
+        depends on BT_CTRL_LE_LOG_EN
+        bool "Enable BLE log dump only"
+        default n
+
+    config BT_CTRL_LE_LOG_STORAGE_EN
+        depends on BT_CTRL_LE_LOG_EN
+        bool "Enable BLE log storage to flash"
+        default n
+
+    config BT_CTRL_LE_LOG_PARTITION_SIZE
+        int "The size of ble controller log partition(Multiples of 4K)"
+        depends on BT_CTRL_LE_LOG_STORAGE_EN
+        default 65536
+        help
+            The size of ble controller log partition shall be a multiples of 4K.
+            The name of log partition shall be "bt_ctrl_log".
+            The partition type shall be ESP_PARTITION_TYPE_DATA.
+            The partition sub_type shall be ESP_PARTITION_SUBTYPE_ANY.
+
+    config BT_CTRL_LE_LOG_SPI_OUT_EN
+        bool "Output ble controller logs to SPI bus"
+        depends on BT_CTRL_LE_LOG_EN
+        depends on !BT_CTRL_LE_LOG_DUMP_ONLY
+        select BT_BLE_LOG_SPI_OUT_ENABLED
+        default n
+        help
+            Output ble controller logs to SPI bus
+
+    config BT_CTRL_LE_LOG_MODE_EN
+        depends on BT_CTRL_LE_LOG_EN
+        int "Enable log for specified BLE mode"
+        range 0 4095
+        default 4093
+
+    config BT_CTRL_LE_LOG_LEVEL
+        depends on BT_CTRL_LE_LOG_EN
+        int "The level of BLE log"
+        range 0 5
+        default 2
+
+    config BT_CTRL_LE_LOG_BUF1_SIZE
+        depends on BT_CTRL_LE_LOG_EN
+        int "The size of BLE log buffer1"
+        default 1024
+
+    config BT_CTRL_LE_LOG_HCI_BUF_SIZE
+        depends on BT_CTRL_LE_LOG_EN
+        int "The size of BLE log HCI buffer"
+        default 1024
+
+    config BT_CTRL_LE_LOG_BUF2_SIZE
+        depends on BT_CTRL_LE_LOG_EN
+        int "The size of BLE log buffer2"
+        default 1024
+endmenu

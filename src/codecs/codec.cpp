@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 
+#include "alac.hpp"
 #include "dr_flac.hpp"
 #include "mad.hpp"
 #include "native.hpp"
@@ -36,6 +37,8 @@ auto StreamTypeToString(StreamType t) -> std::string {
       return "Native";
     case StreamType::kWavPack:
       return "WavPack";
+    case StreamType::kAlac:
+      return "ALAC";
     default:
       return "";
   }
@@ -57,6 +60,8 @@ auto CreateCodecForType(StreamType type) -> std::optional<ICodec*> {
       return new NativeDecoder();
     case StreamType::kWavPack:
       return new WavPackDecoder();
+    case StreamType::kAlac:
+      return new AlacDecoder();
     default:
       return {};
   }

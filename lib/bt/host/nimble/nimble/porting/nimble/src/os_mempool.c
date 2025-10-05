@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include "syscfg/syscfg.h"
+#include "modlog/modlog.h"
 #if !MYNEWT_VAL(OS_SYSVIEW_TRACE_MEMPOOL)
 #define OS_TRACE_DISABLE_FILE_API
 #endif

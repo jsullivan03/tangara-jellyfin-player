@@ -23,12 +23,14 @@
 #include "host/ble_hs.h"
 #include "services/sps/ble_svc_sps.h"
 
+#if MYNEWT_VAL(BLE_GATTS) && CONFIG_BT_NIMBLE_SPS_SERVICE
 static uint16_t ble_scan_itvl;
 static uint16_t ble_scan_window;
 static uint8_t ble_scan_refresh;
 static uint16_t ble_scan_itvl_handle;
 static uint16_t ble_scan_refresh_handle;
 
+static ble_svc_sps_event_fn *ble_svc_sps_cb_fn;
 
 /* Access function */
 static int
@@ -100,9 +102,12 @@ ble_svc_sps_access(uint16_t conn_handle, uint16_t attr_handle,
     case BLE_SVC_SPS_CHR_UUID16_SCAN_ITVL_WINDOW:
         assert(ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR);
         rc = ble_svc_sps_chr_write(ctxt->om, 0, sizeof(ble_scan_itvl) + sizeof(ble_scan_window), &write_val, NULL);
-        if(rc != 0) {
+        if(rc == 0) {
             ble_scan_itvl = (write_val & 0xffff0000) >> 16;
-            ble_scan_window = (write_val && 0x0000ffff);
+            ble_scan_window = (write_val & 0x0000ffff);
+        }
+        if (ble_svc_sps_cb_fn) {
+            ble_svc_sps_cb_fn(ble_scan_itvl, ble_scan_window);
         }
         return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     case BLE_SVC_SPS_CHR_UUID16_SCAN_REFRESH:
@@ -118,6 +123,11 @@ ble_svc_sps_access(uint16_t conn_handle, uint16_t attr_handle,
     return 0;
 }
 
+void
+ble_svc_sps_set_cb(ble_svc_sps_event_fn *cb)
+{
+    ble_svc_sps_cb_fn = cb;
+}
 
 /**
  * Initialize the SPS package.
@@ -138,3 +148,4 @@ ble_svc_sps_init(uint16_t scan_itvl, uint16_t scan_window)
     rc = ble_gatts_add_svcs(ble_svc_sps_defs);
     SYSINIT_PANIC_ASSERT(rc == 0);
 }
+#endif

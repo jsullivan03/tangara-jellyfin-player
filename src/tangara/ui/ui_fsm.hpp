@@ -56,6 +56,8 @@ class UiState : public tinyfsm::Fsm<UiState> {
   void react(const tinyfsm::Event& ev) {}
 
   void react(const Screenshot&);
+  void react(const SeekBack&);
+
   virtual void react(const OnLuaError&) {}
   virtual void react(const DumpLuaStack&) {}
   virtual void react(const internal::BackPressed&) {}

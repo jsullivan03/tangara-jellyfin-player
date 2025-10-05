@@ -40,7 +40,7 @@ class MadMp3Decoder : public ICodec {
 
   struct Mp3Info {
     uint16_t starting_sample;
-    uint32_t length;
+    uint64_t length;
     std::optional<uint32_t> bytes;
     std::optional<std::span<const unsigned char, 100>> toc;
   };
@@ -59,9 +59,9 @@ class MadMp3Decoder : public ICodec {
   // Count of samples processed in the current frame (channels combined)
   int current_frame_sample_;
   // Count of samples processed in the current stream (channels separate, i.e. usually x2)
-  int current_stream_sample_;
+  uint64_t current_stream_sample_;
   // How many samples in the current stream (channels separate) with encoder delay/padding removed
-  int total_samples_;
+  uint64_t total_samples_;
   // Encoder delay, i.e. how many samples to skip at the start of the stream
   int skip_samples_;
   bool is_eof_;

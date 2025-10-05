@@ -44,6 +44,7 @@
 #include "database/track.hpp"
 #include "events/event_queue.hpp"
 #include "lua/lua_registry.hpp"
+#include "lvgl/src/stdlib/lv_mem.h"
 #include "system_fsm/service_locator.hpp"
 #include "system_fsm/system_events.hpp"
 #include "ui/ui_events.hpp"
@@ -362,12 +363,24 @@ int CmdHeaps(int argc, char** argv) {
             << std::endl;
   std::cout << (heap_caps_get_minimum_free_size(MALLOC_CAP_DMA) / 1024)
             << " KiB free at lowest" << std::endl;
+  std::cout << (heap_caps_get_largest_free_block(MALLOC_CAP_DMA) / 1024)
+            << " KiB largest free block" << std::endl;
 
   std::cout << "heap stats (external):" << std::endl;
   std::cout << (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024)
             << " KiB free" << std::endl;
   std::cout << (heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM) / 1024)
             << " KiB free at lowest" << std::endl;
+  std::cout << (heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024)
+            << " KiB largest free block" << std::endl;
+
+  lv_mem_monitor_t lvgl_heap_stats;
+  lv_mem_monitor(&lvgl_heap_stats);
+  std::cout << "heap stats (LVGL):" << std::endl;
+  std::cout << lvgl_heap_stats.free_size / 1024
+            << " KiB free" << std::endl;
+  std::cout << lvgl_heap_stats.free_biggest_size / 1024
+            << " KiB largest free block" << std::endl;
 
   return 0;
 }
@@ -457,8 +470,10 @@ int CmdBtList(int argc, char** argv) {
     }
     AppConsole::sServices->bluetooth().pairedDevice(devices[index]);
   } else {
-    std::cout << "mac\t\tname" << std::endl;
+    std::cout << "index\tmac\t\tname" << std::endl;
+    auto idx = 0;
     for (const auto& device : devices) {
+      std::cout << std::setfill(' ') << std::setw(5) << idx++ << "\t";
       for (size_t i = 0; i < device.mac.size(); i++) {
         std::cout << std::hex << std::setfill('0') << std::setw(2)
                   << static_cast<int>(device.mac[i]);

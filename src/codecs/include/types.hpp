@@ -18,6 +18,7 @@ enum class StreamType {
   kWav,
   kNative,
   kWavPack,
+  kAlac,
 };
 
 auto StreamTypeToString(StreamType t) -> std::string;

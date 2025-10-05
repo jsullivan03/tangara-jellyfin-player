@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 
+#include "driver/i2c_types.h"
 #include "drivers/nvs.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -73,6 +74,7 @@ class Samd {
   Samd& operator=(const Samd&) = delete;
 
  private:
+  i2c_master_dev_handle_t i2c_;
   NvsStorage& nvs_;
 
   enum class RegisterName {

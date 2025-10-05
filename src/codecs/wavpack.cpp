@@ -45,7 +45,7 @@ WavPackDecoder::WavPackDecoder() : input_(), buf_() {
   buf_ = static_cast<int32_t*>(
       heap_caps_malloc(
           kBufSize * sizeof(int32_t),
-          MALLOC_CAP_INTERNAL | MALLOC_CAP_CACHE_ALIGNED
+          MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT
   ));
 }
 
@@ -66,6 +66,7 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
   channels_ = WavpackGetReducedChannels(&wavpack_);
   bitdepth_ = WavpackGetBitsPerSample(&wavpack_);
   size_ = kBufSize / channels_;
+  const auto size = input->Size();
   const std::optional total = WavpackGetNumSamples(&wavpack_) == -1
       ? std::nullopt
       : std::optional(
@@ -73,7 +74,7 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
         );
   const auto rate = WavpackGetSampleRate(&wavpack_);
   if (offset && total && input_.get()->CanSeek()) {
-    const uint32_t want = offset * rate - 1;
+    const uint32_t want = offset * rate;
     if (total < want) {
       ESP_LOGE(kTag, "seeking: offset points beyond the end of the file");
       return cpp::fail(Error::kInternalError);
@@ -96,7 +97,11 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       }
       const uint32_t blockIndex = loadLe32(header + 16);
       const uint32_t blockSamples = loadLe32(header + 20);
-      if (want >= blockIndex && want <= blockIndex + blockSamples) {
+      if (want >= blockIndex && want == blockIndex + blockSamples) {
+        input_->SeekTo(size - 24, IStream::SeekFrom::kCurrentPosition);
+        target = 0;
+        break;
+      } else if (want >= blockIndex && want < blockIndex + blockSamples) {
         input_->SeekTo(-32, IStream::SeekFrom::kCurrentPosition);
         target = want - blockIndex;
         break;
@@ -110,6 +115,7 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
       return cpp::fail(Error::kMalformedData);
     }
 
+    input_->SetPreambleFinished();
     uint32_t samples = 0;
     for (size_t i = 0, n = target / size_; i < n; i++)
       samples += WavpackUnpackSamples(&wavpack_, buf_, size_);
@@ -126,9 +132,9 @@ auto WavPackDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
   } else if (offset && (!total || !input_.get()->CanSeek())) {
     ESP_LOGE(kTag, "seeking: can’t seek");
     return cpp::fail(Error::kInternalError);
-  }
+  } else
+    input_->SetPreambleFinished();
 
-  const auto size = input->Size();
   return OutputFormat{
       .num_channels = channels_,
       .sample_rate_hz = rate,
@@ -150,8 +156,14 @@ auto WavPackDecoder::DecodeTo(std::span<sample::Sample> output)
     ESP_LOGE(kTag, "CRC error");
     return cpp::fail(Error::kMalformedData);
   }
-  for (size_t i = 0; i < samples; i++)
-    output[i] = sample::FromSigned(buf_[i], bitdepth_);
+  if (bitdepth_ == 16)
+    for (size_t i = 0; i < samples; i++)
+      output[i] = buf_[i];
+  else if (bitdepth_ > 16)
+    for (size_t i = 0; i < samples; i++)
+      output[i] = sample::shiftWithDither(buf_[i], bitdepth_ - 16);
+  else for (size_t i = 0; i < samples; i++)
+    output[i] = buf_[i] << (16 - bitdepth_);
   return OutputInfo{
       .samples_written = samples,
       .is_stream_finished = samples == 0,

@@ -34,8 +34,6 @@ class StreamCues {
 
   auto addCue(std::shared_ptr<TrackInfo>, uint32_t start_at) -> void;
 
-  auto clear() -> void;
-
  private:
   uint32_t now_;
 

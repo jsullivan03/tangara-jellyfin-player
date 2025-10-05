@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -36,11 +36,12 @@
 #include "btc_av.h"
 #include "btc/btc_util.h"
 #include "esp_a2dp_api.h"
-#include "sbc_encoder.h"
 #include "osi/future.h"
 #include <assert.h>
 
-#if BTC_AV_SRC_INCLUDED
+#if (BTC_AV_SRC_INCLUDED == TRUE) && (BTC_AV_EXT_CODEC == FALSE)
+
+#include "sbc_encoder.h"
 
 /*****************************************************************************
  **  BQB global variables
@@ -74,20 +75,14 @@ enum {
 
 /* Media task tick in milliseconds, must be set to multiple of
    (1000/TICKS_PER_SEC) */
-#define BTC_MEDIA_TIME_TICK_MS                 (20)
+#define BTC_MEDIA_TIME_TICK_MS                 (30)
 #define A2DP_DATA_READ_POLL_MS                 (BTC_MEDIA_TIME_TICK_MS / 2)
 
 #ifndef MAX_PCM_FRAME_NUM_PER_TICK
-#define MAX_PCM_FRAME_NUM_PER_TICK             14 // 14 for 20ms
+#define MAX_PCM_FRAME_NUM_PER_TICK             21 // 14 for 20ms
 #endif
 
 #define BTC_MEDIA_AA_BUF_SIZE                  (4096+16)
-
-#if (BTA_AV_CO_CP_SCMS_T == TRUE)
-#define BTC_MEDIA_AA_SBC_OFFSET (AVDT_MEDIA_OFFSET + BTA_AV_SBC_HDR_SIZE + 1)
-#else
-#define BTC_MEDIA_AA_SBC_OFFSET (AVDT_MEDIA_OFFSET + BTA_AV_SBC_HDR_SIZE)
-#endif
 
 #ifndef BTC_MEDIA_BITRATE_STEP
 #define BTC_MEDIA_BITRATE_STEP                 5
@@ -97,8 +92,8 @@ enum {
 #define BTC_A2DP_NON_EDR_MAX_RATE              229
 #endif
 
-/* Extreme quality quality setting @ 48 khz */
-#define DEFAULT_SBC_BITRATE                    672
+/* Middle quality quality setting @ 44.1 khz */
+#define DEFAULT_SBC_BITRATE                    328
 
 /*
  * CONGESTION COMPENSATION CTRL ::
@@ -120,7 +115,8 @@ enum {
    layers we might need to temporarily buffer up data */
 
 /* 5 frames is equivalent to 6.89*5*2.9 ~= 100 ms @ 44.1 khz, 20 ms mediatick */
-#define MAX_OUTPUT_A2DP_SRC_FRAME_QUEUE_SZ     (50) // 18 for 20ms tick
+#define MAX_OUTPUT_A2DP_FRAME_QUEUE_SZ         (5)
+#define MAX_OUTPUT_A2DP_SRC_FRAME_QUEUE_SZ     (27) // 18 for 20ms tick
 
 #define BTC_A2DP_SRC_DATA_QUEUE_IDX            (1)
 
@@ -168,6 +164,10 @@ typedef struct {
     osi_thread_t                *btc_aa_src_task_hdl;
     UINT64                      last_frame_us;
 } a2dp_source_local_param_t;
+
+static BOOLEAN btc_a2dp_source_stop_audio_req(void);
+static BOOLEAN btc_a2dp_source_tx_flush_req(void);
+static BOOLEAN btc_a2dp_source_audio_feeding_init_req(tBTC_MEDIA_INIT_AUDIO_FEEDING *p_msg);
 
 static void btc_a2dp_source_thread_init(UNUSED_ATTR void *context);
 static void btc_a2dp_source_thread_cleanup(UNUSED_ATTR void *context);
@@ -224,11 +224,6 @@ static inline void btc_aa_cb_to_app(esp_a2d_cb_event_t event, esp_a2d_cb_param_t
 /*****************************************************************************
  **  BTC ADAPTATION
  *****************************************************************************/
-
-bool btc_a2dp_source_is_streaming(void)
-{
-    return a2dp_source_local_param.btc_aa_src_cb.is_tx_timer == TRUE;
-}
 
 bool btc_a2dp_source_is_task_shutting_down(void)
 {
@@ -504,7 +499,7 @@ BOOLEAN btc_a2dp_source_start_audio_req(void)
  ** Returns          TRUE is success
  **
  *******************************************************************************/
-BOOLEAN btc_a2dp_source_stop_audio_req(void)
+static BOOLEAN btc_a2dp_source_stop_audio_req(void)
 {
     /*
      * Explicitly check whether the btc_aa_src_ctrl_queue is not NULL to
@@ -535,7 +530,7 @@ BOOLEAN btc_a2dp_source_stop_audio_req(void)
  ** Returns          TRUE is success
  **
  *******************************************************************************/
-BOOLEAN btc_a2dp_source_enc_init_req(tBTC_MEDIA_INIT_AUDIO *p_msg)
+static BOOLEAN btc_a2dp_source_enc_init_req(tBTC_MEDIA_INIT_AUDIO *p_msg)
 {
     tBTC_MEDIA_INIT_AUDIO *p_buf;
     if (NULL == (p_buf = osi_malloc(sizeof(tBTC_MEDIA_INIT_AUDIO)))) {
@@ -558,7 +553,7 @@ BOOLEAN btc_a2dp_source_enc_init_req(tBTC_MEDIA_INIT_AUDIO *p_msg)
  ** Returns          TRUE is success
  **
  *******************************************************************************/
-BOOLEAN btc_a2dp_source_enc_update_req(tBTC_MEDIA_UPDATE_AUDIO *p_msg)
+static BOOLEAN btc_a2dp_source_enc_update_req(tBTC_MEDIA_UPDATE_AUDIO *p_msg)
 {
     tBTC_MEDIA_UPDATE_AUDIO *p_buf;
     if (NULL == (p_buf = osi_malloc(sizeof(tBTC_MEDIA_UPDATE_AUDIO)))) {
@@ -1450,6 +1445,7 @@ static void btc_a2dp_source_prep_2_send(UINT8 nb_frame)
  *******************************************************************************/
 static void btc_a2dp_source_send_aa_frame(void)
 {
+    /* if external codec is used, skip generate audio frame */
     UINT8 nb_frame_2_send;
 
     /* get the number of frame to send */
@@ -1460,8 +1456,8 @@ static void btc_a2dp_source_send_aa_frame(void)
         btc_a2dp_source_prep_2_send(nb_frame_2_send);
     }
 
-    /* send it */
-    BTC_TRACE_VERBOSE("%s: send %d frames", __FUNCTION__, nb_frame_2_send);
+    BTC_TRACE_VERBOSE("%s: send %d new frames", __FUNCTION__, nb_frame_2_send);
+
     bta_av_ci_src_data_ready(BTA_AV_CHNL_AUDIO);
 }
 
@@ -1538,8 +1534,8 @@ static void btc_a2dp_source_aa_stop_tx(void)
        when the DUT and the remote device issue SUSPEND simultaneously
        and due to the processing of the SUSPEND request from the remote,
        the media path is torn down. If the A2DP HAL happens to wait
-       for ACK for the initiated SUSPEND, it would never receive it casuing
-       a block/wait. Due to this acknowledgement, the A2DP HAL is guranteed
+       for ACK for the initiated SUSPEND, it would never receive it causing
+       a block/wait. Due to this acknowledgement, the A2DP HAL is guaranteed
        to get the ACK for any pending command in such cases. */
 
     if (send_ack) {
@@ -1646,4 +1642,4 @@ static void btc_a2dp_source_thread_cleanup(UNUSED_ATTR void *context)
     a2dp_source_local_param.btc_aa_src_cb.poll_data = NULL;
 }
 
-#endif /* BTC_AV_INCLUDED */
+#endif /* (BTC_AV_SRC_INCLUDED == TRUE) && (BTC_AV_EXT_CODEC == FALSE) */

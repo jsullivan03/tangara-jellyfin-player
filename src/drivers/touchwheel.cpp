@@ -36,6 +36,15 @@ auto TouchWheel::isAngleWithin(int16_t wheel_angle,
 }
 
 TouchWheel::TouchWheel() {
+  i2c_device_config_t config = {
+      .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+      .device_address = kTouchWheelAddress,
+      .scl_speed_hz = 400'000,
+      .scl_wait_us = 0,
+      .flags = {.disable_ack_check = false},
+  };
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_handle(), &config, &i2c_));
+
   gpio_config_t int_config{
       .pin_bit_mask = 1ULL << kIntPin,
       .mode = GPIO_MODE_INPUT,
@@ -78,32 +87,20 @@ TouchWheel::~TouchWheel() {}
 void TouchWheel::WriteRegister(uint8_t reg, uint8_t val) {
   // Addresses <= 5 are not writeable. Make sure we don't try.
   assert(reg > 5);
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kTouchWheelAddress, I2C_MASTER_WRITE)
-      .write_ack(reg, val)
-      .stop();
-  esp_err_t res = transaction.Execute(1);
+  uint8_t cmd[] = {static_cast<uint8_t>(reg), val};
+  esp_err_t res = i2c_master_transmit(i2c_, cmd, 2, 100);
   if (res != ESP_OK) {
     ESP_LOGW(kTag, "write failed: %s", esp_err_to_name(res));
   }
 }
 
 uint8_t TouchWheel::ReadRegister(uint8_t reg) {
-  uint8_t res;
-  I2CTransaction transaction;
-  transaction.start()
-      .write_addr(kTouchWheelAddress, I2C_MASTER_WRITE)
-      .write_ack(reg)
-      .start()
-      .write_addr(kTouchWheelAddress, I2C_MASTER_READ)
-      .read(&res, I2C_MASTER_NACK)
-      .stop();
-  if (transaction.Execute(1) == ESP_OK) {
-    return res;
-  } else {
+  uint8_t cmd[] = {static_cast<uint8_t>(reg)};
+  uint8_t data[] = {0};
+  if (i2c_master_transmit_receive(i2c_, cmd, 1, data, 1, 100) != ESP_OK) {
     return 0;
   }
+  return data[0];
 }
 
 void TouchWheel::Update() {
