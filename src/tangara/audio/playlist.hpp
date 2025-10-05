@@ -44,7 +44,8 @@ class Playlist {
   auto next() -> void;
   auto prev() -> void;
   auto skipTo(size_t position) -> void;
-  auto at(size_t position) -> std::string;
+
+  auto writeToFile(const std::string& filepath) -> bool;
 
   auto serialiseCache() -> bool;
   auto deserialiseCache() -> bool;

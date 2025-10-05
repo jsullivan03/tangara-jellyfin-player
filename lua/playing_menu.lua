@@ -33,7 +33,6 @@ function get_new_playlist_file()
     filename = prefix..index..suffix 
     index = index + 1
   until not file_exists(filename)
-  print(filename)
   return filename
 end
 
