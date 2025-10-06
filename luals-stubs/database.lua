@@ -8,6 +8,8 @@
 --- the device's LevelDB-backed track database.
 --- @class database
 --- @field updating Property Whether or not a database re-index is currently in progress.
+--- @field auto_update Property Whether to automatically re-index when the SD card is mounted.
+--- @field skip_verification Property Whether or not existing tracks are verified when updating the database.
 local database = {}
 
 --- Returns a list of all indexes in the database.
