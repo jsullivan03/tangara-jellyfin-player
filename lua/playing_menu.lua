@@ -13,6 +13,7 @@ local screen = require("screen")
 local theme = require("theme")
 local track_info = require("track_info")
 local styles = require("styles")
+local filesystem = require("filesystem")
 
 function file_exists(file) 
   local found = false;
@@ -153,6 +154,14 @@ return screen:new {
 
     local save_btn = menu_items:add_btn(nil, "Save Queue As New Playlist")
     save_btn:onClicked(function()
+      -- Check that playlist directory exists, if not, create it
+      if not filesystem.chkdir("Playlists") then
+        local res = filesystem.mkdir("Playlists")
+        if not res then
+          widgets.PopUp("Failed to create playlists directory!")
+          return
+        end
+      end
       local playlist_file = get_new_playlist_file()
       local saved = queue.save_to_playlist(playlist_file)
       if saved then
