@@ -86,7 +86,8 @@ class Database {
   auto setTrackData(TrackId id, const TrackData& data) -> void;
 
   auto getIndexes() -> std::vector<IndexInfo>;
-  auto updateIndexes() -> void;
+  auto updateIndexes(std::optional<bool> skip_verify) -> void;
+  auto updateIndexes() -> void { updateIndexes({}); }
   auto isUpdating() -> bool;
 
   // Cannot be copied or moved.

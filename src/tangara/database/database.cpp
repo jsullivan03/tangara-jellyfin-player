@@ -348,7 +348,7 @@ auto Database::UpdateTracker::onTrackAdded() -> void {
   num_new_tracks_++;
 }
 
-auto Database::updateIndexes() -> void {
+auto Database::updateIndexes(std::optional<bool> skip_verify) -> void {
   if (is_updating_.exchange(true)) {
     return;
   }
@@ -361,8 +361,8 @@ auto Database::updateIndexes() -> void {
   read_options.verify_checksums = true;
 
   // Stage 1: verify all existing tracks are still valid.
-  ESP_LOGI(kTag, "verifying existing tracks");
-  if (!nvs_.DbSkipVerification()) {
+  if (!skip_verify.value_or(nvs_.DbSkipVerification())) {
+    ESP_LOGI(kTag, "verifying existing tracks");
     std::unique_ptr<leveldb::Iterator> it{db_->NewIterator(read_options)};
     std::string prefix = EncodeDataPrefix();
     for (it->Seek(prefix); it->Valid() && it->key().starts_with(prefix);

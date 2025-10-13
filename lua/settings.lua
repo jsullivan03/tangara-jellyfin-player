@@ -726,15 +726,6 @@ settings.DatabaseSettings = SettingsScreen:new {
     local auto_update_sw = auto_update_container:Switch {}
     local auto_update_desc = widgets.Description(auto_update_sw, "Auto update")
 
-    auto_update_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
-      database.auto_update:set(auto_update_sw:enabled())
-      if auto_update_sw:enabled() then
-        auto_update_desc:set({ text = "Disable auto-update" })
-      else
-        auto_update_desc:set({ text = "Enable auto-update" })
-      end
-    end)
-
     local only_new_files_container = self.content:Object {
       flex = {
         flex_direction = "row",
@@ -751,6 +742,17 @@ settings.DatabaseSettings = SettingsScreen:new {
     local skip_verification_sw = only_new_files_container:Switch {}
     local skip_verification_desc = widgets.Description(auto_update_sw, "Only scan new files")
 
+    auto_update_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+      database.auto_update:set(auto_update_sw:enabled())
+      if auto_update_sw:enabled() then
+        only_new_files_container:clear_flag(lvgl.FLAG.HIDDEN)
+        auto_update_desc:set({ text = "Disable auto-update" })
+      else
+        only_new_files_container:add_flag(lvgl.FLAG.HIDDEN)
+        auto_update_desc:set({ text = "Enable auto-update" })
+      end
+    end)
+
     skip_verification_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       database.skip_verification:set(skip_verification_sw:enabled())
       if skip_verification_sw:enabled() then
@@ -764,22 +766,29 @@ settings.DatabaseSettings = SettingsScreen:new {
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
       flex = {
-        flex_direction = "row",
+        flex_direction = "column",
         justify_content = "center",
-        align_items = "space-evenly",
+        align_items = "center",
         align_content = "center",
       },
       pad_top = 4,
       pad_column = 4,
+      pad_row = 4,
     }
     actions_container:add_style(styles.list_item)
 
     local update = actions_container:Button {}
-    update:Label { text = "Update now" }
+    update:Label { text = "Scan all tracks" }
     update:onClicked(function()
-      database.update()
+      database.update(false)
     end)
     update:focus()
+
+    local update_skip = actions_container:Button {}
+    update_skip:Label { text = "Scan for new tracks" }
+    update_skip:onClicked(function()
+      database.update(true)
+    end)
 
     self.bindings = self.bindings + {
       database.auto_update:bind(function(en)
