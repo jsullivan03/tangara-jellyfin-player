@@ -29,6 +29,10 @@ function queue.add(val) end
 --- @param filepath string
 function queue.open_playlist(filepath) end
 
+--- Saves the current queue to a playlist file
+--- @param filepath string
+function queue.save_to_playlist(filepath) end
+
 --- Removes all tracks from the queue.
 function queue.clear() end
 

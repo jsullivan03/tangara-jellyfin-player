@@ -8,6 +8,8 @@
 #include <string>
 #include <cstring>
 #include "lauxlib.h"
+#include "ff.h"
+
 
 namespace lua {
 
@@ -160,7 +162,33 @@ static auto fs_new_iterator(lua_State* state) -> int {
   return 1;
 }
 
+static auto fs_chkdir(lua_State* state) -> int {
+  // Checks if a directory exists
+  std::string path = luaL_checkstring(state, -1);
+  FF_DIR dir;
+  FRESULT res = f_opendir(&dir, path.c_str());
+  f_closedir(&dir);
+  lua_pushboolean(state, res == FR_OK);
+  return 1;
+}
+
+static auto fs_mkdir(lua_State* state) -> int {
+  // Creates a directory 
+  std::string path = luaL_checkstring(state, -1);
+  FRESULT res = f_mkdir(path.c_str());
+  if (res != FR_OK) {
+    lua_pushboolean(state, false);
+    return 1;
+  }
+
+  lua_pushboolean(state, true);
+  return 1;
+
+}
+
 static const struct luaL_Reg kFilesystemFuncs[] = {{"iterator", fs_new_iterator},
+                                                  {"mkdir", fs_mkdir},
+                                                  {"chkdir", fs_chkdir},
                                                  {NULL, NULL}};
 
 static auto lua_filesystem(lua_State* state) -> int {

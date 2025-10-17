@@ -623,4 +623,15 @@ auto TrackQueue::deserialise(const std::string& s) -> void {
   notifyChanged(true, Reason::kDeserialised);
 }
 
+auto TrackQueue::saveToNewPlaylist(const std::string& playlist_file) -> bool {
+  const std::shared_lock<std::shared_mutex> lock(mutex_);
+  if (opened_playlist_) {
+    bool res = opened_playlist_->writeToFile(playlist_file);
+    if (!res) {
+      return false;
+    }
+  }
+  return playlist_.writeToFile(playlist_file);
+}
+
 }  // namespace audio

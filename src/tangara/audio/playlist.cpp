@@ -106,6 +106,59 @@ auto Playlist::skipTo(size_t position) -> void {
   skipToLocked(position);
 }
 
+auto Playlist::writeToFile(const std::string& filepath) -> bool {
+  std::unique_lock<std::mutex> lock(mutex_);
+  uint8_t buffer[2048];
+  // Open the playlist file again for reading
+  FIL infile;
+  FRESULT inres =
+      f_open(&infile, filepath_.c_str(), FA_READ);
+  if (inres != FR_OK) {
+    ESP_LOGE(kTag, "failed to open playlist file for reading! res: %i", inres);
+    f_close(&infile);
+    return false;
+  }
+  FIL outfile;
+  FRESULT outres =
+      f_open(&outfile, filepath.c_str(), FA_WRITE | FA_OPEN_APPEND);
+  if (outres != FR_OK) {
+    ESP_LOGE(kTag, "failed to open playlist file for writing! res: %i", outres);
+    f_close(&outfile);
+    return false;
+  }
+  auto size_before = f_size(&outfile);
+  bool error = false;
+  while (true) {
+    UINT bytes_read;
+    FRESULT read_res = f_read(&infile, buffer, sizeof buffer, &bytes_read);
+    if (read_res != FR_OK) {
+      error = true;
+      break;
+    }
+    if (bytes_read == 0) {
+      break; // EOF, no error
+    }
+    UINT bytes_written;
+    FRESULT write_res = f_write(&outfile, buffer, bytes_read, &bytes_written);
+    if (write_res != FR_OK || bytes_read > bytes_written) {
+      error = true;
+      break;
+    }
+  }
+
+  auto size_now = f_size(&outfile);
+  auto infile_size = f_size(&infile);
+  if (size_now - size_before < infile_size) {
+    ESP_LOGE(kTag, "Sizes not matching? Size before: %lu, Size after: %lu, Infile Size: %lu",
+    size_before, size_now, infile_size);
+    error = true;
+  }
+
+  f_close(&infile);
+  f_close(&outfile);
+  return (!error);
+}
+
 // Serialise the cache to a file to avoid having to rescan
 // the entire queue when resuming
 auto Playlist::serialiseCache() -> bool {
