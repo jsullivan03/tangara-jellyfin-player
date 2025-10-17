@@ -160,8 +160,13 @@ static auto update(lua_State* L) -> int {
     return 0;
   }
 
+  std::optional<bool> skip_verify;
+  if (lua_gettop(L) == 2) {
+    skip_verify = lua_toboolean(L, 1);
+  }
+
   instance->services().bg_worker().Dispatch<void>(
-      [=]() { db->updateIndexes(); });
+      [=]() { db->updateIndexes(skip_verify); });
   return 0;
 }
 
@@ -190,8 +195,8 @@ static const struct luaL_Reg kDatabaseFuncs[] = {
     {"update", update},   {"track_by_id", track_by_id},
     {NULL, NULL}};
 
-static auto push_lua_record(lua_State* state,
-                            const database::Record& r) -> void {
+static auto push_lua_record(lua_State* state, const database::Record& r)
+    -> void {
   database::Record** data = reinterpret_cast<database::Record**>(
       lua_newuserdata(state, sizeof(uintptr_t)));
   *data = new database::Record(r);
@@ -216,8 +221,8 @@ auto db_check_iterator(lua_State* L, int stack_pos) -> database::Iterator* {
   return it;
 }
 
-static auto push_iterator(lua_State* state,
-                          const database::Iterator& it) -> void {
+static auto push_iterator(lua_State* state, const database::Iterator& it)
+    -> void {
   database::Iterator** data = reinterpret_cast<database::Iterator**>(
       lua_newuserdata(state, sizeof(uintptr_t)));
   *data = new database::Iterator(it);
@@ -275,11 +280,13 @@ static auto db_iterator_gc(lua_State* state) -> int {
   return 0;
 }
 
-static const struct luaL_Reg kDbIteratorFuncs[] = {
-    {"next", db_iterate},         {"prev", db_iterate_prev},
-    {"clone", db_iterator_clone}, {"__call", db_iterate},
-    {"__gc", db_iterator_gc},     {"value", db_iterator_value},
-    {NULL, NULL}};
+static const struct luaL_Reg kDbIteratorFuncs[] = {{"next", db_iterate},
+                                                   {"prev", db_iterate_prev},
+                                                   {"clone", db_iterator_clone},
+                                                   {"__call", db_iterate},
+                                                   {"__gc", db_iterator_gc},
+                                                   {"value", db_iterator_value},
+                                                   {NULL, NULL}};
 
 static auto record_text(lua_State* state) -> int {
   database::Record* rec = db_check_record(state, 1);

@@ -140,6 +140,7 @@ class UiState : public tinyfsm::Fsm<UiState> {
 
   static lua::Property sDatabaseUpdating;
   static lua::Property sDatabaseAutoUpdate;
+  static lua::Property sDatabaseSkipVerification;
 
   static lua::Property sSdMounted;
 

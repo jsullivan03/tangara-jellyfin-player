@@ -193,8 +193,9 @@ void Running::react(const internal::Mount& ev) {
   sStorage.reset(storage_res.value());
 
   ESP_LOGI(kTag, "opening database");
-  auto database_res = database::Database::Open(
-      sServices->tag_parser(), sServices->collator(), sServices->bg_worker());
+  auto database_res =
+      database::Database::Open(sServices->tag_parser(), sServices->collator(),
+                               sServices->bg_worker(), sServices->nvs());
   if (database_res.has_error()) {
     unmountStorage();
     return;

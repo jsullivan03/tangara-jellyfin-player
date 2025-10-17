@@ -46,6 +46,7 @@ static constexpr char kKeyDisplayLeftPadding[] = "displeftpad";
 static constexpr char kKeyHapticMotorType[] = "hapticmtype";
 static constexpr char kKeyLraCalibration[] = "lra_cali";
 static constexpr char kKeyDbAutoIndex[] = "dbautoindex";
+static constexpr char kKeyDbSkipVerification[] = "dbskipverify";
 static constexpr char kKeyQueueRepeatMode[] = "queue_rpt";
 static constexpr char kKeyFastCharge[] = "fastchg";
 
@@ -287,6 +288,7 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       bt_preferred_(kKeyBluetoothPreferred),
       bt_names_(kKeyBluetoothNames),
       db_auto_index_(kKeyDbAutoIndex),
+      db_skip_verification_(kKeyDbSkipVerification),
       queue_repeat_mode_(kKeyQueueRepeatMode),
       bt_volumes_(),
       bt_volumes_dirty_(false) {}
@@ -320,6 +322,7 @@ auto NvsStorage::Read() -> void {
   bt_preferred_.read(handle_);
   bt_names_.read(handle_);
   db_auto_index_.read(handle_);
+  db_skip_verification_.read(handle_);
   queue_repeat_mode_.read(handle_);
   readBtVolumes();
 }
@@ -348,6 +351,7 @@ auto NvsStorage::Write() -> bool {
   bt_preferred_.write(handle_);
   bt_names_.write(handle_);
   db_auto_index_.write(handle_);
+  db_skip_verification_.write(handle_);
   queue_repeat_mode_.write(handle_);
   writeBtVolumes();
   return nvs_commit(handle_) == ESP_OK;
@@ -511,7 +515,8 @@ auto NvsStorage::OutputMode(Output out) -> void {
 
 auto NvsStorage::HapticsMode() -> HapticsModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  int val = haptics_mode_.get().value_or(static_cast<uint8_t>(HapticsModes::kMinimal));
+  int val = haptics_mode_.get().value_or(
+      static_cast<uint8_t>(HapticsModes::kMinimal));
   return intToHapticsMode(val);
 }
 
@@ -532,7 +537,6 @@ auto NvsStorage::HapticsMode(HapticsModes mode) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   haptics_mode_.set(static_cast<uint8_t>(mode));
 }
-
 
 auto NvsStorage::FastCharge() -> bool {
   std::lock_guard<std::mutex> lock{mutex_};
@@ -642,7 +646,8 @@ auto NvsStorage::WheelInput(WheelInputModes mode) -> void {
 
 auto NvsStorage::ButtonInput() -> ButtonInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (button_input_mode_.get().value_or(static_cast<uint8_t>(ButtonInputModes::kVolumeOnly))) {
+  switch (button_input_mode_.get().value_or(
+      static_cast<uint8_t>(ButtonInputModes::kVolumeOnly))) {
     case static_cast<uint8_t>(ButtonInputModes::kDisabled):
       return ButtonInputModes::kDisabled;
     case static_cast<uint8_t>(ButtonInputModes::kVolumeOnly):
@@ -663,7 +668,8 @@ auto NvsStorage::ButtonInput(ButtonInputModes mode) -> void {
 
 auto NvsStorage::LockedInput() -> ButtonInputModes {
   std::lock_guard<std::mutex> lock{mutex_};
-  switch (locked_input_mode_.get().value_or(static_cast<uint8_t>(ButtonInputModes::kDisabled))) {
+  switch (locked_input_mode_.get().value_or(
+      static_cast<uint8_t>(ButtonInputModes::kDisabled))) {
     case static_cast<uint8_t>(ButtonInputModes::kDisabled):
       return ButtonInputModes::kDisabled;
     case static_cast<uint8_t>(ButtonInputModes::kVolumeOnly):
@@ -671,7 +677,7 @@ auto NvsStorage::LockedInput() -> ButtonInputModes {
     case static_cast<uint8_t>(ButtonInputModes::kMediaControls):
       return ButtonInputModes::kMediaControls;
     case static_cast<uint8_t>(ButtonInputModes::kNavigation):
-      return ButtonInputModes::kNavigation; 
+      return ButtonInputModes::kNavigation;
     default:
       return ButtonInputModes::kDisabled;
   }
@@ -700,6 +706,16 @@ auto NvsStorage::DbAutoIndex() -> bool {
 auto NvsStorage::DbAutoIndex(bool en) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   db_auto_index_.set(static_cast<uint8_t>(en));
+}
+
+auto NvsStorage::DbSkipVerification() -> bool {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return db_skip_verification_.get().value_or(false);
+}
+
+auto NvsStorage::DbSkipVerification(bool en) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  db_skip_verification_.set(static_cast<uint8_t>(en));
 }
 
 class VolumesParseClient : public cppbor::ParseClient {

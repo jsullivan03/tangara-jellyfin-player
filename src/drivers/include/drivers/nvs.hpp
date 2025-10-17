@@ -172,6 +172,9 @@ class NvsStorage {
   auto DbAutoIndex() -> bool;
   auto DbAutoIndex(bool) -> void;
 
+  auto DbSkipVerification() -> bool;
+  auto DbSkipVerification(bool) -> void;
+
   explicit NvsStorage(nvs_handle_t);
   ~NvsStorage();
 
@@ -208,6 +211,7 @@ class NvsStorage {
   Setting<std::vector<bluetooth::MacAndName>> bt_names_;
 
   Setting<uint8_t> db_auto_index_;
+  Setting<uint8_t> db_skip_verification_;
 
   Setting<uint8_t> queue_repeat_mode_;
 
