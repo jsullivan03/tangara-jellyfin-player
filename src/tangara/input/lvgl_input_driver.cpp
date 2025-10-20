@@ -126,7 +126,8 @@ LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
             }
             // Ensure we don't remove the only navigation control
             if (*mode != drivers::NvsStorage::ButtonInputModes::kNavigation &&
-                nvs.WheelInput() == drivers::NvsStorage::WheelInputModes::kDisabled) {
+                nvs.WheelInput() ==
+                    drivers::NvsStorage::WheelInputModes::kDisabled) {
               return false;
             }
             nvs.ButtonInput(*mode);
@@ -146,14 +147,25 @@ LvglInputDriver::LvglInputDriver(drivers::NvsStorage& nvs,
                      return true;
                    }),
       haptics_mode_(static_cast<int>(nvs.HapticsMode()),
-            [&](const lua::LuaValue& val) {
-              if (!std::holds_alternative<int>(val)) {
-                return false;
-              }
-              auto mode = drivers::NvsStorage::intToHapticsMode(std::get<int>(val));
-              nvs.HapticsMode(mode);
-              return true;
-            }),
+                    [&](const lua::LuaValue& val) {
+                      if (!std::holds_alternative<int>(val)) {
+                        return false;
+                      }
+                      auto mode = drivers::NvsStorage::intToHapticsMode(
+                          std::get<int>(val));
+                      nvs.HapticsMode(mode);
+                      return true;
+                    }),
+      long_text_mode_(static_cast<int>(nvs.LongTextMode()),
+                      [&](const lua::LuaValue& val) {
+                        if (!std::holds_alternative<int>(val)) {
+                          return false;
+                        }
+                        auto mode = drivers::NvsStorage::intToLongTextMode(
+                            std::get<int>(val));
+                        nvs.LongTextMode(mode);
+                        return true;
+                      }),
       inputs_(factory.createInputs()),
       feedbacks_(factory.createFeedbacks()),
       is_locked_(false) {
@@ -187,7 +199,7 @@ auto LvglInputDriver::read(lv_indev_data_t* data) -> void {
   for (auto&& device : inputs_) {
     device->read(data, events);
   }
-  for (auto event: events) {
+  for (auto event : events) {
     for (auto&& device : feedbacks_) {
       device->feedback(lv_indev_get_group(device_), event);
     }

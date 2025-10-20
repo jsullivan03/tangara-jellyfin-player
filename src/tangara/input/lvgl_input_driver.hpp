@@ -39,6 +39,7 @@ class LvglInputDriver {
   auto buttonMode() -> lua::Property& { return button_mode_; }
   auto lockedMode() -> lua::Property& { return locked_mode_; }
   auto hapticsMode() -> lua::Property& { return haptics_mode_; }
+  auto longTextMode() -> lua::Property& { return long_text_mode_; }
 
   auto setGroup(lv_group_t*) -> void;
   auto read(lv_indev_data_t* data) -> void;
@@ -55,6 +56,7 @@ class LvglInputDriver {
   lua::Property button_mode_;
   lua::Property locked_mode_;
   lua::Property haptics_mode_;
+  lua::Property long_text_mode_;
   lv_indev_t* device_;
 
   std::vector<std::shared_ptr<IInputDevice>> inputs_;

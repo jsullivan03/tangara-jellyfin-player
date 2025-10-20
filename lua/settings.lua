@@ -19,6 +19,7 @@ local main_menu = require("main_menu")
 local img = require("images")
 local nvs = require("nvs")
 local sd_card = require("sd_card")
+local playing_screen_settings = require("playing_screen_settings")
 
 local settings = {}
 
@@ -360,6 +361,72 @@ settings.DisplaySettings = SettingsScreen:new {
   end
 }
 
+settings.PlayingScreenSettings = SettingsScreen:new{
+  title = "Playing Screen Options",
+  create_ui = function(self)
+    SettingsScreen.create_ui(self)
+
+    -- Use the playing scheme enum lists to generate the relevant dropdowns
+    local make_scheme_playing_screen_setting = function(self, scheme_list, playing_screen_setting_scheme)
+      local option_to_scheme = {}
+      local scheme_to_option = {}
+      local option_idx = 0
+      local options = ""
+
+      -- Sort the keys to order the dropdowns the same as the enums
+      keys = {}
+      for i in pairs(scheme_list) do table.insert(keys, i) end
+      table.sort(keys)
+
+      for i, k in pairs(keys) do
+        v = scheme_list[k]
+
+        option_to_scheme[option_idx] = k
+        scheme_to_option[k] = option_idx
+        if option_idx > 0 then
+          options = options .. "\n"
+        end
+        options = options .. v
+        option_idx = option_idx + 1
+      end
+
+      local playing_screen_settings_chooser = self.content:Dropdown{
+        options = options,
+        symbol = img.chevron
+      }
+
+      -- TODO: This is the bullshit s is empty
+      self.bindings = self.bindings + {
+        playing_screen_setting_scheme:bind(function(s)
+          local option = scheme_to_option[s]
+          playing_screen_settings_chooser:set({ selected = option })
+        end)
+      }
+
+      playing_screen_settings_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+        local option = playing_screen_settings_chooser:get('selected')
+        local scheme = option_to_scheme[option]
+        local prev_scheme = playing_screen_setting_scheme:get()
+        -- Check the new scheme is valid
+        if not playing_screen_setting_scheme:set(scheme) then
+          widgets.PopUp("Playing options not valid")
+          playing_screen_setting_scheme:set(prev_scheme)
+        end
+      end)
+
+      return playing_screen_settings_chooser
+    end
+
+    theme.set_subject(self.content:Label{
+      text="Long Text Mode",
+    }, "settings_title")
+    local playing_screen_settings_chooser = make_scheme_playing_screen_setting(self, playing_screen_settings.long_text_schemes(), playing_screen_settings.long_text_scheme)
+    local playing_screen_settings_desc = widgets.Description(playing_screen_settings_chooser, "Playing Screen Settings scheme")
+
+    playing_screen_settings_chooser:focus()
+    end
+}
+
 settings.ThemeSettings = SettingsScreen:new {
   title = "Theme",
   create_ui = function(self)
@@ -438,7 +505,7 @@ settings.ThemeSettings = SettingsScreen:new {
     local theme_reload_btn = theme_container:Button {}
     theme_reload_btn:Label { text = "Reload" }
     theme_reload_btn:onClicked(theme_reload)
-  end
+    end
 }
 
 settings.InputSettings = SettingsScreen:new {
@@ -499,6 +566,7 @@ settings.InputSettings = SettingsScreen:new {
     theme.set_subject(self.content:Label {
       text = "Wheel Controls",
     }, "settings_title")
+
     local controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
     local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
 
@@ -1091,6 +1159,7 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Display", settings.DisplaySettings)
     submenu("Theme", settings.ThemeSettings)
     submenu("Input Method", settings.InputSettings)
+    submenu("Playing Screen", settings.PlayingScreenSettings)
 
     section("Storage")
     submenu("SD Card", settings.SDSettings)

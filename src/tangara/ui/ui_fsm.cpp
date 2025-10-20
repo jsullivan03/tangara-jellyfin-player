@@ -732,6 +732,12 @@ void Lua::entry() {
     }
 
     registry.AddPropertyModule(
+        "playing_screen_settings",
+        {
+            {"long_text_scheme", &sInput->longTextMode()},
+        });
+
+    registry.AddPropertyModule(
         "backstack",
         {
             {"push", [&](lua_State* s) { return PushLuaScreen(s, false); }},
