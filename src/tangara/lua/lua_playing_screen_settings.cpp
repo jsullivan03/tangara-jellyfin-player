@@ -31,9 +31,9 @@ static auto long_text_schemes(lua_State* L) -> int {
   lua_rawseti(L, -2,
               static_cast<int>(drivers::NvsStorage::LongTextModes::kDefault));
 
-  lua_pushliteral(L, "Truncate");
+  lua_pushliteral(L, "Ellipsize");
   lua_rawseti(L, -2,
-              static_cast<int>(drivers::NvsStorage::LongTextModes::kTruncate));
+              static_cast<int>(drivers::NvsStorage::LongTextModes::kEllipsize));
 
   lua_pushliteral(L, "Scroll");
   lua_rawseti(L, -2,

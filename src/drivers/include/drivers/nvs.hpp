@@ -124,7 +124,7 @@ class NvsStorage {
 
   enum class LongTextModes : uint8_t {
     kDefault = 0,
-    kTruncate = 1,
+    kEllipsize = 1,
     kScroll = 2,
     kScrollCircular = 3,
     kClip = 4,

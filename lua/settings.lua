@@ -395,7 +395,6 @@ settings.PlayingScreenSettings = SettingsScreen:new{
         symbol = img.chevron
       }
 
-      -- TODO: This is the bullshit s is empty
       self.bindings = self.bindings + {
         playing_screen_setting_scheme:bind(function(s)
           local option = scheme_to_option[s]

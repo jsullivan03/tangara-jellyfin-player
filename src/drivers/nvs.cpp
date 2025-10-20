@@ -556,8 +556,8 @@ auto NvsStorage::intToLongTextMode(int raw) -> LongTextModes {
   switch (raw) {
     case static_cast<int>(LongTextModes::kDefault):
       return LongTextModes::kDefault;
-    case static_cast<int>(LongTextModes::kTruncate):
-      return LongTextModes::kTruncate;
+    case static_cast<int>(LongTextModes::kEllipsize):
+      return LongTextModes::kEllipsize;
     case static_cast<int>(LongTextModes::kScroll):
       return LongTextModes::kScroll;
     case static_cast<int>(LongTextModes::kScrollCircular):
