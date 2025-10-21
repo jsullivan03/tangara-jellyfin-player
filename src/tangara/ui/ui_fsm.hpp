@@ -56,6 +56,8 @@ class UiState : public tinyfsm::Fsm<UiState> {
   void react(const tinyfsm::Event& ev) {}
 
   void react(const Screenshot&);
+  void react(const SeekBack&);
+
   virtual void react(const OnLuaError&) {}
   virtual void react(const DumpLuaStack&) {}
   virtual void react(const internal::BackPressed&) {}
@@ -78,12 +80,12 @@ class UiState : public tinyfsm::Fsm<UiState> {
   void react(const internal::DismissAlerts&);
 
   void react(const database::event::UpdateStarted&);
-  void react(const database::event::UpdateProgress&){};
+  void react(const database::event::UpdateProgress&) {};
   void react(const database::event::UpdateFinished&);
 
   void react(const system_fsm::BluetoothEvent&);
 
-  void react(const internal::ReindexDatabase&){};
+  void react(const internal::ReindexDatabase&) {};
 
  protected:
   void PushScreen(std::shared_ptr<Screen>, bool);
@@ -138,6 +140,7 @@ class UiState : public tinyfsm::Fsm<UiState> {
 
   static lua::Property sDatabaseUpdating;
   static lua::Property sDatabaseAutoUpdate;
+  static lua::Property sDatabaseSkipVerification;
 
   static lua::Property sSdMounted;
 

@@ -34,6 +34,10 @@ struct Screenshot : tinyfsm::Event {
   std::string filename;
 };
 
+struct SeekBack : tinyfsm::Event {
+  uint32_t seconds;
+};
+
 namespace internal {
 
 struct InitDisplay : tinyfsm::Event {

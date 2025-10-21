@@ -20,6 +20,10 @@
 #ifndef H_BLE_SVC_DIS_
 #define H_BLE_SVC_DIS_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Example:
  *
@@ -42,7 +46,16 @@
 #define BLE_SVC_DIS_CHR_UUID16_HARDWARE_REVISION    0x2A27
 #define BLE_SVC_DIS_CHR_UUID16_SOFTWARE_REVISION    0x2A28
 #define BLE_SVC_DIS_CHR_UUID16_MANUFACTURER_NAME    0x2A29
+#define BLE_SVC_DIS_CHR_UUID16_IEEE_REG_CERT_LIST   0x2A2A
 #define BLE_SVC_DIS_CHR_UUID16_PNP_ID               0x2A50
+#define BLE_SVC_DIS_CHR_UUID16_UDI                  0x2BFF
+
+/* One PTS Case requires DIS to be included. 
+ * The UUID below is randomly chosen.
+ */
+static const ble_uuid128_t ble_svc_dis_include_uuid =
+    BLE_UUID128_INIT(0x2d, 0x71, 0xa2, 0x59, 0xb4, 0x58, 0xc8, 0x12,
+                     0x99, 0x99, 0x43, 0x95, 0x12, 0x2f, 0x46, 0xFF);
 
 /**
  * Structure holding data for the main characteristics
@@ -81,14 +94,26 @@ struct ble_svc_dis_data {
     /**
      * System ID.
      * Represent the System Id of the device.
+     * Length: 8 Octets
      */
     const char *system_id;
 
     /**
      * PNP ID.
      * Represent the PNP Id of the device.
+     * Length: 7 Octets
      */
     const char *pnp_id;
+
+    /**
+     * IEEE 11073-20601 Regulatory Certification Data List
+     */
+    const char *ieee;
+
+    /**
+     * UDI for Medical Devices
+     */
+    const char *udi;
 };
 
 /**
@@ -101,6 +126,11 @@ extern struct ble_svc_dis_data ble_svc_dis_data;
  * Automatically called during package initialisation.
  */
 void ble_svc_dis_init(void);
+
+/**
+ * Service initialisation as an included service.
+ */
+void ble_svc_dis_included_init(void);
 
 const char *ble_svc_dis_model_number(void);
 int ble_svc_dis_model_number_set(const char *value);
@@ -118,5 +148,9 @@ const char *ble_svc_dis_system_id(void);
 int ble_svc_dis_system_id_set(const char *value);
 int ble_svc_dis_pnp_id_set(const char *value);
 const char *ble_svc_dis_pnp_id(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

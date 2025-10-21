@@ -27,8 +27,8 @@
 #include <string.h>
 
 
-/* Stack Configuation Related Init Definaton
- * TODO: Now Just Unmask these defination until stack layer is OK
+/* Stack Configuration Related Init Definaton
+ * TODO: Now Just Unmask these definition until stack layer is OK
  */
 
 #ifndef BTA_INCLUDED
@@ -91,6 +91,15 @@
 #endif
 #endif
 
+#if (defined(OBEX_INCLUDED) && OBEX_INCLUDED == TRUE)
+#include "stack/obex_api.h"
+#endif
+
+#if (defined(GOEPC_INCLUDED) && GOEPC_INCLUDED == TRUE)
+#include "stack/goep_common.h"
+#include "stack/goepc_api.h"
+#endif
+
 //BTA Modules
 #if BTA_INCLUDED == TRUE && BTA_DYNAMIC_MEMORY == TRUE
 #include "bta/bta_api.h"
@@ -147,6 +156,10 @@
 #include "bta_pan_int.h"
 #endif
 
+#if BTA_PBA_CLIENT_INCLUDED == TRUE
+#include "bta_pba_client_int.h"
+#endif
+
 #include "bta_sys_int.h"
 
 // control block for patch ram downloading
@@ -175,6 +188,12 @@ void BTE_DeinitStack(void)
 {
     //BTA Modules
 #if (BTA_INCLUDED == TRUE && BTA_DYNAMIC_MEMORY == TRUE)
+#if BTA_PBA_CLIENT_INCLUDED == TRUE
+    if (bta_pba_client_cb_ptr) {
+        osi_free(bta_pba_client_cb_ptr);
+        bta_pba_client_cb_ptr = NULL;
+    }
+#endif
 #if GATTS_INCLUDED == TRUE
     if (bta_gatts_cb_ptr){
         osi_free(bta_gatts_cb_ptr);
@@ -266,6 +285,14 @@ void BTE_DeinitStack(void)
         bta_sys_cb_ptr = NULL;
     }
 #endif // BTA_INCLUDED == TRUE
+
+#if (defined(GOEPC_INCLUDED) && GOEPC_INCLUDED == TRUE)
+    GOEPC_Deinit();
+#endif
+
+#if (defined(OBEX_INCLUDED) && OBEX_INCLUDED == TRUE)
+    OBEX_Deinit();
+#endif
 
 #if (defined(HID_DEV_INCLUDED) && HID_DEV_INCLUDED == TRUE)
     HID_DevDeinit();
@@ -388,6 +415,18 @@ bt_status_t BTE_InitStack(void)
     MCA_Init();
 #endif
 
+#if (defined(OBEX_INCLUDED) && OBEX_INCLUDED == TRUE)
+    if (OBEX_Init() != OBEX_SUCCESS) {
+        goto error_exit;
+    }
+#endif
+
+#if (defined(GOEPC_INCLUDED) && GOEPC_INCLUDED == TRUE)
+    if (GOEPC_Init() != GOEP_SUCCESS) {
+        goto error_exit;
+    }
+#endif
+
     //BTA Modules
 #if (BTA_INCLUDED == TRUE && BTA_DYNAMIC_MEMORY == TRUE)
     if ((bta_sys_cb_ptr = (tBTA_SYS_CB *)osi_malloc(sizeof(tBTA_SYS_CB))) == NULL) {
@@ -491,6 +530,12 @@ bt_status_t BTE_InitStack(void)
 #endif
 #if BTA_PAN_INCLUDED==TRUE
     memset((void *)bta_pan_cb_ptr, 0, sizeof(tBTA_PAN_CB));
+#endif
+#if BTA_PBA_CLIENT_INCLUDED == TRUE
+    if ((bta_pba_client_cb_ptr = (tBTA_PBA_CLIENT_CB *)osi_malloc(sizeof(tBTA_PBA_CLIENT_CB))) == NULL) {
+        goto error_exit;
+    }
+    memset((void *)bta_pba_client_cb_ptr, 0, sizeof(tBTA_PBA_CLIENT_CB));
 #endif
 
 #endif // BTA_INCLUDED == TRUE

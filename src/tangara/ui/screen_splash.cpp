@@ -14,6 +14,8 @@
 #include "misc/lv_color.h"
 #include "misc/lv_style.h"
 
+#include "esp_app_desc.h"
+
 LV_IMG_DECLARE(splash);
 
 namespace ui {
@@ -26,6 +28,10 @@ Splash::Splash() {
   lv_obj_set_style_bg_color(logo, lv_color_black(), 0);
   lv_img_set_src(logo, &splash);
   lv_obj_center(logo);
+
+  lv_obj_t* version_label = lv_label_create(root_);
+  lv_label_set_text(version_label, esp_app_get_description()->version);
+  lv_obj_align(version_label, LV_ALIGN_CENTER, 0, 30);
 }
 
 Splash::~Splash() {}

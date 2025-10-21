@@ -40,8 +40,18 @@ static auto wheel_schemes(lua_State* L) -> int {
 
   lua_pushliteral(L, "Touchwheel");
   lua_rawseti(
+<<<<<<< HEAD
       L, -2,
       static_cast<int>(drivers::NvsStorage::WheelInputModes::kRotatingWheel));
+||||||| 05c1dd8e
+      L, -2, static_cast<int>(drivers::NvsStorage::WheelInputModes::kRotatingWheel));
+=======
+    L, -2, static_cast<int>(drivers::NvsStorage::WheelInputModes::kRotatingWheel));
+
+  lua_pushliteral(L, "Wheel with Buttons");
+  lua_rawseti(L, -2,
+              static_cast<int>(drivers::NvsStorage::WheelInputModes::kWheelWithButtons));
+>>>>>>> main
 
   return 1;
 }

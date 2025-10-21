@@ -416,6 +416,9 @@ auto GenericTagParser::ReadAndParseTags(std::string_view p)
     case Fwavpack:
       out->encoding(Container::kWavPack);
       break;
+    case Falac:
+      out->encoding(Container::kAlac);
+      break;
     default:
       out->encoding(Container::kUnsupported);
   }

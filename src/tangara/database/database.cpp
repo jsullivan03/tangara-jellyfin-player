@@ -23,6 +23,7 @@
 #include "cppbor.h"
 #include "cppbor_parse.h"
 #include "debug.hpp"
+#include "drivers/nvs.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "ff.h"
@@ -68,8 +69,8 @@ static std::atomic<bool> sIsDbOpen(false);
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-static auto CreateNewDatabase(leveldb::Options& options,
-                              locale::ICollator& col) -> leveldb::DB* {
+static auto CreateNewDatabase(leveldb::Options& options, locale::ICollator& col)
+    -> leveldb::DB* {
   Database::Destroy();
   leveldb::DB* db;
   options.create_if_missing = true;
@@ -128,7 +129,8 @@ static auto CheckDatabase(leveldb::DB& db, locale::ICollator& col) -> bool {
 
 auto Database::Open(ITagParser& parser,
                     locale::ICollator& collator,
-                    tasks::WorkerPool& bg_worker)
+                    tasks::WorkerPool& bg_worker,
+                    drivers::NvsStorage& nvs)
     -> cpp::result<Database*, DatabaseError> {
   if (sIsDbOpen.exchange(true)) {
     return cpp::fail(DatabaseError::ALREADY_OPEN);
@@ -172,7 +174,7 @@ auto Database::Open(ITagParser& parser,
 
             ESP_LOGI(kTag, "Database opened successfully");
             return new Database(db, cache.release(), bg_worker, parser,
-                                collator);
+                                collator, nvs);
           })
       .get();
 }
@@ -187,7 +189,8 @@ Database::Database(leveldb::DB* db,
                    leveldb::Cache* cache,
                    tasks::WorkerPool& pool,
                    ITagParser& tag_parser,
-                   locale::ICollator& collator)
+                   locale::ICollator& collator,
+                   drivers::NvsStorage& nvs)
     : db_(db),
       cache_(cache),
       track_finder_(
@@ -197,6 +200,7 @@ Database::Database(leveldb::DB* db,
           std::bind(&Database::indexingCompleteCallback, this)),
       tag_parser_(tag_parser),
       collator_(collator),
+      nvs_(nvs),
       is_updating_(false) {
   dbCalculateNextTrackId();
 }
@@ -344,7 +348,7 @@ auto Database::UpdateTracker::onTrackAdded() -> void {
   num_new_tracks_++;
 }
 
-auto Database::updateIndexes() -> void {
+auto Database::updateIndexes(std::optional<bool> skip_verify) -> void {
   if (is_updating_.exchange(true)) {
     return;
   }
@@ -357,8 +361,8 @@ auto Database::updateIndexes() -> void {
   read_options.verify_checksums = true;
 
   // Stage 1: verify all existing tracks are still valid.
-  ESP_LOGI(kTag, "verifying existing tracks");
-  {
+  if (!skip_verify.value_or(nvs_.DbSkipVerification())) {
+    ESP_LOGI(kTag, "verifying existing tracks");
     std::unique_ptr<leveldb::Iterator> it{db_->NewIterator(read_options)};
     std::string prefix = EncodeDataPrefix();
     for (it->Seek(prefix); it->Valid() && it->key().starts_with(prefix);
@@ -446,8 +450,8 @@ auto Database::updateIndexes() -> void {
   track_finder_.launch("");
 };
 
-auto Database::processCandidateCallback(FILINFO& info,
-                                        std::string_view path) -> void {
+auto Database::processCandidateCallback(FILINFO& info, std::string_view path)
+    -> void {
   leveldb::ReadOptions read_options;
   read_options.fill_cache = true;
   read_options.verify_checksums = false;
@@ -531,8 +535,8 @@ static constexpr char kMusicMediaPath[] = "/Music/";
 static constexpr char kPodcastMediaPath[] = "/Podcasts/";
 static constexpr char kAudiobookMediaPath[] = "/Audiobooks/";
 
-auto Database::calculateMediaType(TrackTags& tags,
-                                  std::string_view path) -> MediaType {
+auto Database::calculateMediaType(TrackTags& tags, std::string_view path)
+    -> MediaType {
   auto equalsIgnoreCase = [&](char lhs, char rhs) {
     return std::tolower(lhs) == std::tolower(rhs);
   };
@@ -635,8 +639,8 @@ auto Database::dbMintNewTrackId() -> TrackId {
   return next_track_id_++;
 }
 
-auto Database::dbGetTrackData(leveldb::ReadOptions options,
-                              TrackId id) -> std::shared_ptr<TrackData> {
+auto Database::dbGetTrackData(leveldb::ReadOptions options, TrackId id)
+    -> std::shared_ptr<TrackData> {
   std::string key = EncodeDataKey(id);
   std::string raw_val;
   if (!db_->Get(options, key, &raw_val).ok()) {

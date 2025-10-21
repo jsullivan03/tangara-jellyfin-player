@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,6 +12,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef uint16_t esp_hf_sync_conn_hdl_t;
+
+/// profile states
+typedef enum {
+    ESP_HF_INIT_SUCCESS = 0,                /*!< Indicate init successful */
+    ESP_HF_INIT_ALREADY,                    /*!< Indicate init repeated */
+    ESP_HF_INIT_FAIL,                       /*!< Indicate init fail */
+    ESP_HF_DEINIT_SUCCESS,                  /*!< Indicate deinit successful */
+    ESP_HF_DEINIT_ALREADY,                  /*!< Indicate deinit repeated */
+    ESP_HF_DEINIT_FAIL,                     /*!< Indicate deinit fail */
+} esp_hf_prof_state_t;
 
 /// in-band ring tone state
 typedef enum {
@@ -128,7 +140,7 @@ typedef enum {
 
 /// +CLCC address type
 typedef enum {
-    ESP_HF_CALL_ADDR_TYPE_UNKNOWN = 0x81,            /*!< unkown address type */
+    ESP_HF_CALL_ADDR_TYPE_UNKNOWN = 0x81,            /*!< unknown address type */
     ESP_HF_CALL_ADDR_TYPE_INTERNATIONAL = 0x91,      /*!< international address */
 } esp_hf_call_addr_type_t;
 
@@ -160,7 +172,7 @@ typedef enum
     ESP_HF_NREC_START
 } esp_hf_nrec_t;
 
-///+CCWA resposne status
+///+CCWA response status
 typedef enum {
     ESP_HF_CALL_WAITING_INACTIVE,
     ESP_HF_CALL_WAITING_ACTIVE,
@@ -238,6 +250,25 @@ typedef enum {
     ESP_HF_CME_NETWORK_TIMEOUT = 31,              /*!< network timeout */
     ESP_HF_CME_NETWORK_NOT_ALLOWED = 32,          /*!< network not allowed --emergency calls only */
 } esp_hf_cme_err_t;
+
+/* Since HFP uses a fixed set of mSBC codec parameters, define it here */
+#define ESP_HF_MSBC_CHANNEL_MODE                "Mono"              /*!< mSBC channel mode */
+#define ESP_HF_MSBC_SAMPLING_RATE               "16 kHz"            /*!< mSBC sampling rate */
+#define ESP_HF_MSBC_ALLOCATION_METHOD           "Loudness"          /*!< mSBC allocation method */
+#define ESP_HF_MSBC_SUBBANDS                    8                   /*!< mSBC subbands */
+#define ESP_HF_MSBC_BLOCK_LENGTH                15                  /*!< mSBC block length */
+#define ESP_HF_MSBC_BITPOOL                     26                  /*!< mSBC bitpool */
+/* frame size after mSBC encoded */
+#define ESP_HF_MSBC_ENCODED_FRAME_SIZE          57                  /*!< mSBC frame size */
+
+/**
+ * @brief HFP audio buffer
+ */
+typedef struct {
+    uint16_t    buff_size;                  /*!< buffer size */
+    uint16_t    data_len;                   /*!< audio data length, data length should not greater than buffer size */
+    uint8_t    *data;                       /*!< pointer to audio data start */
+} esp_hf_audio_buff_t;                      /*!< struct to store audio data */
 
 #ifdef __cplusplus
 }

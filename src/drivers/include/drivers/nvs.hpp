@@ -122,6 +122,18 @@ class NvsStorage {
   auto HapticsMode(HapticsModes) -> void;
   static auto intToHapticsMode(int raw) -> HapticsModes;
 
+  enum class LongTextModes : uint8_t {
+    kDefault = 0,
+    kEllipsize = 1,
+    kScroll = 2,
+    kScrollCircular = 3,
+    kClip = 4,
+  };
+
+  auto LongTextMode() -> LongTextModes;
+  auto LongTextMode(LongTextModes) -> void;
+  static auto intToLongTextMode(int raw) -> LongTextModes;
+
   auto ScreenBrightness() -> uint_fast8_t;
   auto ScreenBrightness(uint_fast8_t) -> void;
 
@@ -147,6 +159,7 @@ class NvsStorage {
     kDisabled = 0,
     kDirectionalWheel = 1,
     kRotatingWheel = 2,
+    kWheelWithButtons = 3,
   };
 
   auto WheelInput() -> WheelInputModes;
@@ -170,6 +183,9 @@ class NvsStorage {
 
   auto DbAutoIndex() -> bool;
   auto DbAutoIndex(bool) -> void;
+
+  auto DbSkipVerification() -> bool;
+  auto DbSkipVerification(bool) -> void;
 
   explicit NvsStorage(nvs_handle_t);
   ~NvsStorage();
@@ -200,6 +216,7 @@ class NvsStorage {
   Setting<uint8_t> locked_input_mode_;
   Setting<uint8_t> output_mode_;
   Setting<uint8_t> haptics_mode_;
+  Setting<uint8_t> long_text_mode_;
 
   Setting<std::string> theme_;
 
@@ -207,6 +224,7 @@ class NvsStorage {
   Setting<std::vector<bluetooth::MacAndName>> bt_names_;
 
   Setting<uint8_t> db_auto_index_;
+  Setting<uint8_t> db_skip_verification_;
 
   Setting<uint8_t> queue_repeat_mode_;
 

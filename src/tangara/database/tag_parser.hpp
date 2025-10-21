@@ -62,9 +62,9 @@ class GenericTagParser : public ITagParser {
   // Supported file extensions for parsing tags, derived from the list of
   // supported audio formats here:
   // https://cooltech.zone/tangara/docs/music-library/
-  static constexpr std::string supported_exts[] = {"flac", "mp3",  "ogg",
-                                                   "ogx",  "opus", "wav",
-                                                   "wv"};
+  static constexpr std::string supported_exts[] = {"flac", "m4a", "mp3",
+                                                   "ogg", "ogx",  "opus",
+                                                   "wav", "wv"};
 };
 
 }  // namespace database

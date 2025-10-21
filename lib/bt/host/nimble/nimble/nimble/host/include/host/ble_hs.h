@@ -315,17 +315,48 @@ struct ble_hs_cfg {
      */
     unsigned sm_sc:1;
 
+    /** @brief Security Manager - Enable/Disable Secure Connections Only flag
+     *
+     * If set, this will enforce P-256 elliptic curve encryption algorithm
+     * during pairing.
+     * It will force the max key size to be used during pairing.
+     */
+    unsigned sm_sc_only:1;
+
+    /** @brief Security Manager - Security Mode 1 Level for GATT related operations
+     *
+     * Possible values are:
+     * 0: Default value, ignored
+     * 1: No security
+     * 2: Unauthenticated pairing with encryption
+     * 3. Authenticated pairing with encryption
+     * 4. Authenticated LE Secure Connections pairing with encryption using a 128-bit strength encryption key
+     */
+    uint8_t sm_sec_lvl;
+
     /** @brief Security Manager Key Press Notification flag
      *
      * Currently unsupported and should not be set.
      */
     unsigned sm_keypress:1;
 
+    /** @brief Enable/Disable Enhanced ATT Support
+     *
+     * Primarily used to enable EATT behaviour; denotes the number of eatt
+     * channels. Set to 0 to disable eatt.
+     *
+     * Default value is CONFIG_BT_NIMBLE_EATT_CHAN_NUM.
+     */
+    uint8_t eatt;
+
     /** @brief Security Manager Local Key Distribution Mask */
     uint8_t sm_our_key_dist;
 
     /** @brief Security Manager Remote Key Distribution Mask */
     uint8_t sm_their_key_dist;
+
+    /** @brief Weather to use GATT caching or not for discovery operations */
+    uint8_t gatt_use_cache;
 
     /** @brief Stack reset callback
      *

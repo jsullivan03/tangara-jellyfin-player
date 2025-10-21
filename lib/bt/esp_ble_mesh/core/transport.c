@@ -2,7 +2,7 @@
 
 /*
  * SPDX-FileCopyrightText: 2017 Intel Corporation
- * SPDX-FileContributor: 2018-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileContributor: 2018-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,6 +11,7 @@
 #include <errno.h>
 
 #include "crypto.h"
+#include "tag.h"
 #include "adv.h"
 #include "mesh.h"
 #include "lpn.h"
@@ -26,7 +27,9 @@
 #include "mesh/cfg_srv.h"
 #include "heartbeat.h"
 
+#if CONFIG_BLE_MESH_V11_SUPPORT
 #include "mesh_v1.1/utils.h"
+#endif
 
 /* The transport layer needs at least three buffers for itself to avoid
  * deadlocks. Ensure that there are a sufficient number of advertising
@@ -310,7 +313,15 @@ static void seg_tx_done(struct seg_tx *tx, uint8_t seg_idx)
 {
     bt_mesh_adv_buf_ref_debug(__func__, tx->seg[seg_idx], 3U, BLE_MESH_BUF_REF_SMALL);
 
-    BLE_MESH_ADV(tx->seg[seg_idx])->busy = 0U;
+    /**
+     * When cancelling a segment that is still in the adv sending queue, `tx->seg_pending`
+     * must else be decremented by one. More detailed information
+     * can be found in BLEMESH24-26.
+     */
+    if (bt_mesh_atomic_cas(&BLE_MESH_ADV_BUSY(tx->seg[seg_idx]), 1, 0)) {
+        tx->seg_pending--;
+    }
+
     net_buf_unref(tx->seg[seg_idx]);
     tx->seg[seg_idx] = NULL;
     tx->nack_count--;
@@ -369,6 +380,20 @@ static inline void seg_tx_complete(struct seg_tx *tx, int err)
 
 static void schedule_retransmit(struct seg_tx *tx)
 {
+    /* It's possible that a segment broadcast hasn't finished,
+     * but the tx are already released. Only the seg_pending
+     * of this segment remains unprocessed. So, here, we
+     * determine if the tx are released by checking if the
+     * destination (dst) is unassigned, and then process
+     * the seg_pending of this segment.
+     * See BLEMESH25-92 for details */
+    if (tx->dst == BLE_MESH_ADDR_UNASSIGNED) {
+        if (tx->seg_pending) {
+            tx->seg_pending--;
+        }
+        return;
+    }
+
     if (--tx->seg_pending) {
         return;
     }
@@ -443,7 +468,7 @@ static void seg_tx_send_unacked(struct seg_tx *tx)
             continue;
         }
 
-        if (BLE_MESH_ADV(seg)->busy) {
+        if (bt_mesh_atomic_get(&BLE_MESH_ADV_BUSY(seg))) {
             BT_DBG("Skipping segment that's still advertising");
             continue;
         }
@@ -493,7 +518,15 @@ static int send_seg(struct bt_mesh_net_tx *net_tx, struct net_buf_simple *sdu,
            net_tx->aszmic, sdu->len);
 
     for (tx = NULL, i = 0; i < ARRAY_SIZE(seg_tx); i++) {
-        if (!seg_tx[i].nack_count) {
+        if (!seg_tx[i].nack_count &&
+            /* In some critical conditions, the tx might be
+             * reset before a segment broadcast is finished.
+             * If this happens, the seg_pending of the segment
+             * hasn't been processed. To avoid assigning this
+             * uncleared tx to a new message, extra checks for
+             * seg_pending being 0 are added. See BLEMESH25-92
+             * for details.*/
+            !seg_tx[i].seg_pending) {
             tx = &seg_tx[i];
             break;
         }
@@ -1031,18 +1064,18 @@ static int ctl_recv(struct bt_mesh_net_rx *rx, uint8_t hdr,
         return 0;
     }
 
-    if (IS_ENABLED(CONFIG_BLE_MESH_DF_SRV)) {
-        switch (ctl_op) {
-        case TRANS_CTL_OP_PATH_REQ:
-        case TRANS_CTL_OP_PATH_REPLY:
-        case TRANS_CTL_OP_PATH_CFM:
-        case TRANS_CTL_OP_PATH_ECHO_REQ:
-        case TRANS_CTL_OP_PATH_ECHO_REPLY:
-        case TRANS_CTL_OP_DEP_NODE_UPDATE:
-        case TRANS_CTL_OP_PATH_REQ_SOLIC:
-            return bt_mesh_directed_forwarding_ctl_recv(ctl_op, rx, buf);
-        }
+#if CONFIG_BLE_MESH_DF_SRV
+    switch (ctl_op) {
+    case TRANS_CTL_OP_PATH_REQ:
+    case TRANS_CTL_OP_PATH_REPLY:
+    case TRANS_CTL_OP_PATH_CFM:
+    case TRANS_CTL_OP_PATH_ECHO_REQ:
+    case TRANS_CTL_OP_PATH_ECHO_REPLY:
+    case TRANS_CTL_OP_DEP_NODE_UPDATE:
+    case TRANS_CTL_OP_PATH_REQ_SOLIC:
+        return bt_mesh_directed_forwarding_ctl_recv(ctl_op, rx, buf);
     }
+#endif
 
     if (IS_ENABLED(CONFIG_BLE_MESH_FRIEND) && !bt_mesh_lpn_established()) {
         switch (ctl_op) {
@@ -1528,7 +1561,7 @@ static int trans_seg(struct net_buf_simple *buf, struct bt_mesh_net_rx *net_rx,
          * eventually be freed up and we'll be able to process
          * this one.
          */
-        BT_WARN("No free slots for new incoming segmented messages");
+        BT_WARN("No free slots for new incoming segmented messages, src: %04x", net_rx->ctx.addr);
         return -ENOMEM;
     }
 
@@ -1750,8 +1783,6 @@ void bt_mesh_tx_reset_single(uint16_t dst)
 void bt_mesh_trans_init(void)
 {
     int i;
-
-    bt_mesh_sar_init();
 
     for (i = 0; i < ARRAY_SIZE(seg_tx); i++) {
         k_delayed_work_init(&seg_tx[i].rtx_timer, seg_retransmit);

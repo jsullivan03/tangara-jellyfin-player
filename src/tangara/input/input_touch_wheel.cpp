@@ -25,9 +25,12 @@
 
 namespace input {
 
-TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
+TouchWheel::TouchWheel(drivers::NvsStorage& nvs,
+                       drivers::TouchWheel& wheel,
+                       audio::TrackQueue& queue)
     : nvs_(nvs),
       wheel_(wheel),
+      queue_(queue),
       sensitivity_(static_cast<int>(nvs.ScrollSensitivity()),
                    [&](const lua::LuaValue& val) {
                      if (!std::holds_alternative<int>(val)) {
@@ -55,7 +58,23 @@ TouchWheel::TouchWheel(drivers::NvsStorage& nvs, drivers::TouchWheel& wheel)
       threshold_(calculateThreshold(nvs.ScrollSensitivity())),
       is_first_read_(true),
       last_angle_(0),
-      last_wheel_touch_time_(0) {}
+      last_wheel_touch_time_(0),
+      buttons_active_(false) {}
+
+auto TouchWheel::activate_buttons(bool activate) -> void {
+  if (activate) {
+    up_.override(Trigger::State::kClick, {actions::skipBack()});
+    left_.override(Trigger::State::kClick, {actions::prevTrack(queue_)});
+    right_.override(Trigger::State::kClick, {actions::nextTrack(queue_)});
+    down_.override(Trigger::State::kClick, {actions::togglePlayPause()});
+  } else {
+    up_.override(Trigger::State::kClick, std::nullopt);
+    left_.override(Trigger::State::kClick, std::nullopt);
+    right_.override(Trigger::State::kClick, std::nullopt);
+    down_.override(Trigger::State::kClick, std::nullopt);
+  }
+  buttons_active_ = activate;
+}
 
 auto TouchWheel::read(lv_indev_data_t* data, std::vector<InputEvent>& events) -> void {
   if (locked_) {
@@ -99,25 +118,42 @@ auto TouchWheel::read(lv_indev_data_t* data, std::vector<InputEvent>& events) ->
 
   // If the user is touching the wheel but not scrolling, then they may be
   // clicking on one of the wheel's cardinal directions.
+  const uint64_t now_us = esp_timer_get_time() / 1000;
   if (is_scrolling_) {
     up_.cancel();
     right_.cancel();
     down_.cancel();
     left_.cancel();
+    last_scroll_ = now_us;
   } else {
-    bool pressing = wheel_data.is_wheel_touched;
-    up_.update(pressing && drivers::TouchWheel::isAngleWithin(
-                               wheel_data.wheel_position, 0, 32),
-               data);
-    right_.update(pressing && drivers::TouchWheel::isAngleWithin(
-                                  wheel_data.wheel_position, 192, 32),
-                  data);
-    down_.update(pressing && drivers::TouchWheel::isAngleWithin(
-                                 wheel_data.wheel_position, 128, 32),
-                 data);
-    left_.update(pressing && drivers::TouchWheel::isAngleWithin(
-                                 wheel_data.wheel_position, 64, 32),
-                 data);
+    const auto time_since_last_scroll = last_scroll_ - now_us;
+    bool pressing = wheel_data.is_wheel_touched &&
+                    (time_since_last_scroll > SCROLL_TIMEOUT_US);
+
+    const auto ustate =
+        up_.update(pressing && drivers::TouchWheel::isAngleWithin(
+                                   wheel_data.wheel_position, 0, 32),
+                   data);
+    const auto rstate =
+        right_.update(pressing && drivers::TouchWheel::isAngleWithin(
+                                      wheel_data.wheel_position, 192, 32),
+                      data);
+    const auto dstate =
+        down_.update(pressing && drivers::TouchWheel::isAngleWithin(
+                                     wheel_data.wheel_position, 128, 32),
+                     data);
+    const auto lstate =
+        left_.update(pressing && drivers::TouchWheel::isAngleWithin(
+                                     wheel_data.wheel_position, 64, 32),
+                     data);
+
+    // This is for haptic feedback.
+    if (buttons_active_ &&
+        (ustate == Trigger::State::kClick || rstate == Trigger::State::kClick ||
+         dstate == Trigger::State::kClick ||
+         lstate == Trigger::State::kClick)) {
+      events.push_back(InputEvent::kOnPress);
+    }
   }
 }
 

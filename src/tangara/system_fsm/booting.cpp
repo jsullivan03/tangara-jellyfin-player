@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+#include "drivers/wm8523.hpp"
 #include "system_fsm/system_fsm.hpp"
 
 #include <cstdint>
@@ -88,13 +89,15 @@ auto Booting::entry() -> void {
   ESP_LOGI(kTag, "installing remaining drivers");
   drivers::spiffs_mount();
   sServices->samd(std::make_unique<drivers::Samd>(sServices->nvs()));
+
   if (drivers::TouchWheel::IsHardwarePresent()) {
-	  sServices->touchwheel(
-	      std::unique_ptr<drivers::TouchWheel>{drivers::TouchWheel::Create()});
+    sServices->touchwheel(
+        std::unique_ptr<drivers::TouchWheel>{drivers::TouchWheel::Create()});
   }
   if (drivers::Haptics::IsHardwarePresent()) {
-	  sServices->haptics(std::make_unique<drivers::Haptics>(sServices->nvs()));
+    sServices->haptics(std::make_unique<drivers::Haptics>(sServices->nvs()));
   }
+  ESP_ERROR_CHECK(drivers::wm8523::Init());
 
   auto adc = drivers::AdcBattery::Create();
   sServices->battery(std::make_unique<battery::Battery>(

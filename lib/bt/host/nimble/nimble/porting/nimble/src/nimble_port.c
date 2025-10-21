@@ -122,11 +122,10 @@ esp_err_t esp_nimble_init(void)
     os_msys_init();
 
 #endif
+
+    ble_transport_ll_init();
     /* Initialize the host */
     ble_transport_hs_init();
-#if CONFIG_BT_CONTROLLER_DISABLED && CONFIG_BT_NIMBLE_TRANSPORT_UART
-    ble_transport_ll_init();
-#endif
 
     return ESP_OK;
 }
@@ -158,6 +157,12 @@ esp_err_t esp_nimble_deinit(void)
 #if !SOC_ESP_NIMBLE_CONTROLLER || !CONFIG_BT_CONTROLLER_ENABLED
     npl_freertos_funcs_deinit();
 #endif
+
+#if !SOC_ESP_NIMBLE_CONTROLLER
+    npl_freertos_mempool_deinit();
+#endif
+
+    ble_transport_ll_deinit();
     return ESP_OK;
 }
 
@@ -213,7 +218,7 @@ nimble_port_init(void)
         return ret;
     }
 
-#if (BT_HCI_LOG_INCLUDED == TRUE)
+#if MYNEWT_VAL(BT_HCI_LOG_INCLUDED)
     bt_hci_log_init();
 #endif // (BT_HCI_LOG_INCLUDED == TRUE)
 

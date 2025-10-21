@@ -45,6 +45,7 @@ class TouchWheel {
   static auto IsHardwarePresent() -> bool;
 
  private:
+  i2c_master_dev_handle_t i2c_;
   TouchWheelData data_;
 
   enum Register {

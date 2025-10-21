@@ -25,6 +25,7 @@
 #include "database/tag_parser.hpp"
 #include "database/track.hpp"
 #include "database/track_finder.hpp"
+#include "drivers/nvs.hpp"
 #include "ff.h"
 #include "leveldb/cache.h"
 #include "leveldb/db.h"
@@ -60,7 +61,8 @@ class Database {
   };
   static auto Open(ITagParser& tag_parser,
                    locale::ICollator& collator,
-                   tasks::WorkerPool& bg_worker)
+                   tasks::WorkerPool& bg_worker,
+                   drivers::NvsStorage& nvs)
       -> cpp::result<Database*, DatabaseError>;
 
   static auto Destroy() -> void;
@@ -84,7 +86,8 @@ class Database {
   auto setTrackData(TrackId id, const TrackData& data) -> void;
 
   auto getIndexes() -> std::vector<IndexInfo>;
-  auto updateIndexes() -> void;
+  auto updateIndexes(std::optional<bool> skip_verify) -> void;
+  auto updateIndexes() -> void { updateIndexes({}); }
   auto isUpdating() -> bool;
 
   // Cannot be copied or moved.
@@ -104,6 +107,7 @@ class Database {
   // Not owned.
   ITagParser& tag_parser_;
   locale::ICollator& collator_;
+  drivers::NvsStorage& nvs_;
 
   /* Internal utility for tracking a currently in-progress index update. */
   class UpdateTracker {
@@ -131,7 +135,8 @@ class Database {
            leveldb::Cache* cache,
            tasks::WorkerPool& pool,
            ITagParser& tag_parser,
-           locale::ICollator& collator);
+           locale::ICollator& collator,
+           drivers::NvsStorage& nvs);
 
   auto processCandidateCallback(FILINFO&, std::string_view) -> void;
   auto indexingCompleteCallback() -> void;

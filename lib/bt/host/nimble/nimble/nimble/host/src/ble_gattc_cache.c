@@ -31,7 +31,7 @@
 #define GATT_CACHE_PREFIX "gatt_"
 #define INVALID_ADDR_NUM 0xff
 #define MAX_DEVICE_IN_CACHE 50
-#define MAX_ADDR_LIST_CACHE_BUF 2048
+#define MAX_ADDR_LIST_CACHE_BUF 4096
 
 #if MYNEWT_VAL(BLE_GATT_CACHING)
 static const char *cache_key = "gattc_cache_key";
@@ -305,7 +305,8 @@ static void check_uuid(ble_uuid_any_t *uuid)
 static void
 ble_gattc_fill_nv_attr_entry(ble_uuid_any_t uuid, uint16_t s_handle, uint16_t e_handle,
                              ble_gatt_attr_type attr_type, bool is_primary,
-                             struct ble_gatt_nv_attr *nv_attr, int index, uint8_t properties)
+                             struct ble_gatt_nv_attr *nv_attr, int index, uint8_t properties,
+                             uint16_t incl_svc_s_handle, uint16_t incl_svc_e_handle)
 {
     ble_uuid_copy(&nv_attr[index].uuid, &uuid.u);
     check_uuid(&nv_attr[index].uuid);
@@ -314,6 +315,8 @@ ble_gattc_fill_nv_attr_entry(ble_uuid_any_t uuid, uint16_t s_handle, uint16_t e_
     nv_attr[index].is_primary = is_primary;
     nv_attr[index].attr_type = attr_type;
     nv_attr[index].properties = properties;
+    nv_attr[index].incl_svc_s_handle = incl_svc_s_handle;
+    nv_attr[index].incl_svc_e_handle = incl_svc_e_handle;
 
     if (s_handle >= svc_end_handle) {
         svc_end_handle = s_handle;
@@ -327,6 +330,9 @@ static void
 ble_gattc_fill_nv_attr(struct ble_gattc_cache_conn *peer, size_t num_attr, struct ble_gatt_nv_attr *nv_attr)
 {
     struct ble_gattc_cache_conn_svc *svc;
+#if MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES) 
+    struct ble_gattc_cache_conn_incl_svc *included_svc;
+#endif
     struct ble_gattc_cache_conn_chr *chr;
     struct ble_gattc_cache_conn_dsc *dsc;
 
@@ -336,18 +342,29 @@ ble_gattc_fill_nv_attr(struct ble_gattc_cache_conn *peer, size_t num_attr, struc
     SLIST_FOREACH(svc, &peer->svcs, next) {
         ble_gattc_fill_nv_attr_entry(svc->svc.uuid, svc->svc.start_handle, svc->svc.end_handle,
                                      BLE_GATT_ATTR_TYPE_SRVC, svc->type == BLE_GATT_SVC_TYPE_PRIMARY,
-                                     nv_attr, index, 0);
+                                     nv_attr, index, 0, 0, 0);
         svc_index = index;
         index++;
+#if MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES)
+        if (!SLIST_EMPTY(&svc->incl_svc)) {
+            SLIST_FOREACH(included_svc, &svc->incl_svc, next) {
+                ble_gattc_fill_nv_attr_entry(included_svc->svc.uuid, included_svc->svc.handle,
+                                              0, BLE_GATT_ATTR_TYPE_INCL_SRVC, false,
+                                              nv_attr, index, 0, included_svc->svc.start_handle, included_svc->svc.end_handle);
+                index++;
+            }
+
+        }
+#endif
         SLIST_FOREACH(chr, &svc->chrs, next) {
             ble_gattc_fill_nv_attr_entry(chr->chr.uuid, chr->chr.val_handle,
                                          chr->chr.def_handle, BLE_GATT_ATTR_TYPE_CHAR, false,
-                                         nv_attr, index, chr->chr.properties);
+                                         nv_attr, index, chr->chr.properties, 0, 0);
             index++;
             SLIST_FOREACH(dsc, &chr->dscs, next) {
                 ble_gattc_fill_nv_attr_entry(dsc->dsc.uuid, dsc->dsc.handle, 0,
                                              BLE_GATT_ATTR_TYPE_CHAR_DESCR, false, nv_attr, index,
-                                             0);
+                                             0, 0, 0);
                 index++;
             }
         }
@@ -388,6 +405,7 @@ ble_gattc_cache_addr_save(uint8_t *out_index, ble_addr_t addr, uint8_t * hash_ke
                 address list.
              */
             if(num > MYNEWT_VAL(BLE_GATT_CACHING_MAX_CONNS)) {
+                nimble_platform_mem_free(p_buf);
                 return BLE_HS_ENOMEM;
             }
             BLE_HS_LOG(DEBUG, "BD addr not present");
@@ -396,6 +414,7 @@ ble_gattc_cache_addr_save(uint8_t *out_index, ble_addr_t addr, uint8_t * hash_ke
     } else {
         BLE_HS_LOG(DEBUG, "Hash key not present, saving new data");
         if(num > MYNEWT_VAL(BLE_GATT_CACHING_MAX_CONNS)) {
+            nimble_platform_mem_free(p_buf);
             return BLE_HS_ENOMEM;
         }
         insert_ind = num - 1;
@@ -485,6 +504,7 @@ ble_gattc_cache_save(struct ble_gattc_cache_conn *peer, size_t num_attr)
     if(rc != 0) {
         /* cannot save address, return */
         BLE_HS_LOG(ERROR, "Failed to save cache %d", rc);
+        nimble_platform_mem_free(nv_attr);
         return;
     }
 
@@ -530,6 +550,7 @@ static int
 ble_gattc_add_svc_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_attr)
 {
     struct ble_gatt_svc *gatt_svc;
+    int rc;
 
     gatt_svc = (struct ble_gatt_svc *)nimble_platform_mem_malloc(sizeof(struct ble_gatt_svc));
     if (gatt_svc == NULL) {
@@ -540,29 +561,39 @@ ble_gattc_add_svc_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_at
     gatt_svc->end_handle = nv_attr.e_handle;
     ble_uuid_copy(&gatt_svc->uuid, &nv_attr.uuid.u);
 
-    return ble_gattc_cache_conn_svc_add(peer_addr, gatt_svc);
+    rc = ble_gattc_cache_conn_svc_add(peer_addr, gatt_svc, nv_attr.is_primary);
+    nimble_platform_mem_free(gatt_svc);
+    return rc;
 }
 
+#if MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES)
 static int
 ble_gattc_add_inc_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_attr)
 {
-    struct ble_gatt_svc *gatt_svc;
+    int rc;
+    struct ble_gatt_incl_svc *gatt_incl_svc;
 
-    gatt_svc = (struct ble_gatt_svc *)nimble_platform_mem_malloc(sizeof(struct ble_gatt_svc));
-    if (gatt_svc == NULL) {
+    gatt_incl_svc = (struct ble_gatt_incl_svc *)nimble_platform_mem_malloc(sizeof(struct ble_gatt_incl_svc));
+    if (gatt_incl_svc == NULL) {
         return BLE_HS_ENOMEM;
     }
 
-    gatt_svc->start_handle = nv_attr.s_handle;
-    gatt_svc->end_handle = nv_attr.e_handle;
-    ble_uuid_copy(&gatt_svc->uuid, &nv_attr.uuid.u);
-    return ble_gattc_cache_conn_inc_add(peer_addr, gatt_svc);
+    gatt_incl_svc->handle = nv_attr.s_handle;
+    gatt_incl_svc->start_handle = nv_attr.incl_svc_s_handle;
+    gatt_incl_svc->end_handle = nv_attr.incl_svc_e_handle;
+    ble_uuid_copy(&gatt_incl_svc->uuid, &nv_attr.uuid.u);
+
+    rc = ble_gattc_cache_conn_inc_add(peer_addr, gatt_incl_svc);
+    nimble_platform_mem_free(gatt_incl_svc);
+    return rc;
 }
+#endif
 
 static int
 ble_gattc_add_chr_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_attr)
 {
     struct ble_gatt_chr *gatt_chr;
+    int rc;
     gatt_chr = (struct ble_gatt_chr *)nimble_platform_mem_malloc(sizeof(struct ble_gatt_chr));
     if (gatt_chr == NULL) {
         return BLE_HS_ENOMEM;
@@ -573,13 +604,16 @@ ble_gattc_add_chr_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_at
     ble_uuid_copy(&gatt_chr->uuid, &nv_attr.uuid.u);
     gatt_chr->properties = nv_attr.properties;
 
-    return ble_gattc_cache_conn_chr_add(peer_addr, 0, gatt_chr);
+    rc = ble_gattc_cache_conn_chr_add(peer_addr, 0, gatt_chr);
+    nimble_platform_mem_free(gatt_chr);
+    return rc;
 }
 
 static int
 ble_gattc_add_dsc_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_attr)
 {
     struct ble_gatt_dsc *gatt_dsc;
+    int rc;
     gatt_dsc = (struct ble_gatt_dsc *)nimble_platform_mem_malloc(sizeof(struct ble_gatt_dsc));
     if (gatt_dsc == NULL) {
         return BLE_HS_ENOMEM;
@@ -588,7 +622,9 @@ ble_gattc_add_dsc_from_cache(ble_addr_t peer_addr, struct ble_gatt_nv_attr nv_at
     gatt_dsc->handle = nv_attr.s_handle;
     ble_uuid_copy(&gatt_dsc->uuid, &nv_attr.uuid.u);
 
-    return ble_gattc_cache_conn_dsc_add(peer_addr, 0, gatt_dsc);
+    rc = ble_gattc_cache_conn_dsc_add(peer_addr, 0, gatt_dsc);
+    nimble_platform_mem_free(gatt_dsc);
+    return rc;
 }
 
 int
@@ -613,11 +649,7 @@ ble_gattc_cache_load(ble_addr_t peer_addr)
     for (int i = 0; i < num_attr; i++) {
         switch (nv_attr[i].attr_type) {
         case BLE_GATT_ATTR_TYPE_SRVC:
-            if (nv_attr[i].is_primary) {
-                rc = ble_gattc_add_svc_from_cache(peer_addr, nv_attr[i]);
-            } else {
-                rc = ble_gattc_add_inc_from_cache(peer_addr, nv_attr[i]);
-            }
+            rc = ble_gattc_add_svc_from_cache(peer_addr, nv_attr[i]);
             break;
 
         case BLE_GATT_ATTR_TYPE_CHAR:
@@ -628,6 +660,11 @@ ble_gattc_cache_load(ble_addr_t peer_addr)
             rc = ble_gattc_add_dsc_from_cache(peer_addr, nv_attr[i]);
             break;
 
+#if MYNEWT_VAL(BLE_GATT_CACHING_INCLUDE_SERVICES) 
+        case BLE_GATT_ATTR_TYPE_INCL_SRVC:
+            rc = ble_gattc_add_inc_from_cache(peer_addr, nv_attr[i]);
+            break;
+#endif
         default:
             break;
         }

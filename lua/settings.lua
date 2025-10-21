@@ -19,6 +19,7 @@ local main_menu = require("main_menu")
 local img = require("images")
 local nvs = require("nvs")
 local sd_card = require("sd_card")
+local playing_screen_settings = require("playing_screen_settings")
 
 local settings = {}
 
@@ -102,10 +103,10 @@ settings.BluetoothSettings = SettingsScreen:new {
       bluetooth.enabled:bind(function(en)
         if en then
           enable_sw:add_state(lvgl.STATE.CHECKED)
-          enable_sw_desc:set({text="Disable Bluetooth"})
+          enable_sw_desc:set({ text = "Disable Bluetooth" })
         else
           enable_sw:clear_state(lvgl.STATE.CHECKED)
-          enable_sw_desc:set({text="Enable Bluetooth"})
+          enable_sw_desc:set({ text = "Enable Bluetooth" })
         end
       end),
     }
@@ -357,8 +358,72 @@ settings.DisplaySettings = SettingsScreen:new {
 
       break
     end
-
   end
+}
+
+settings.PlayingScreenSettings = SettingsScreen:new{
+  title = "Playing Screen Options",
+  create_ui = function(self)
+    SettingsScreen.create_ui(self)
+
+    -- Use the playing scheme enum lists to generate the relevant dropdowns
+    local make_scheme_playing_screen_setting = function(self, scheme_list, playing_screen_setting_scheme)
+      local option_to_scheme = {}
+      local scheme_to_option = {}
+      local option_idx = 0
+      local options = ""
+
+      -- Sort the keys to order the dropdowns the same as the enums
+      keys = {}
+      for i in pairs(scheme_list) do table.insert(keys, i) end
+      table.sort(keys)
+
+      for i, k in pairs(keys) do
+        v = scheme_list[k]
+
+        option_to_scheme[option_idx] = k
+        scheme_to_option[k] = option_idx
+        if option_idx > 0 then
+          options = options .. "\n"
+        end
+        options = options .. v
+        option_idx = option_idx + 1
+      end
+
+      local playing_screen_settings_chooser = self.content:Dropdown{
+        options = options,
+        symbol = img.chevron
+      }
+
+      self.bindings = self.bindings + {
+        playing_screen_setting_scheme:bind(function(s)
+          local option = scheme_to_option[s]
+          playing_screen_settings_chooser:set({ selected = option })
+        end)
+      }
+
+      playing_screen_settings_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+        local option = playing_screen_settings_chooser:get('selected')
+        local scheme = option_to_scheme[option]
+        local prev_scheme = playing_screen_setting_scheme:get()
+        -- Check the new scheme is valid
+        if not playing_screen_setting_scheme:set(scheme) then
+          widgets.PopUp("Playing options not valid")
+          playing_screen_setting_scheme:set(prev_scheme)
+        end
+      end)
+
+      return playing_screen_settings_chooser
+    end
+
+    theme.set_subject(self.content:Label{
+      text="Long Text Mode",
+    }, "settings_title")
+    local playing_screen_settings_chooser = make_scheme_playing_screen_setting(self, playing_screen_settings.long_text_schemes(), playing_screen_settings.long_text_scheme)
+    local playing_screen_settings_desc = widgets.Description(playing_screen_settings_chooser, "Playing Screen Settings scheme")
+
+    playing_screen_settings_chooser:focus()
+    end
 }
 
 settings.ThemeSettings = SettingsScreen:new {
@@ -439,7 +504,7 @@ settings.ThemeSettings = SettingsScreen:new {
     local theme_reload_btn = theme_container:Button {}
     theme_reload_btn:Label { text = "Reload" }
     theme_reload_btn:onClicked(theme_reload)
-  end
+    end
 }
 
 settings.InputSettings = SettingsScreen:new {
@@ -449,60 +514,60 @@ settings.InputSettings = SettingsScreen:new {
 
     -- Use the control scheme enum lists to generate the relevant dropdowns
     local make_scheme_control = function(self, scheme_list, control_scheme)
-        local option_to_scheme = {}
-        local scheme_to_option = {}
-        local option_idx = 0
-        local options = ""
+      local option_to_scheme = {}
+      local scheme_to_option = {}
+      local option_idx = 0
+      local options = ""
 
-        -- Sort the keys to order the dropdowns the same as the enums
-        keys = {}
-        for i in pairs(scheme_list) do table.insert(keys, i) end
-        table.sort(keys)
+      -- Sort the keys to order the dropdowns the same as the enums
+      keys = {}
+      for i in pairs(scheme_list) do table.insert(keys, i) end
+      table.sort(keys)
 
-        for i, k in pairs(keys) do
-          v = scheme_list[k]
+      for i, k in pairs(keys) do
+        v = scheme_list[k]
 
-          option_to_scheme[option_idx] = k
-          scheme_to_option[k] = option_idx
-          if option_idx > 0 then
-            options = options .. "\n"
-          end
-          options = options .. v
-          option_idx = option_idx + 1
+        option_to_scheme[option_idx] = k
+        scheme_to_option[k] = option_idx
+        if option_idx > 0 then
+          options = options .. "\n"
         end
+        options = options .. v
+        option_idx = option_idx + 1
+      end
 
-        local controls_chooser = self.content:Dropdown {
-          options = options,
-          symbol = img.chevron,
-        }
+      local controls_chooser = self.content:Dropdown {
+        options = options,
+        symbol = img.chevron,
+      }
 
-        self.bindings = self.bindings + {
-          control_scheme:bind(function(s)
-            local option = scheme_to_option[s]
-            controls_chooser:set({ selected = option })
-          end)
-        }
-
-        controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
-          local option = controls_chooser:get('selected')
-          local scheme = option_to_scheme[option]
-          local prev_scheme = control_scheme:get()
-          -- Check the new scheme is valid
-          if not control_scheme:set(scheme) then
-            widgets.PopUp("Controls not valid")
-            control_scheme:set(prev_scheme)
-          end
+      self.bindings = self.bindings + {
+        control_scheme:bind(function(s)
+          local option = scheme_to_option[s]
+          controls_chooser:set({ selected = option })
         end)
+      }
 
-        return controls_chooser
+      controls_chooser:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+        local option = controls_chooser:get('selected')
+        local scheme = option_to_scheme[option]
+        local prev_scheme = control_scheme:get()
+        -- Check the new scheme is valid
+        if not control_scheme:set(scheme) then
+          widgets.PopUp("Controls not valid")
+          control_scheme:set(prev_scheme)
+        end
+      end)
+
+      return controls_chooser
     end
 
-    local controls_chooser
     if controls.touchwheel_present() then
       theme.set_subject(self.content:Label {
         text = "Wheel Controls",
       }, "settings_title")
-      controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
+
+      local controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
       local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
     end
 
@@ -510,11 +575,11 @@ settings.InputSettings = SettingsScreen:new {
       text = "Side Button Controls",
     }, "settings_title")
     local buttons_chooser = make_scheme_control(self, controls.button_schemes(), controls.button_scheme)
-    
+
     theme.set_subject(self.content:Label {
       text = "Side Button Controls When Locked",
       w = lvgl.PCT(80),
-      h = lvgl.SIZE_CONTENT, 
+      h = lvgl.SIZE_CONTENT,
       long_mode = lvgl.LABEL.LONG_WRAP,
     }, "settings_title")
     local controls_locked = make_scheme_control(self, controls.locked_schemes(), controls.locked_scheme)
@@ -669,10 +734,10 @@ settings.MassStorageSettings = SettingsScreen:new {
     local bind_switch = function()
       if usb.msc_enabled:get() then
         enable_sw:add_state(lvgl.STATE.CHECKED)
-        enable_sw_desc:set({ text = "Disable USB Storage"})
+        enable_sw_desc:set({ text = "Disable USB Storage" })
       else
         enable_sw:clear_state(lvgl.STATE.CHECKED)
-        enable_sw_desc:set({text = "Enable USB Storage"})
+        enable_sw_desc:set({ text = "Enable USB Storage" })
       end
     end
 
@@ -738,12 +803,39 @@ settings.DatabaseSettings = SettingsScreen:new {
     local auto_update_sw = auto_update_container:Switch {}
     local auto_update_desc = widgets.Description(auto_update_sw, "Auto update")
 
+    local only_new_files_container = self.content:Object {
+      flex = {
+        flex_direction = "row",
+        justify_content = "flex-start",
+        align_items = "center",
+        align_content = "flex-start",
+      },
+      w = lvgl.PCT(100),
+      h = lvgl.SIZE_CONTENT,
+      pad_bottom = 4,
+    }
+    only_new_files_container:add_style(styles.list_item)
+    only_new_files_container:Label { text = "Only scan new files", flex_grow = 1 }
+    local skip_verification_sw = only_new_files_container:Switch {}
+    local skip_verification_desc = widgets.Description(auto_update_sw, "Only scan new files")
+
     auto_update_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
       database.auto_update:set(auto_update_sw:enabled())
       if auto_update_sw:enabled() then
-        auto_update_desc:set({text = "Disable auto-update"})
+        only_new_files_container:clear_flag(lvgl.FLAG.HIDDEN)
+        auto_update_desc:set({ text = "Disable auto-update" })
       else
-        auto_update_desc:set({text = "Enable auto-update"})
+        only_new_files_container:add_flag(lvgl.FLAG.HIDDEN)
+        auto_update_desc:set({ text = "Enable auto-update" })
+      end
+    end)
+
+    skip_verification_sw:onevent(lvgl.EVENT.VALUE_CHANGED, function()
+      database.skip_verification:set(skip_verification_sw:enabled())
+      if skip_verification_sw:enabled() then
+        skip_verification_desc:set({ text = "Disable scanning only new files" })
+      else
+        skip_verification_desc:set({ text = "Enable scanning only new files" })
       end
     end)
 
@@ -751,22 +843,29 @@ settings.DatabaseSettings = SettingsScreen:new {
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
       flex = {
-        flex_direction = "row",
+        flex_direction = "column",
         justify_content = "center",
-        align_items = "space-evenly",
+        align_items = "center",
         align_content = "center",
       },
       pad_top = 4,
       pad_column = 4,
+      pad_row = 4,
     }
     actions_container:add_style(styles.list_item)
 
     local update = actions_container:Button {}
-    update:Label { text = "Update now" }
+    update:Label { text = "Scan all tracks" }
     update:onClicked(function()
-      database.update()
+      database.update(false)
     end)
     update:focus()
+
+    local update_skip = actions_container:Button {}
+    update_skip:Label { text = "Scan for new tracks" }
+    update_skip:onClicked(function()
+      database.update(true)
+    end)
 
     self.bindings = self.bindings + {
       database.auto_update:bind(function(en)
@@ -774,6 +873,13 @@ settings.DatabaseSettings = SettingsScreen:new {
           auto_update_sw:add_state(lvgl.STATE.CHECKED)
         else
           auto_update_sw:clear_state(lvgl.STATE.CHECKED)
+        end
+      end),
+      database.skip_verification:bind(function(en)
+        if en then
+          skip_verification_sw:add_state(lvgl.STATE.CHECKED)
+        else
+          skip_verification_sw:clear_state(lvgl.STATE.CHECKED)
         end
       end),
     }
@@ -826,10 +932,10 @@ settings.PowerSettings = SettingsScreen:new {
       power.fast_charge:bind(function(en)
         if en then
           fast_charge_sw:add_state(lvgl.STATE.CHECKED)
-          fast_charge_desc:set({text = "Disable Fast Charging"})
+          fast_charge_desc:set({ text = "Disable Fast Charging" })
         else
           fast_charge_sw:clear_state(lvgl.STATE.CHECKED)
-          fast_charge_desc:set({text = "Enable Fast Charging"})
+          fast_charge_desc:set({ text = "Enable Fast Charging" })
         end
       end),
     }
@@ -1041,14 +1147,14 @@ settings.Root = widgets.MenuScreen:new {
         backstack.push(class:new())
       end)
       if section_label then
-         -- Make sure item is visible, and, ideally, the section header.
-         item:onevent(lvgl.EVENT.FOCUSED, function()
-           -- Scroll to section in case it's off the top of the screen.
-           -- (0 for no animation; doesn't work if both scroll with animation.)
-           section_label:scroll_to_view(0);
-           -- Scroll to item in case it's off the bottom of the screen.
-           item:scroll_to_view(1);
-         end)
+        -- Make sure item is visible, and, ideally, the section header.
+        item:onevent(lvgl.EVENT.FOCUSED, function()
+          -- Scroll to section in case it's off the top of the screen.
+          -- (0 for no animation; doesn't work if both scroll with animation.)
+          section_label:scroll_to_view(0);
+          -- Scroll to item in case it's off the bottom of the screen.
+          item:scroll_to_view(1);
+        end)
       end
       item:add_style(styles.list_item)
       return item
@@ -1062,6 +1168,7 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Display", settings.DisplaySettings)
     submenu("Theme", settings.ThemeSettings)
     submenu("Input Method", settings.InputSettings)
+    submenu("Playing Screen", settings.PlayingScreenSettings)
 
     section("Storage")
     submenu("SD Card", settings.SDSettings)

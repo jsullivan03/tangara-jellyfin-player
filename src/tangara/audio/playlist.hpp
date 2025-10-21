@@ -45,12 +45,15 @@ class Playlist {
   auto prev() -> void;
   auto skipTo(size_t position) -> void;
 
+  auto writeToFile(const std::string& filepath) -> bool;
+
   auto serialiseCache() -> bool;
   auto deserialiseCache() -> bool;
   auto close() -> void;
 
  protected:
   const std::string filepath_;
+  std::string mutated_;
 
   mutable std::mutex mutex_;
   size_t total_size_;

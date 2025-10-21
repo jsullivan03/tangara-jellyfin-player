@@ -5,7 +5,7 @@
 # For more information about build system see
 # https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html
 
-set(PROJECT_VER "1.3.2")
+set(PROJECT_VER "1.5.0")
 
 # esp-idf sets the C++ standard weird. Set cmake vars to match.
 set(CMAKE_CXX_STANDARD 23)
@@ -15,6 +15,7 @@ set(CMAKE_CXX_EXTENSIONS ON)
 set(COMPONENTS "")
 
 # External dependencies
+list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/alac")
 list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/bt")
 list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/catch2")
 list(APPEND EXTRA_COMPONENT_DIRS "$ENV{PROJ_PATH}/lib/cbor")

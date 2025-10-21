@@ -2,7 +2,7 @@
 
 /*
  * SPDX-FileCopyrightText: 2017 Intel Corporation
- * SPDX-FileContributor: 2018-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileContributor: 2018-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -22,15 +22,21 @@
 #include "prov_common.h"
 #include "prov_node.h"
 
+#if CONFIG_BLE_MESH_V11_SUPPORT
 #include "mesh_v1.1/utils.h"
+#endif
 
 #if (CONFIG_BLE_MESH_NODE && CONFIG_BLE_MESH_PB_GATT) || \
      CONFIG_BLE_MESH_GATT_PROXY_SERVER
 
-#if !CONFIG_BLE_MESH_BQB_TEST
+#if !CONFIG_BLE_MESH_BQB_TEST && !CONFIG_BLE_MESH_PROXY_CLI_SRV_COEXIST && !CONFIG_BLE_MESH_RPR_SRV
 /* Not support enabling Proxy Client and Proxy Server simultaneously */
 _Static_assert(!(IS_ENABLED(CONFIG_BLE_MESH_GATT_PROXY_SERVER) && IS_ENABLED(CONFIG_BLE_MESH_GATT_PROXY_CLIENT)),
                "Not support Proxy Server and Proxy Client simultaneously");
+#endif
+
+#if CONFIG_BLE_MESH_USE_BLE_50
+static uint8_t proxy_adv_inst = BLE_MESH_ADV_INS_UNUSED;
 #endif
 
 #define ADV_OPT     (BLE_MESH_ADV_OPT_CONNECTABLE | BLE_MESH_ADV_OPT_ONE_TIME)
@@ -50,12 +56,24 @@ static const struct bt_mesh_adv_param slow_adv_param = {
     .options = ADV_OPT,
     .interval_min = BLE_MESH_GAP_ADV_SLOW_INT_MIN,
     .interval_max = BLE_MESH_GAP_ADV_SLOW_INT_MAX,
+#if CONFIG_BLE_MESH_USE_BLE_50
+    .primary_phy = BLE_MESH_ADV_PHY_1M,
+    .secondary_phy = BLE_MESH_ADV_PHY_1M,
+    .adv_duration = 0,
+    .adv_count = 0,
+#endif
 };
 
 static const struct bt_mesh_adv_param fast_adv_param = {
     .options = ADV_OPT,
     .interval_min = BLE_MESH_GAP_ADV_FAST_INT_MIN_0,
     .interval_max = BLE_MESH_GAP_ADV_FAST_INT_MAX_0,
+#if CONFIG_BLE_MESH_USE_BLE_50
+    .primary_phy = BLE_MESH_ADV_PHY_1M,
+    .secondary_phy = BLE_MESH_ADV_PHY_1M,
+    .adv_duration = 0,
+    .adv_count = 0,
+#endif
 };
 
 static bool proxy_adv_enabled;
@@ -150,6 +168,11 @@ static void proxy_sar_timeout(struct k_work *work)
 
     net_buf_simple_reset(&client->buf);
     bt_mesh_gatts_disconnect(client->conn, 0x13);
+}
+
+void bt_mesh_proxy_server_adv_flag_set(bool enable)
+{
+    proxy_adv_enabled = enable;
 }
 
 #if CONFIG_BLE_MESH_GATT_PROXY_SERVER
@@ -826,10 +849,18 @@ static void proxy_connected(struct bt_mesh_conn *conn, uint8_t err)
 
     BT_DBG("conn %p err 0x%02x", conn, err);
 
+    if (gatt_svc == MESH_GATT_PROV && conn_count == 1) {
+       BT_WARN("Only one prov connection could exists");
+       bt_mesh_gatts_disconnect(conn, 0x13);
+       return;
+    }
+
     conn_count++;
 
     /* Since we use ADV_OPT_ONE_TIME */
-    proxy_adv_enabled = false;
+#if !CONFIG_BLE_MESH_USE_BLE_50
+    bt_mesh_proxy_server_adv_flag_set(false);
+#endif
 
 #if CONFIG_BLE_MESH_PROXY_SOLIC_PDU_RX
     /* Before re-enabling advertising, stop advertising
@@ -1018,7 +1049,6 @@ int bt_mesh_proxy_server_prov_enable(void)
             clients[i].filter_type = SRV_PROV;
         }
     }
-
 
     return 0;
 }
@@ -1333,7 +1363,7 @@ int bt_mesh_proxy_server_segment_send(struct bt_mesh_conn *conn, uint8_t type,
     net_buf_simple_pull(msg, mtu);
 
     while (msg->len) {
-        if (msg->len + 1 < mtu) {
+        if (msg->len + 1 <= mtu) {
             net_buf_simple_push_u8(msg, BLE_MESH_PROXY_PDU_HDR(BLE_MESH_PROXY_SAR_LAST, type));
             proxy_send(conn, msg->data, msg->len);
             break;
@@ -1463,14 +1493,19 @@ static int node_id_adv(struct bt_mesh_subnet *sub)
     memcpy(proxy_svc_data + 3, tmp + 8, 8);
     proxy_sd_len = gatt_proxy_adv_create(&proxy_sd);
 
-    err = bt_le_adv_start(&fast_adv_param, node_id_ad,
-                          ARRAY_SIZE(node_id_ad), &proxy_sd, proxy_sd_len);
+#if CONFIG_BLE_MESH_USE_BLE_50
+    err = bt_le_ext_adv_start(proxy_adv_inst, &fast_adv_param, node_id_ad,
+                              ARRAY_SIZE(node_id_ad), &proxy_sd, proxy_sd_len);
+#else
+     err = bt_le_adv_start(&fast_adv_param, node_id_ad,
+                           ARRAY_SIZE(node_id_ad), &proxy_sd, proxy_sd_len);
+#endif
     if (err) {
         BT_WARN("Failed to advertise using Node ID (err %d)", err);
         return err;
     }
 
-    proxy_adv_enabled = true;
+    bt_mesh_proxy_server_adv_flag_set(true);
 
     return 0;
 }
@@ -1489,14 +1524,19 @@ static int net_id_adv(struct bt_mesh_subnet *sub)
     memcpy(proxy_svc_data + 3, sub->keys[sub->kr_flag].net_id, 8);
     proxy_sd_len = gatt_proxy_adv_create(&proxy_sd);
 
-    err = bt_le_adv_start(&slow_adv_param, net_id_ad,
-                          ARRAY_SIZE(net_id_ad), &proxy_sd, proxy_sd_len);
+#if CONFIG_BLE_MESH_USE_BLE_50
+    err = bt_le_ext_adv_start(proxy_adv_inst, &slow_adv_param, net_id_ad,
+                              ARRAY_SIZE(net_id_ad), &proxy_sd, proxy_sd_len);
+#else
+     err = bt_le_adv_start(&slow_adv_param, net_id_ad,
+                           ARRAY_SIZE(net_id_ad), &proxy_sd, proxy_sd_len);
+#endif
     if (err) {
         BT_WARN("Failed to advertise using Network ID (err %d)", err);
         return err;
     }
 
-    proxy_adv_enabled = true;
+    bt_mesh_proxy_server_adv_flag_set(true);
 
     return 0;
 }
@@ -1559,7 +1599,7 @@ static int private_node_id_adv(struct bt_mesh_subnet *sub)
         return err;
     }
 
-    proxy_adv_enabled = true;
+    bt_mesh_proxy_server_adv_flag_set(true);
 
     return 0;
 }
@@ -1603,7 +1643,7 @@ static int private_net_id_adv(struct bt_mesh_subnet *sub)
         return err;
     }
 
-    proxy_adv_enabled = true;
+    bt_mesh_proxy_server_adv_flag_set(true);
 
     return 0;
 }
@@ -1715,6 +1755,7 @@ static int32_t gatt_proxy_advertise(struct bt_mesh_subnet *sub)
         && sub->private_node_id == BLE_MESH_PRIVATE_NODE_IDENTITY_STOPPED
 #endif
         ) {
+        /* advertising node identity forever */
         if (bt_mesh_gatt_proxy_get() == BLE_MESH_GATT_PROXY_ENABLED) {
             net_id_adv(sub);
         }
@@ -1830,9 +1871,17 @@ static int32_t solic_adv_private_net_id(void)
 
 int32_t bt_mesh_proxy_server_adv_start(void)
 {
+    BT_DBG("proxy server start");
+
     if (gatt_svc == MESH_GATT_NONE) {
         return K_FOREVER;
     }
+
+#if CONFIG_BLE_MESH_USE_BLE_50
+    if (proxy_adv_inst == BLE_MESH_ADV_INS_UNUSED) {
+        return K_FOREVER;
+    }
+#endif
 
 #if CONFIG_BLE_MESH_PB_GATT
     if (prov_fast_adv) {
@@ -1840,7 +1889,7 @@ int32_t bt_mesh_proxy_server_adv_start(void)
     }
 
     if (!bt_mesh_is_provisioned()) {
-        const struct bt_mesh_adv_param *param;
+        const struct bt_mesh_adv_param *param = NULL;
         struct bt_mesh_adv_data prov_sd[2];
         size_t prov_sd_len;
 
@@ -1852,9 +1901,15 @@ int32_t bt_mesh_proxy_server_adv_start(void)
 
         prov_sd_len = gatt_prov_adv_create(prov_sd);
 
+#if CONFIG_BLE_MESH_USE_BLE_50
+        if (bt_le_ext_adv_start(proxy_adv_inst, param, prov_ad, ARRAY_SIZE(prov_ad),
+                                prov_sd, prov_sd_len) == 0) {
+#else /* CONFIG_BLE_MESH_USE_BLE_50 */
         if (bt_le_adv_start(param, prov_ad, ARRAY_SIZE(prov_ad),
                             prov_sd, prov_sd_len) == 0) {
-            proxy_adv_enabled = true;
+#endif /* CONFIG_BLE_MESH_USE_BLE_50 */
+
+            bt_mesh_proxy_server_adv_flag_set(true);
 
             /* Advertise 60 seconds using fast interval */
             if (prov_fast_adv) {
@@ -1884,25 +1939,35 @@ int32_t bt_mesh_proxy_server_adv_start(void)
     }
 #endif /* GATT_PROXY */
 
+    /* used to indicate proxy advertising could be stopped */
     return K_FOREVER;
 }
 
-void bt_mesh_proxy_server_adv_stop(void)
+int bt_mesh_proxy_server_adv_stop(void)
 {
     int err = 0;
 
-    BT_DBG("adv_enabled %u", proxy_adv_enabled);
-
     if (!proxy_adv_enabled) {
-        return;
+        return -EALREADY;
     }
 
+#if CONFIG_BLE_MESH_USE_BLE_50
+    if (proxy_adv_inst == BLE_MESH_ADV_INS_UNUSED) {
+        BT_ERR("Proxy adv inst is not initialized!");
+        return -EINVAL;
+   }
+
+    err = bt_le_ext_adv_stop(proxy_adv_inst);
+#else
     err = bt_le_adv_stop();
+#endif
     if (err) {
         BT_ERR("Failed to stop advertising (err %d)", err);
-    } else {
-        proxy_adv_enabled = false;
+        return -EINVAL;
     }
+
+    bt_mesh_proxy_server_adv_flag_set(false);
+    return 0;
 }
 
 static struct bt_mesh_conn_cb conn_callbacks = {
@@ -1913,6 +1978,14 @@ static struct bt_mesh_conn_cb conn_callbacks = {
 int bt_mesh_proxy_server_init(void)
 {
     int i;
+
+#if CONFIG_BLE_MESH_USE_BLE_50
+#if CONFIG_BLE_MESH_SUPPORT_MULTI_ADV
+    proxy_adv_inst = CONFIG_BLE_MESH_PROXY_ADV_INST_ID;
+#else /* CONFIG_BLE_MESH_SUPPORT_MULTI_ADV */
+    proxy_adv_inst = CONFIG_BLE_MESH_ADV_INST_ID;
+#endif
+#endif
 
 #if CONFIG_BLE_MESH_GATT_PROXY_SERVER
     bt_mesh_gatts_service_register(&proxy_svc);
@@ -1952,7 +2025,11 @@ int bt_mesh_proxy_server_deinit(void)
 {
     int i;
 
-    proxy_adv_enabled = false;
+#if CONFIG_BLE_MESH_USE_BLE_50
+    proxy_adv_inst = BLE_MESH_ADV_INS_UNUSED;
+#endif
+
+    bt_mesh_proxy_server_adv_flag_set(false);
     gatt_svc = MESH_GATT_NONE;
 
 #if CONFIG_BLE_MESH_GATT_PROXY_SERVER

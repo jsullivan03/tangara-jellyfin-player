@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "driver/i2c.h"
+#include "driver/i2c_types.h"
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -137,6 +138,8 @@ class Gpios : public IGpios {
 
  private:
   Gpios(bool invert_lock);
+
+  i2c_master_dev_handle_t i2c_;
 
   std::atomic<uint16_t> ports_;
   std::atomic<uint16_t> inputs_;

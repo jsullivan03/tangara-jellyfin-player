@@ -320,6 +320,14 @@ lua::Property UiState::sDatabaseAutoUpdate{
       sServices->nvs().DbAutoIndex(std::get<bool>(val));
       return true;
     }};
+lua::Property UiState::sDatabaseSkipVerification{
+    false, [](const lua::LuaValue& val) {
+      if (!std::holds_alternative<bool>(val)) {
+        return false;
+      }
+      sServices->nvs().DbSkipVerification(std::get<bool>(val));
+      return true;
+    }};
 
 lua::Property UiState::sSdMounted{false};
 
@@ -405,6 +413,31 @@ void UiState::react(const Screenshot& ev) {
     return;
   }
   SaveScreenshot(sCurrentScreen->root(), ev.filename);
+}
+
+void UiState::react(const SeekBack& ev) {
+  const auto playback_position = sPlaybackPosition.get();
+  if (!std::holds_alternative<int>(playback_position)) {
+    // I don't think this ever happens, but check anyway.
+    return;
+  }
+
+  const auto track = sPlaybackTrack.get();
+  if (!std::holds_alternative<audio::TrackInfo>(track)) {
+    // Nothing is playing
+    return;
+  }
+
+  const auto current_position = std::get<int>(playback_position);
+  int32_t seek_position = current_position - ev.seconds;
+  if (seek_position < 1) {
+    seek_position = 0;
+  }
+
+  events::Audio().Dispatch(audio::SetTrack{
+      .new_track = std::get<audio::TrackInfo>(track).uri,
+      .seek_to_second = seek_position,
+  });
 }
 
 void UiState::react(const system_fsm::KeyLockChanged& ev) {
@@ -699,6 +732,12 @@ void Lua::entry() {
     }
 
     registry.AddPropertyModule(
+        "playing_screen_settings",
+        {
+            {"long_text_scheme", &sInput->longTextMode()},
+        });
+
+    registry.AddPropertyModule(
         "backstack",
         {
             {"push", [&](lua_State* s) { return PushLuaScreen(s, false); }},
@@ -715,11 +754,12 @@ void Lua::entry() {
         "time", {
                     {"ticks", [&](lua_State* s) { return Ticks(s); }},
                 });
-    registry.AddPropertyModule("database",
-                               {
-                                   {"updating", &sDatabaseUpdating},
-                                   {"auto_update", &sDatabaseAutoUpdate},
-                               });
+    registry.AddPropertyModule(
+        "database", {
+                        {"updating", &sDatabaseUpdating},
+                        {"auto_update", &sDatabaseAutoUpdate},
+                        {"skip_verification", &sDatabaseSkipVerification},
+                    });
     registry.AddPropertyModule(
         "sd_card", {
                        {"mounted", &sSdMounted},
@@ -736,6 +776,7 @@ void Lua::entry() {
                                });
 
     sDatabaseAutoUpdate.setDirect(sServices->nvs().DbAutoIndex());
+    sDatabaseSkipVerification.setDirect(sServices->nvs().DbSkipVerification());
 
     auto bt = sServices->bluetooth();
     sBluetoothEnabled.setDirect(bt.enabled());

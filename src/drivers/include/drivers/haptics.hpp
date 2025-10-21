@@ -14,6 +14,7 @@
 #include <string>
 #include <variant>
 
+#include "driver/i2c_types.h"
 #include "drivers/nvs.hpp"
 
 namespace drivers {
@@ -199,6 +200,7 @@ class Haptics {
   static auto IsHardwarePresent() -> bool;
 
  private:
+  i2c_master_dev_handle_t i2c_;
   std::optional<Effect> current_effect_;
   std::mutex playing_effect_;
 
@@ -315,7 +317,6 @@ class Haptics {
     kLraResonancePeriod = 0,
   };
 
-  auto PowerUp() -> void;
   auto WriteRegister(Register reg, uint8_t val) -> void;
   auto ReadRegister(Register reg) -> uint8_t;
 

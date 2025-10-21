@@ -28,6 +28,7 @@
 #include "lua/lua_font.hpp"
 #include "lua/lua_i2c.hpp"
 #include "lua/lua_nvs.hpp"
+#include "lua/lua_playing_screen_settings.hpp"
 #include "lua/lua_queue.hpp"
 #include "lua/lua_screen.hpp"
 #include "lua/lua_testing.hpp"
@@ -80,6 +81,7 @@ auto Bridge::installBaseModules(lua_State* L) -> void {
   lua_pop(L, 1);
 
   RegisterControlsModule(L);
+  RegisterPlayingScreenSettingsModule(L);
   RegisterDatabaseModule(L);
   RegisterQueueModule(L);
   RegisterTestingModule(L);

@@ -79,6 +79,19 @@ static auto queue_open_playlist(lua_State* state) -> int {
   return 0;
 }
 
+static auto queue_save_to_playlist(lua_State* state) -> int {
+  Bridge* instance = Bridge::Get(state);
+  audio::TrackQueue& queue = instance->services().track_queue();
+  size_t len = 0;
+  const char* str = luaL_checklstring(state, 1, &len);
+  if (!str) {
+    return 0;
+  }
+  bool res = queue.saveToNewPlaylist(str);
+  lua_pushboolean(state, res);
+  return 1;
+}
+
 static auto queue_play_from(lua_State* state) -> int {
   Bridge* instance = Bridge::Get(state);
   audio::TrackQueue& queue = instance->services().track_queue();
@@ -96,6 +109,7 @@ static const struct luaL_Reg kQueueFuncs[] = {
     {"add", queue_add},
     {"clear", queue_clear},
     {"open_playlist", queue_open_playlist},
+    {"save_to_playlist", queue_save_to_playlist},
     {"play_from", queue_play_from},
     {NULL, NULL}};
 
