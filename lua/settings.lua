@@ -362,7 +362,7 @@ settings.DisplaySettings = SettingsScreen:new {
 }
 
 settings.PlayingScreenSettings = SettingsScreen:new{
-  title = "Playing Screen Options",
+  title = "Playing Screen",
   create_ui = function(self)
     SettingsScreen.create_ui(self)
 
