@@ -8,6 +8,8 @@
 
 #include <string>
 
+#include "driver/i2c.h"
+#include "esp_log.h"
 #include "lua.hpp"
 
 #include "lauxlib.h"
@@ -17,131 +19,132 @@
 
 namespace lua {
 
-struct I2CCommand {
-  enum class Type { start, stop, read, write } type;
-  uint8_t data;      // for write
-  bool ack;          // for read/write
+[[maybe_unused]] static constexpr char kTag[] = "lua_i2c";
+
+struct I2CDevice {
+  i2c_master_dev_handle_t handle;
 };
-static_assert(std::is_trivially_destructible<I2CCommand>());
+static_assert(std::is_trivially_destructible<I2CDevice>());
+static char const* kDeviceMetatable = "i2c_device";
 
-static char const* kCommandMetatable = "i2c_command";
+static auto make_device(lua_State* L) -> int {
+  luaL_argexpected(L, lua_istable(L, 1), 1, "options table");
 
-static auto make_i2c_command(lua_State* L) -> I2CCommand* {
-  void* userdata = lua_newuserdata(L, sizeof(I2CCommand));
-  I2CCommand* cmd = new (userdata) I2CCommand;
-  luaL_getmetatable(L, kCommandMetatable);
+  i2c_device_config_t dev_config;
+
+  lua_getfield(L, 1, "address");
+  dev_config.device_address = luaL_checkinteger(L, -1);
+  lua_pop(L, 1);
+
+  lua_getfield(L, 1, "address_is_ten_bit");
+  dev_config.dev_addr_length =
+      lua_toboolean(L, -1) ? I2C_ADDR_BIT_LEN_10 : I2C_ADDR_BIT_LEN_7;
+  lua_pop(L, 1);
+
+  lua_getfield(L, 1, "scl_speed_hz");
+  dev_config.scl_speed_hz =
+      lua_isinteger(L, -1) ? lua_tointeger(L, -1) : 400000;
+  lua_pop(L, 1);
+
+  lua_getfield(L, 1, "scl_wait_us");
+  dev_config.scl_wait_us = lua_isinteger(L, -1) ? lua_tointeger(L, -1) : 0;
+  lua_pop(L, 1);
+
+  lua_getfield(L, 1, "disable_ack_check");
+  dev_config.flags.disable_ack_check = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+
+  ESP_LOGW(kTag, "make_device: address=%02x dev_addr_length=%d scl_speed_hz=%d scl_wait_us=%d disable_ack_check=%d",
+           dev_config.device_address,
+           dev_config.dev_addr_length,
+           dev_config.scl_speed_hz,
+           dev_config.scl_wait_us,
+           dev_config.flags.disable_ack_check);
+
+  void* userdata = lua_newuserdata(L, sizeof(I2CDevice));
+  I2CDevice* device = new (userdata) I2CDevice;
+  luaL_getmetatable(L, kDeviceMetatable);
   lua_setmetatable(L, -2);
-  return cmd;
-}
 
-static auto check_i2c_command(lua_State* L, int i) -> I2CCommand* {
-  return static_cast<I2CCommand*>(luaL_checkudata(L, i, kCommandMetatable));
-}
-
-static auto make_start(lua_State* L) -> int {
-  auto c = make_i2c_command(L);
-  c->type = I2CCommand::Type::start;
-  return 1;
-}
-
-static auto make_stop(lua_State* L) -> int {
-  auto c = make_i2c_command(L);
-  c->type = I2CCommand::Type::stop;
-  return 1;
-}
-
-static char const* const rw_opts[]{
-    "write", "read", nullptr};  // order is important, 0=write 1=read in i2c
-static char const* const ack_opts[]{
-    "nack", "ack", nullptr};  // order also important, it's a boolean
-
-static auto make_read(lua_State* L) -> int {
-  auto ack = luaL_checkoption(L, 1, "ack", ack_opts);
-  auto c = make_i2c_command(L);
-  c->type = I2CCommand::Type::read;
-  c->ack = ack;
-  return 1;
-}
-
-static auto make_write_addr(lua_State* L) -> int {
-  auto addr = luaL_checkinteger(L, 1);
-  auto is_read = luaL_checkoption(L, 2, nullptr, rw_opts);
-  auto c = make_i2c_command(L);
-  c->type = I2CCommand::Type::write;
-  c->data = addr << 1 | is_read;
-  c->ack = true;
-  return 1;
-}
-
-static auto make_write_ack(lua_State* L) -> int {
-  auto data = luaL_checkinteger(L, 1);
-  auto c = make_i2c_command(L);
-  c->type = I2CCommand::Type::write;
-  c->data = data;
-  return 1;
-}
-
-static auto execute(lua_State* L) -> int {
-  int arg_count = lua_gettop(L);
-
-  // first, how many bytes are we reading? allocate a place for them
-  int read_count = 0;
-  for (int i = 1; i <= arg_count; i++) {
-    auto arg = check_i2c_command(L, i);
-    if (arg->type == I2CCommand::Type::read) {
-      read_count++;
-    }
-  }
-  uint8_t* read_slots = static_cast<uint8_t*>(alloca(read_count));
-  int read_index = 0;
-
-  // build and execute the transaction
-  drivers::I2CTransaction transaction;
-  for (int i = 1; i <= arg_count; i++) {
-    auto arg = check_i2c_command(L, i);
-    switch (arg->type) {
-      case I2CCommand::Type::start: {
-        transaction.start();
-        break;
-      }
-      case I2CCommand::Type::read: {
-        transaction.read(&read_slots[read_index],
-                         arg->ack ? I2C_MASTER_ACK : I2C_MASTER_NACK);
-        read_index++;
-        break;
-      }
-      case I2CCommand::Type::write: {
-        transaction.write_ack(arg->data);
-        break;
-      }
-      case I2CCommand::Type::stop: {
-        transaction.stop();
-        break;
-      }
-    }
-  }
-  esp_err_t err = transaction.Execute();
-
+  int err = i2c_master_bus_add_device(drivers::i2c_handle(), &dev_config,
+                                      &device->handle);
   if (err != ESP_OK) {
+    auto err_text = esp_err_to_name(err);
+    ESP_LOGE(kTag, "i2c_master_bus_add_device failed (err=%s)", err_text);
+    luaL_error(L, "make_device failed: %s", err_text);
     return 0;
   }
-  for (int i = 0; i < read_count; i++) {
-    lua_pushinteger(L, read_slots[i]);
-  }
 
-  return read_count;
+  return 1;
 }
 
-static const struct luaL_Reg kI2CFuncs[] = {{"start", make_start},
-                                            {"stop", make_stop},
-                                            {"read", make_read},
-                                            {"write_addr", make_write_addr},
-                                            {"write_ack", make_write_ack},
-                                            {"execute", execute},
+static auto check_device(lua_State* L, int pos) -> I2CDevice* {
+  return reinterpret_cast<I2CDevice*>(
+      luaL_checkudata(L, pos, kDeviceMetatable));
+}
+
+static auto device_read_register(lua_State* L) -> int {
+  auto device = check_device(L, 1);
+  auto reg = luaL_checkinteger(L, 2);
+  auto count = luaL_checkinteger(L, 3);
+  uint8_t tx[] = {static_cast<uint8_t>(reg)};
+  uint8_t* rx = reinterpret_cast<uint8_t*>(alloca(count));
+  auto err = i2c_master_transmit_receive(device->handle, tx, 1, rx, count, 100);
+  if (err != ESP_OK) {
+    auto err_text = esp_err_to_name(err);
+    ESP_LOGE(kTag, "i2c_master_transmit_receive failed (err=%s)", err_text);
+    luaL_error(L, "read failed: %s", err_text);
+  }
+  for (size_t i = 0; i < count; i++) {
+    lua_pushinteger(L, rx[i]);
+  }
+  return count;
+}
+
+static auto device_write_register(lua_State* L) -> int {
+  int argc = lua_gettop(L);
+  auto device = check_device(L, 1);
+  auto count = argc - 1;
+  uint8_t* tx = reinterpret_cast<uint8_t*>(alloca(count));
+  for (size_t i = 0; i < count; i++) {
+    tx[i] = luaL_checkinteger(L, 2 + i);
+  }
+  auto err = i2c_master_transmit(device->handle, tx, count, 100);
+  if (err != ESP_OK) {
+    auto err_text = esp_err_to_name(err);
+    ESP_LOGE(kTag, "i2c_master_transmit failed (err=%s)", err_text);
+    luaL_error(L, "write failed: %s", err_text);
+  }
+
+  return 0;
+}
+
+static auto device_destroy(lua_State* L) -> int {
+  auto device = check_device(L, 1);
+  if (device->handle) {
+    i2c_master_bus_rm_device(device->handle);
+    device->handle = nullptr;
+  }
+  return 0;
+}
+
+static const struct luaL_Reg kI2CFuncs[] = {{"device", make_device},
                                             {NULL, NULL}};
 
+static const struct luaL_Reg kI2CDeviceFuncs[] = {
+    {"read", device_read_register},
+    {"write", device_write_register},
+    {"__gc", device_destroy},
+    {"__close", device_destroy},
+    {nullptr, nullptr}};
+
 static auto lua_i2c(lua_State* L) -> int {
-  luaL_newmetatable(L, kCommandMetatable);
+  luaL_newmetatable(L, kDeviceMetatable);
+  luaL_setfuncs(L, kI2CDeviceFuncs, 0);
+  lua_pushliteral(L, "__index");
+  lua_pushvalue(L, -2);
+  lua_settable(L, -3);  // metatable.__index = metatable
+
   luaL_newlib(L, kI2CFuncs);
   return 1;
 }

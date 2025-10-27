@@ -511,9 +511,7 @@ auto Haptics::EffectToLabel(Effect effect) -> std::string {
 auto Haptics::IsHardwarePresent() -> bool {
   static bool already_probed = false, probe_result;
   if (!already_probed) {
-    I2CTransaction transaction;
-    transaction.start().write_addr(kHapticsAddress, I2C_MASTER_READ).stop();
-    esp_err_t res = transaction.Execute(1);
+    esp_err_t res = i2c_master_probe(i2c_handle(), kHapticsAddress, 100);
     probe_result = (res == ESP_OK);
     already_probed = true;
   }
