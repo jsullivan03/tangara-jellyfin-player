@@ -67,7 +67,7 @@ class AlacDecoder : public ICodec {
   alac_file alac_;
   uint8_t bitdepth_;
   uint8_t channels_;
-  uint16_t sampleRate_;
+  uint32_t sampleRate_;
   uint16_t index_;
 
   std::vector<std::tuple<uint32_t, uint32_t>> stts_;

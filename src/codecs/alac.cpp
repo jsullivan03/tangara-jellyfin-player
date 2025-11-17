@@ -117,15 +117,7 @@ auto AlacDecoder::readStsd() -> cpp::result<void, ICodec::Error> {
   std::byte buf2[2];
   input_->Read(buf2);
   index_ = loadBe16(buf2);
-  input_->SeekTo(8, IStream::SeekFrom::kCurrentPosition);
-  input_->Read(buf2);
-  if (channels_ = loadBe16(buf2); channels_ > 2)
-    return cpp::fail(Error::kUnsupportedFormat);
-  input_->Read(buf2);
-  bitdepth_ = loadBe16(buf2);
-  input_->SeekTo(4, IStream::SeekFrom::kCurrentPosition);
-  input_->Read(buf4);
-  sampleRate_ = loadBe32(buf4) >> 16;
+  input_->SeekTo(20, IStream::SeekFrom::kCurrentPosition);
   input_->Read(buf4);
   uint32_t alacInfoSize = loadBe32(buf4) - 12;
   input_->Read(buf4);
@@ -136,6 +128,9 @@ auto AlacDecoder::readStsd() -> cpp::result<void, ICodec::Error> {
     return cpp::fail(Error::kUnsupportedFormat);
   std::vector<std::byte> cookie(alacInfoSize);
   input_->Read(cookie);
+  bitdepth_ = static_cast<uint8_t>(cookie[5]);
+  channels_ = static_cast<uint8_t>(cookie[9]);
+  sampleRate_ = loadBe32(&cookie[20]);
   create_alac(&alac_, bitdepth_, channels_);
   alac_set_info(&alac_, reinterpret_cast<char*>(cookie.data()));
   alac_.predicterror_buffer_a = static_cast<int32_t*>(
