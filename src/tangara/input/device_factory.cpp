@@ -26,8 +26,8 @@ DeviceFactory::DeviceFactory(
     std::shared_ptr<system_fsm::ServiceLocator> services)
     : services_(services) {
   if (services->touchwheel()) {
-    wheel_ =
-        std::make_shared<TouchWheel>(services->nvs(), **services->touchwheel(), services->track_queue());
+    wheel_ = std::make_shared<TouchWheel>(
+        services->nvs(), **services->touchwheel(), services->track_queue());
     auto wheel_mode = services_->nvs().WheelInput();
     if (wheel_mode == drivers::NvsStorage::WheelInputModes::kWheelWithButtons) {
       wheel_->activate_buttons(true);
@@ -125,7 +125,7 @@ auto DeviceFactory::createFeedbacks()
     -> std::vector<std::shared_ptr<IFeedbackDevice>> {
   std::vector<std::shared_ptr<IFeedbackDevice>> ret;
   if (services_->haptics()) {
-    std::make_shared<Haptics>(**services_->haptics(), services_);
+    ret.push_back(std::make_shared<Haptics>(**services_->haptics(), services_));
   }
   ret.push_back(std::make_shared<TextToSpeech>(services_->tts()));
   return ret;
