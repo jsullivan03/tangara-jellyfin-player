@@ -562,12 +562,13 @@ settings.InputSettings = SettingsScreen:new {
       return controls_chooser
     end
 
+    local controls_chooser
     if controls.touchwheel_present() then
       theme.set_subject(self.content:Label {
         text = "Wheel Controls",
       }, "settings_title")
 
-      local controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
+      controls_chooser = make_scheme_control(self, controls.wheel_schemes(), controls.wheel_scheme)
       local controls_chooser_desc = widgets.Description(controls_chooser, "Control scheme")
     end
 
