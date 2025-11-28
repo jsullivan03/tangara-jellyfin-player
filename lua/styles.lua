@@ -13,7 +13,7 @@ local styles = {
     pad_top = 4,
     pad_left = 4,
     pad_right = 4,
-    text_font = font.fusion_10(),
+    text_font = font.fusion_10,
     text_align = lvgl.ALIGN.CENTER,
   },
 }

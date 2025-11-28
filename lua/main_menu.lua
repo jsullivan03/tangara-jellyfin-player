@@ -50,7 +50,7 @@ return widgets.MenuScreen:new {
     }
     local time_remaining = now_playing:Label {
       text = " ",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
     }
 
     now_playing:onClicked(function() backstack.push(playing:new()) end)

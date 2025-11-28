@@ -92,22 +92,6 @@ static lv_obj_t* sAlertContainer;
 static std::atomic<lv_font_t*> sFont_fusion_10 = nullptr;
 static std::atomic<lv_font_t*> sFont_fusion_12 = nullptr;
 
-static int get_fusion_10(lua_State *L) {
-  lua_pushlightuserdata(L, (void*)sFont_fusion_10.load());
-  return 1;
-}
-
-static int get_fusion_12(lua_State *L) {
-  lua_pushlightuserdata(L, (void*)sFont_fusion_12.load());
-  return 1;
-}
-
-static const struct luaL_Reg font_methods[] = {
-  {"fusion_10", get_fusion_10},
-  {"fusion_12", get_fusion_12},
-  {NULL,       NULL},
-};
-
 static void alert_timer_callback(TimerHandle_t timer) {
   events::Ui().Dispatch(internal::DismissAlerts{});
 }
@@ -677,9 +661,24 @@ void Lua::entry() {
 
     sFont_fusion_10.wait(nullptr);
     sFont_fusion_12.wait(nullptr);
+
     auto state = sLua->state();
-    luaL_newlib(state, font_methods);
-    lua_setglobal(state, "font");
+    luaL_getsubtable(state, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
+
+    lua_createtable(state, 0, 2);
+    lua_pushliteral(state, "fusion_10");
+    lua_pushlightuserdata(state, (void*)sFont_fusion_10.load());
+    lua_rawset(state, -3);
+    lua_pushliteral(state, "fusion_12");
+    lua_pushlightuserdata(state, (void*)sFont_fusion_12.load());
+    lua_rawset(state, -3);
+
+    lua_pushvalue(state, -1);
+    lua_setfield(state, -3, "font"); // LOADED[font] = module
+
+    lua_remove(state, -2);
+
+    lua_setglobal(state, "font"); // _G[font] = module
     // This allocates large buffers, so ensure it runs after
     // the font files have been parsed and freed from memory.
     system_fsm::BootComplete ev{.services = sServices};

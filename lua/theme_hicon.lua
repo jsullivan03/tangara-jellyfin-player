@@ -11,7 +11,7 @@ local theme_hicon = {
   base = {
     {lvgl.PART.MAIN, lvgl.Style {
       bg_opa = lvgl.OPA(0),
-      text_font = font.fusion_12(),
+      text_font = font.fusion_12,
     }},
     {lvgl.PART.SCROLLBAR, lvgl.Style {
       bg_color = text_color,
@@ -233,7 +233,7 @@ local theme_hicon = {
    {lvgl.PART.MAIN, lvgl.Style {
       pad_top = 2,
       pad_bottom = 4,
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
       text_color = text_color,
     }},
   },

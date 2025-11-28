@@ -43,7 +43,7 @@ GLOBAL_BINDINGS = {
       theme.set_subject(container, "pop_up")
       container:Label {
         text = string.format("Volume %i%%", pct),
-        text_font = font.fusion_10()
+        text_font = font.fusion_10
       }
       container:Bar {
         w = lvgl.PCT(100),

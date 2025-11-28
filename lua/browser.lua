@@ -54,7 +54,7 @@ return screen:new {
     if self.breadcrumb then
       header:Label {
         text = self.breadcrumb,
-        text_font = font.fusion_10()
+        text_font = font.fusion_10
       }
     end
 

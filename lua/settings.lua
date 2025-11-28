@@ -1023,7 +1023,7 @@ local FccStatementScreen = SettingsScreen:new {
         w = lvgl.PCT(100),
         h = lvgl.SIZE_CONTENT,
         text = text,
-        text_font = font.fusion_10(),
+        text_font = font.fusion_10,
         long_mode = lvgl.LABEL.LONG_WRAP,
       }
     end
@@ -1063,11 +1063,11 @@ settings.RegulatoryScreen = SettingsScreen:new {
       container:Label {
         text = left,
         flex_grow = 1,
-        text_font = font.fusion_10(),
+        text_font = font.fusion_10,
       }
       container:Label {
         text = right,
-        text_font = font.fusion_10(),
+        text_font = font.fusion_10,
       }
     end
     small_row("Manufacturer", "cool tech zone")

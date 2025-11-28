@@ -68,7 +68,7 @@ return screen:new {
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
       text = "",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
       text_align = 2,
     }
 
@@ -76,7 +76,7 @@ return screen:new {
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
       text = "",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
       text_align = 2,
     }
 
@@ -112,7 +112,7 @@ return screen:new {
       h = lvgl.SIZE_CONTENT,
       align = lvgl.ALIGN.LEFT_MID,
       text = "",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
     }
 
     playlist:Object({ flex_grow = 1, h = 1 }) -- spacer
@@ -129,15 +129,15 @@ return screen:new {
     }
     local playlist_pos = playlist_pos_container:Label {
       text = "",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
     }
     playlist_pos_container:Label {
       text = "/",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
     }
     local playlist_total = playlist_pos_container:Label {
       text = "",
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
     }
 
     playlist:Object({ flex_grow = 1, h = 1 }) -- spacer
@@ -147,7 +147,7 @@ return screen:new {
       h = lvgl.SIZE_CONTENT,
       text_align = 3, -- LV_TEXT_ALIGN_RIGHT
       text = format_time(0),
-      text_font = font.fusion_10(),
+      text_font = font.fusion_10,
     }
     playlist:Object({ w = 3, h = 1 }) -- spacer
 
