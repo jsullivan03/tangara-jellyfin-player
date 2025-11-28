@@ -64,5 +64,6 @@ auto loadFont(const std::string& path,
   auto buffer = readFont(path);
   bg_worker_pool.Dispatch<void>([&pointer, buffer]() {
     pointer = parseFont(buffer);
+    pointer.notify_all();
   });
 }
