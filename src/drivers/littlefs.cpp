@@ -4,28 +4,27 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include "drivers/spiffs.hpp"
+#include "drivers/littlefs.hpp"
 
 #include "esp_err.h"
 #include "esp_log.h"
-#include "esp_spiffs.h"
+#include "esp_littlefs.h"
 
 namespace drivers {
 
-[[maybe_unused]] static constexpr char kTag[] = "spiffs";
+[[maybe_unused]] static constexpr char kTag[] = "littlefs";
 
 static auto mount_script_dir() -> esp_err_t {
-  esp_vfs_spiffs_conf_t config{
+  esp_vfs_littlefs_conf_t config{
       .base_path = "/lua",
       .partition_label = "lua",
-      .max_files = 5,
       .format_if_mount_failed = false,
   };
 
-  esp_err_t res = esp_vfs_spiffs_register(&config);
+  esp_err_t res = esp_vfs_littlefs_register(&config);
   if (res == ESP_OK) {
     size_t total, used;
-    esp_spiffs_info("lua", &total, &used);
+    esp_littlefs_info("lua", &total, &used);
     ESP_LOGI(kTag, "lua scripts mounted okay. %d / %d ", used / 1024,
              total / 1024);
   }
@@ -34,17 +33,16 @@ static auto mount_script_dir() -> esp_err_t {
 }
 
 static auto mount_repl_dir() -> esp_err_t {
-  esp_vfs_spiffs_conf_t config{
+  esp_vfs_littlefs_conf_t config{
       .base_path = "/repl",
       .partition_label = "repl",
-      .max_files = 5,
       .format_if_mount_failed = false,
   };
 
-  esp_err_t res = esp_vfs_spiffs_register(&config);
+  esp_err_t res = esp_vfs_littlefs_register(&config);
   if (res == ESP_OK) {
     size_t total, used;
-    esp_spiffs_info("repl", &total, &used);
+    esp_littlefs_info("repl", &total, &used);
     ESP_LOGI(kTag, "lua repl mounted okay. %d / %d ", used / 1024,
              total / 1024);
   }
@@ -52,7 +50,7 @@ static auto mount_repl_dir() -> esp_err_t {
   return res;
 }
 
-esp_err_t spiffs_mount() {
+esp_err_t littlefs_mount() {
   esp_err_t res;
   if ((res = mount_script_dir()) != ESP_OK) {
     return res;

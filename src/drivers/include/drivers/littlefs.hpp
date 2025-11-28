@@ -10,6 +10,6 @@
 
 namespace drivers {
 
-esp_err_t spiffs_mount();
+esp_err_t littlefs_mount();
 
 }  // namespace drivers

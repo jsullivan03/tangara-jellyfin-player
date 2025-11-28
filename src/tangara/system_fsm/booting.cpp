@@ -30,10 +30,10 @@
 #include "drivers/gpios.hpp"
 #include "drivers/haptics.hpp"
 #include "drivers/i2c.hpp"
+#include "drivers/littlefs.hpp"
 #include "drivers/nvs.hpp"
 #include "drivers/samd.hpp"
 #include "drivers/spi.hpp"
-#include "drivers/spiffs.hpp"
 #include "drivers/touchwheel.hpp"
 #include "events/event_queue.hpp"
 #include "system_fsm/service_locator.hpp"
@@ -87,7 +87,7 @@ auto Booting::entry() -> void {
   sServices->bg_worker(std::make_unique<tasks::WorkerPool>());
 
   ESP_LOGI(kTag, "installing remaining drivers");
-  drivers::spiffs_mount();
+  drivers::littlefs_mount();
   sServices->samd(std::make_unique<drivers::Samd>(sServices->nvs()));
 
   if (drivers::TouchWheel::IsHardwarePresent()) {

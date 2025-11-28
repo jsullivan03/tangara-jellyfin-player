@@ -27,12 +27,12 @@ get_filename_component(collate_full_path "tools/collate/Generic.LC_COLLATE" ABSO
 esptool_py_flash_to_partition(flash "collate" ${collate_full_path})
 
 # /lua partition on internal flash, for storing the lua application
-spiffs_create_partition_image(lua lua FLASH_IN_PROJECT)
+littlefs_create_partition_image(lua lua FLASH_IN_PROJECT)
 
 # /repl partition on internal flash, for storing the developer repl and its deps
 file(COPY lib/lua-repl/repl DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/repl)
 file(COPY lib/lua-term/term DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/repl)
-spiffs_create_partition_image(repl ${CMAKE_CURRENT_BINARY_DIR}/repl FLASH_IN_PROJECT)
+littlefs_create_partition_image(repl ${CMAKE_CURRENT_BINARY_DIR}/repl FLASH_IN_PROJECT)
 
 add_custom_target(check-for-sdkconfig-changes ALL
   COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake/check-for-sdkconfig-changes.sh

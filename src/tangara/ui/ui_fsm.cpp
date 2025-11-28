@@ -48,7 +48,6 @@
 #include "drivers/haptics.hpp"
 #include "drivers/nvs.hpp"
 #include "drivers/samd.hpp"
-#include "drivers/spiffs.hpp"
 #include "drivers/storage.hpp"
 #include "drivers/touchwheel.hpp"
 #include "events/event_queue.hpp"
