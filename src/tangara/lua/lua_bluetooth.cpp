@@ -30,30 +30,15 @@ namespace lua {
 
 static auto forget_known_device(lua_State* state) -> int {
   Bridge* instance = Bridge::Get(state);
-  size_t len = 0;
 
-  // Get name of device to forget
-  const char* nameChar = luaL_checklstring(state, 1, &len);
-  if (!nameChar) {
+  drivers::bluetooth::mac_addr_t mac;
+  if (lua_isuserdata(state, 1)) {
+    mac = *reinterpret_cast<drivers::bluetooth::mac_addr_t*>(
+        lua_touserdata(state, 1));
+  } else
     return 0;
-  }
-  // Convert to type string
-  const std::string name(nameChar);
 
-  // Get list of known devices
-  const std::vector<drivers::bluetooth::MacAndName> knownDevices =
-      instance->services().bluetooth().knownDevices();
-
-  std::vector<drivers::bluetooth::MacAndName> matchedDevice;
-
-  // Match known device to target name to forget
-  std::copy_if(knownDevices.begin(), knownDevices.end(),
-               std::back_inserter(matchedDevice),
-               [&](const drivers::bluetooth::MacAndName& entry) {
-                 return entry.name == name;
-               });
-
-  instance->services().bluetooth().forgetKnownDevice(matchedDevice[0].mac);
+  instance->services().bluetooth().forgetKnownDevice(mac);
 
   return 1;
 }

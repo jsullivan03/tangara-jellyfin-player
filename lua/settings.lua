@@ -101,7 +101,7 @@ local BluetoothForget = SettingsScreen:new{
           local forget_known_device = known_device:Button{}
           forget_known_device:Label { text = "x" }
           forget_known_device:onClicked(function()
-            bluetooth.forget_known_device(dev.name)
+            bluetooth.forget_known_device(dev.address)
           end)
         end
       end)

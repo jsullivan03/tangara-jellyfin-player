@@ -17,8 +17,8 @@
 local bluetooth = {}
 
 --- Removes known bluetooth device
---- @param name string The name of the device
-function bluetooth.forget_known_device(name) end
+--- @param mac userdata The name of the device
+function bluetooth.forget_known_device(mac) end
 
 --- Enables Bluetooth, this is the same as bluetooth.enabled:set(true)
 function bluetooth.enable() end
