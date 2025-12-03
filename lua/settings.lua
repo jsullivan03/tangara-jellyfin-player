@@ -98,11 +98,10 @@ local BluetoothForget = SettingsScreen:new{
             h = lvgl.SIZE_CONTENT,
             pad_bottom = 2,
           }
-          local remove_known_device = known_device:Button{}
-          remove_known_device:Label { text = "x" }
-          remove_known_device:onClicked(function()
-            print(dev.name)
-            -- bluetooth.forget_known_device()
+          local forget_known_device = known_device:Button{}
+          forget_known_device:Label { text = "x" }
+          forget_known_device:onClicked(function()
+            bluetooth.forget_known_device(dev.name)
           end)
         end
       end)
