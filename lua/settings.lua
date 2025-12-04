@@ -241,7 +241,7 @@ settings.BluetoothSettings = SettingsScreen:new {
     end)
 
     local forget_known = button_container:Button {}
-    forget_known:Label { text="Forget known devices"}
+    forget_known:Label { text="Forget a device" }
     forget_known:onClicked(function()
      backstack.push(BluetoothForget:new())
     end)
