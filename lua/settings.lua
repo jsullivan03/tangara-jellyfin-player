@@ -71,6 +71,44 @@ local BluetoothPairing = SettingsScreen:new {
   on_hide = function() bluetooth.discovering:set(false) end,
 }
 
+
+local BluetoothForget = SettingsScreen:new{
+  title = "Forget Devices",
+  create_ui = function(self)
+    SettingsScreen.create_ui(self)
+
+    local devices = self.content:List{
+      w = lvgl.PCT(100),
+      h = lvgl.SIZE_CONTENT,
+    }
+
+    self.bindings = self.bindings +{
+      bluetooth.known_devices:bind(function(devs)
+        devices:clean()
+
+        for _, dev in pairs(devs) do
+          local known_device = devices:Label{
+            text = dev.name,
+            flex = {
+              flex_direction = "row",
+              justify_content = "flex-end",
+              align_items = "flex-start"
+            },
+            w = lvgl.PCT(100),
+            h = lvgl.SIZE_CONTENT,
+            pad_bottom = 2,
+          }
+          local forget_known_device = known_device:Button{}
+          forget_known_device:Label { text = "x" }
+          forget_known_device:onClicked(function()
+            bluetooth.forget_known_device(dev.address)
+          end)
+        end
+      end)
+    }
+  end,
+}
+
 settings.BluetoothSettings = SettingsScreen:new {
   title = "Bluetooth",
   create_ui = function(self)
@@ -185,13 +223,14 @@ settings.BluetoothSettings = SettingsScreen:new {
       w = lvgl.PCT(100),
       h = lvgl.SIZE_CONTENT,
       flex = {
-        flex_direction = "row",
+        flex_direction = "column",
         justify_content = "center",
-        align_items = "space-evenly",
+        align_items = "center",
         align_content = "center",
       },
       pad_top = 4,
       pad_column = 4,
+      pad_row = 4,
     }
     button_container:add_style(styles.list_item)
 
@@ -201,11 +240,17 @@ settings.BluetoothSettings = SettingsScreen:new {
       backstack.push(BluetoothPairing:new())
     end)
 
+    local forget_known = button_container:Button {}
+    forget_known:Label { text="Forget a device" }
+    forget_known:onClicked(function()
+     backstack.push(BluetoothForget:new())
+    end)
 
     self.bindings = self.bindings + {
       bluetooth.known_devices:bind(function(devs)
         local group = lvgl.group.get_default()
         group.remove_obj(pair_new)
+        group.remove_obj(forget_known)
         devices:clean()
         for _, dev in pairs(devs) do
           devices:add_btn(nil, dev.name):onClicked(function()
@@ -213,6 +258,7 @@ settings.BluetoothSettings = SettingsScreen:new {
           end)
         end
         group:add_obj(pair_new)
+        group:add_obj(forget_known)
       end)
     }
   end

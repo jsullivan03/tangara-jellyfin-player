@@ -16,6 +16,10 @@
 --- @field known_devices Property Devices that have previously been paired.
 local bluetooth = {}
 
+--- Removes known bluetooth device
+--- @param mac userdata The mac address of the device
+function bluetooth.forget_known_device(mac) end
+
 --- Enables Bluetooth, this is the same as bluetooth.enabled:set(true)
 function bluetooth.enable() end
 

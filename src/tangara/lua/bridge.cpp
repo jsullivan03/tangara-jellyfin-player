@@ -20,10 +20,11 @@
 #include "lauxlib.h"
 #include "lua.h"
 #include "lua.hpp"
+#include "lua/lua_bluetooth.hpp"
 #include "lua/lua_controls.hpp"
 #include "lua/lua_database.hpp"
-#include "lua/lua_gpio.hpp"
 #include "lua/lua_filesystem.hpp"
+#include "lua/lua_gpio.hpp"
 #include "lua/lua_i2c.hpp"
 #include "lua/lua_nvs.hpp"
 #include "lua/lua_playing_screen_settings.hpp"
@@ -78,6 +79,7 @@ auto Bridge::installBaseModules(lua_State* L) -> void {
   RegisterPlayingScreenSettingsModule(L);
   RegisterDatabaseModule(L);
   RegisterQueueModule(L);
+  RegisterBluetoothModule(L);
   RegisterTestingModule(L);
   RegisterFileSystemModule(L);
   RegisterVersionModule(L);
