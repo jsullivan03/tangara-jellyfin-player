@@ -37,6 +37,8 @@ enum class Type {
   // Second audio task. Converts the PCM stream into one suitable for the
   // current output (e.g. downsampling for bluetooth).
   kAudioConverter,
+  // Reads audio file data to a buffer
+  kAudioFileReader,
   // Task for running database queries.
   kDatabase,
   // Task for async background work

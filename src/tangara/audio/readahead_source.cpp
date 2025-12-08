@@ -5,75 +5,96 @@
  */
 
 #include "audio/readahead_source.hpp"
+#include "audio/readahead_runner.hpp"
 
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-
-#include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "ff.h"
-
-#include "audio/audio_source.hpp"
-#include "codec.hpp"
-#include "drivers/spi.hpp"
-#include "freertos/portmacro.h"
-#include "tasks.hpp"
-#include "types.hpp"
 
 namespace audio {
 
 static constexpr char kTag[] = "readahead";
-static constexpr size_t kBufferSize = 1024 * 512;
 
-ReadaheadSource::ReadaheadSource(tasks::WorkerPool& worker,
-                                 std::unique_ptr<codecs::IStream> wrapped)
+// This buffer is statically allocated in SPIRAM to ensure that allocation doesn't fail due
+// to heap fragmentation. Its size is limited by peak heap usage during boot, which is
+// largely determined by the font loading process.
+static constexpr size_t kReadaheadStreamBufferSize = 1024 * 1440 + 1;
+static EXT_RAM_BSS_ATTR uint8_t sReadaheadStreamBufferStorage[kReadaheadStreamBufferSize];
+
+static constexpr size_t kFileReadBufferSize = 1024 * 32;
+static EXT_RAM_BSS_ATTR std::array<std::byte, kFileReadBufferSize> sFileReadBuffer;
+
+static_assert((kReadaheadStreamBufferSize - 1) % kFileReadBufferSize == 0,
+              "kReadaheadStreamBufferSize must be an integer multiple of kFileReadBufferSize"
+              " + 1 for an integer multiple of kFileReadBufferSize to fit in the streambuffer.");
+
+ReadaheadSource::ReadaheadSource(std::unique_ptr<codecs::IStream> wrapped, ReadaheadRunner& runner)
     : IStream(wrapped->type()),
-      worker_(worker),
       wrapped_(std::move(wrapped)),
-      readahead_enabled_(false),
-      is_refilling_(false),
-      buffer_(xStreamBufferCreateWithCaps(kBufferSize, 1, MALLOC_CAP_SPIRAM)),
-      tell_(wrapped_->CurrentPosition()) {}
+      tell_(wrapped_->CurrentPosition()),
+      streambuffer_(nullptr),
+      streambuffer_static_(),
+      reading_file_(false),
+      end_of_file_buffered_(false),
+      shutting_down_(false),
+      runner_(runner)
+{}
 
 ReadaheadSource::~ReadaheadSource() {
-  is_refilling_.wait(true);
-  vStreamBufferDeleteWithCaps(buffer_);
+  // Tell the file reading task to stop.
+  shutting_down_ = true;
+  // If the file reading task is blocked on sending to the stream buffer,
+  // unblock it by draining the buffer.
+  // The size of this buffer is arbitrary.
+  std::array<std::byte, 1024> drain;
+  while (xStreamBufferSpacesAvailable(streambuffer_) < kFileReadBufferSize) {
+    xStreamBufferReceive(streambuffer_, drain.data(), drain.size(), 0);
+  }
+  // Wait until the file reading task confirms it has stopped before
+  // freeing memory it accesses.
+  reading_file_.wait(true);
+
+  vStreamBufferDelete(streambuffer_);
 }
 
 auto ReadaheadSource::Read(std::span<std::byte> dest) -> ssize_t {
   size_t bytes_written = 0;
-  // Fill the destination from our buffer, until either the buffer is drained
-  // or the destination is full.
-  while (!dest.empty() && (is_refilling_ || !xStreamBufferIsEmpty(buffer_))) {
-    size_t bytes_read =
-        xStreamBufferReceive(buffer_, dest.data(), dest.size_bytes(), 1);
-    tell_ += bytes_read;
-    bytes_written += bytes_read;
-    dest = dest.subspan(bytes_read);
-  }
+  if (reading_file_ || end_of_file_buffered_) {
+    while (!dest.empty()) {
+      ESP_LOGV(kTag, "streambuffer has %u kb available to read", xStreamBufferBytesAvailable(streambuffer_) / 1024);
+      // First try a nonblocking read
+      size_t bytes_read = xStreamBufferReceive(streambuffer_, dest.data(), dest.size_bytes(), 0);
+      if (bytes_read == 0) {
+        // If the file reading task reached the end of the file,
+        // avoid waiting; just return early.
+        if (end_of_file_buffered_) {
+          return 0;
+        }
+        ESP_LOGW(kTag, "cache miss; waiting for streambuffer to be filled");
+        // There is no option here but to wait. This is working with encoded bytes
+        // before they go to the decoder, not decoded PCM samples, so filling dest with 0s
+        // would send invalid data to the decoder.
+        bytes_read = xStreamBufferReceive(streambuffer_, dest.data(), dest.size_bytes(), portMAX_DELAY);
+      }
 
-  // After the loop, we've either written everything that was asked for, or
-  // we're out of data.
-  if (!dest.empty()) {
-    // Out of data in the buffer. Finish using the wrapped stream.
-    size_t extra_bytes = wrapped_->Read(dest);
-    tell_ += extra_bytes;
-    bytes_written += extra_bytes;
-
-    // Check for EOF in the wrapped stream.
-    if (extra_bytes < dest.size_bytes()) {
-      return bytes_written;
+      tell_ += bytes_read;
+      bytes_written += bytes_read;
+      dest = dest.subspan(bytes_read);
     }
-  }
-  // After this point, we're done writing to `dest`. It's either empty, or the
-  // underlying source is EOF.
+  } else {
+    // Codec is opening the stream and the background file reader task has not started yet,
+    // so use the wrapped stream directly.
+    while (!dest.empty()) {
+      ESP_LOGV(kTag, "reading %u bytes from stream directly without streambuffer", dest.size_bytes());
+      size_t bytes_read = wrapped_->Read(dest);
+      tell_ += bytes_read;
+      bytes_written += bytes_read;
 
-  // If we're here, then there is more data to be read from the wrapped stream.
-  // Ensure the readahead is running.
-  if (!is_refilling_ && readahead_enabled_ &&
-      xStreamBufferBytesAvailable(buffer_) < kBufferSize / 4) {
-    BeginReadahead();
+      // Check for EOF in the wrapped stream.
+      if (bytes_read < dest.size_bytes()) {
+        break;
+      } else {
+        dest = dest.subspan(bytes_read);
+      }
+    }
   }
 
   return bytes_written;
@@ -84,16 +105,12 @@ auto ReadaheadSource::CanSeek() -> bool {
 }
 
 auto ReadaheadSource::SeekTo(int64_t destination, SeekFrom from) -> void {
-  // Seeking blows away all of our prefetched data. To do this safely, we
-  // first need to wait for the refill task to finish.
-  ESP_LOGI(kTag, "dropping readahead due to seek");
-  is_refilling_.wait(true);
-  // It's now safe to clear out the buffer.
-  xStreamBufferReset(buffer_);
+  // This function gets called by the codec before the file reading task starts.
+  // Seeking from the UI creates a whole new ReadaheadSource and deletes the
+  // old one, so there is no need to clear the buffers here.
+  assert(!reading_file_);
 
   wrapped_->SeekTo(destination, from);
-
-  // Make sure our tell is up to date with the new location.
   tell_ = wrapped_->CurrentPosition();
 }
 
@@ -105,36 +122,49 @@ auto ReadaheadSource::Size() -> std::optional<int64_t> {
   return wrapped_->Size();
 }
 
-auto ReadaheadSource::SetPreambleFinished() -> void {
-  readahead_enabled_ = true;
-  BeginReadahead();
+auto ReadaheadSource::ReadFile() -> void {
+  reading_file_ = true;
+  while (!shutting_down_) {
+    ssize_t read = wrapped_->Read(sFileReadBuffer);
+    if (read > 0) {
+      // If the streambuffer is full, block until the reader clears enough space
+      // to write again. Because the file read has already happened at this point,
+      // refilling the streambuffer to its capacity is very fast.
+      xStreamBufferSend(streambuffer_, sFileReadBuffer.data(), read, portMAX_DELAY);
+      ESP_LOGV(kTag, "wrote %u kb to streambuffer", read / 1024);
+    } else if (read == 0) {
+      end_of_file_buffered_ = true;
+      ESP_LOGV(kTag, "end of file buffered");
+      break;
+    } else if (read < 0) {
+      ESP_LOGW(kTag, "error reading file");
+    }
+  }
+  reading_file_ = false;
+  reading_file_.notify_all();
 }
 
-auto ReadaheadSource::BeginReadahead() -> void {
-  is_refilling_ = true;
-  std::function<void(void)> refill = [this]() {
-    // Try to keep larger than most reasonable FAT sector sizes for more
-    // efficient disk reads.
-    constexpr size_t kMaxSingleRead = 1024 * 16;
-    std::byte working_buf[kMaxSingleRead];
-    for (;;) {
-      size_t bytes_to_read = std::min<size_t>(
-          kMaxSingleRead, xStreamBufferSpacesAvailable(buffer_));
-      if (bytes_to_read == 0) {
-        break;
-      }
-      size_t read = wrapped_->Read({working_buf, bytes_to_read});
-      if (read > 0) {
-        xStreamBufferSend(buffer_, working_buf, read, 0);
-      }
-      if (read < bytes_to_read) {
-        break;
-      }
+auto ReadaheadSource::SetPreambleFinished() -> void {
+  assert(!streambuffer_);
+  streambuffer_ = xStreamBufferCreateStatic(kReadaheadStreamBufferSize, 1, sReadaheadStreamBufferStorage, &streambuffer_static_);
+
+  // SD card reads can get very slow at the beginning of the file, so
+  // block on partially filling the streambuffer to reduce cache misses when playback starts.
+  // Don't completely fill it because that would frequently create a noticeable delay when loading tracks.
+  // This partial filling sometimes results in a noticeable delay when loading tracks, however, that is better
+  // than starting to play then hearing a few stutters at the beginning of the track before the cache fills up.
+  // When the read speed is not super slow, this should not cause a noticeable delay.
+  static constexpr size_t kPrefillSize = 1024 * 128;
+  static_assert(kPrefillSize % kFileReadBufferSize == 0, "kPrefillSize must be an integer multiple of kFileReadBufferSize");
+  for (int i = 0; i < kPrefillSize / kFileReadBufferSize; i++) {
+    size_t read = wrapped_->Read(sFileReadBuffer);
+    if (read > 0) {
+      xStreamBufferSend(streambuffer_, sFileReadBuffer.data(), read, portMAX_DELAY);
     }
-    is_refilling_ = false;
-    is_refilling_.notify_all();
-  };
-  worker_.Dispatch(refill);
+  }
+
+  // ReadaheadRunner executes ReadaheadSource::ReadFile in another task
+  runner_.RunInstance(this);
 }
 
 }  // namespace audio

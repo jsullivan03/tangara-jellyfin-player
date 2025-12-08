@@ -175,6 +175,7 @@ auto Decoder::prepareDecode(std::shared_ptr<TaggedStream> stream) -> void {
                        open_res->num_channels / open_res->sample_rate_hz;
   }
 
+  stream_->SetPreambleFinished();
   events::Audio().Dispatch(internal::DecodingStarted{.track = track_});
   processor_->beginStream(track_);
 }
