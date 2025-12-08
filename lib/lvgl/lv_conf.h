@@ -51,7 +51,7 @@
      *are copied from flash into buffers in SPIRAM and parsed in parallel.
      *This size was determined experimentally as the smallest size that does not
      *crash with the fonts in use.*/
-    #define LV_MEM_SIZE (1390U * 1024U)          /*[bytes]*/
+    #define LV_MEM_SIZE (1536U * 1024U)          /*[bytes]*/
 
     /*Size of the memory expand for `lv_malloc()` in bytes*/
     #define LV_MEM_POOL_EXPAND_SIZE 0
