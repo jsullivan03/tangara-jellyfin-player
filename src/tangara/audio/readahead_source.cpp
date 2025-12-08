@@ -16,7 +16,7 @@ static constexpr char kTag[] = "readahead";
 // This buffer is statically allocated in SPIRAM to ensure that allocation doesn't fail due
 // to heap fragmentation. Its size is limited by peak heap usage during boot, which is
 // largely determined by the font loading process.
-static constexpr size_t kReadaheadStreamBufferSize = 1024 * 1440 + 1;
+static constexpr size_t kReadaheadStreamBufferSize = 1024 * 1024 + 1;
 static EXT_RAM_BSS_ATTR uint8_t sReadaheadStreamBufferStorage[kReadaheadStreamBufferSize];
 
 static constexpr size_t kFileReadBufferSize = 1024 * 32;
