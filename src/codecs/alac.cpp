@@ -11,7 +11,6 @@
 
 #include "esp_heap_caps.h"
 #include "codec.hpp"
-#include "esp_log.h"
 #include "result.hpp"
 #include "sample.hpp"
 #include "types.hpp"
@@ -44,7 +43,7 @@ static inline constexpr auto loadLe16(std::byte* data) -> int16_t {
 }
 
 auto AlacDecoder::readBoxHeader()
-    -> cpp::result<std::tuple<std::uint64_t, std::array<std::byte, 4>>, ICodec::Error> {
+    -> cpp::result<std::tuple<std::uint64_t, std::array<std::byte, 4>>, Error> {
   std::byte buf[4];
   input_->Read(buf);
   std::uint64_t size = loadBe32(buf);
@@ -75,8 +74,7 @@ auto AlacDecoder::readFullBoxHeader()
   return std::make_tuple(version, flags);
 }
 
-auto AlacDecoder::readFtyp(uint64_t size)
-    -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readFtyp(uint64_t size) -> cpp::result<void, Error> {
   std::array<std::byte, 4> brand;
   input_->Read(brand);
   if (loadBe32(brand.data()) != str4("M4A "))
@@ -95,7 +93,7 @@ void AlacDecoder::readFree(uint64_t size) {
   );
 }
 
-auto AlacDecoder::readStsd() -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readStsd() -> cpp::result<void, Error> {
   uint8_t version;
   uint32_t flags;
   std::tie(version, flags) = readFullBoxHeader();
@@ -117,15 +115,7 @@ auto AlacDecoder::readStsd() -> cpp::result<void, ICodec::Error> {
   std::byte buf2[2];
   input_->Read(buf2);
   index_ = loadBe16(buf2);
-  input_->SeekTo(8, IStream::SeekFrom::kCurrentPosition);
-  input_->Read(buf2);
-  if (channels_ = loadBe16(buf2); channels_ > 2)
-    return cpp::fail(Error::kUnsupportedFormat);
-  input_->Read(buf2);
-  bitdepth_ = loadBe16(buf2);
-  input_->SeekTo(4, IStream::SeekFrom::kCurrentPosition);
-  input_->Read(buf4);
-  sampleRate_ = loadBe32(buf4) >> 16;
+  input_->SeekTo(20, IStream::SeekFrom::kCurrentPosition);
   input_->Read(buf4);
   uint32_t alacInfoSize = loadBe32(buf4) - 12;
   input_->Read(buf4);
@@ -136,6 +126,9 @@ auto AlacDecoder::readStsd() -> cpp::result<void, ICodec::Error> {
     return cpp::fail(Error::kUnsupportedFormat);
   std::vector<std::byte> cookie(alacInfoSize);
   input_->Read(cookie);
+  bitdepth_ = static_cast<uint8_t>(cookie[5]);
+  channels_ = static_cast<uint8_t>(cookie[9]);
+  sampleRate_ = loadBe32(&cookie[20]);
   create_alac(&alac_, bitdepth_, channels_);
   alac_set_info(&alac_, reinterpret_cast<char*>(cookie.data()));
   alac_.predicterror_buffer_a = static_cast<int32_t*>(
@@ -171,7 +164,7 @@ auto AlacDecoder::readStsd() -> cpp::result<void, ICodec::Error> {
   return {};
 }
 
-auto AlacDecoder::readStts() -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readStts() -> cpp::result<void, Error> {
   uint8_t version;
   uint32_t flags;
   std::tie(version, flags) = readFullBoxHeader();
@@ -192,7 +185,7 @@ auto AlacDecoder::readStts() -> cpp::result<void, ICodec::Error> {
   return {};
 }
 
-auto AlacDecoder::readStsc() -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readStsc() -> cpp::result<void, Error> {
   uint8_t version;
   uint32_t flags;
   std::tie(version, flags) = readFullBoxHeader();
@@ -216,7 +209,7 @@ auto AlacDecoder::readStsc() -> cpp::result<void, ICodec::Error> {
   return {};
 }
 
-auto AlacDecoder::readStsz() -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readStsz() -> cpp::result<void, Error> {
   uint8_t version;
   uint32_t flags;
   std::tie(version, flags) = readFullBoxHeader();
@@ -240,7 +233,7 @@ auto AlacDecoder::readStsz() -> cpp::result<void, ICodec::Error> {
   return {};
 }
 
-auto AlacDecoder::readStco() -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readStco() -> cpp::result<void, Error> {
   uint8_t version;
   uint32_t flags;
   std::tie(version, flags) = readFullBoxHeader();
@@ -258,7 +251,7 @@ auto AlacDecoder::readStco() -> cpp::result<void, ICodec::Error> {
   return {};
 }
 
-auto AlacDecoder::readCo64() -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::readCo64() -> cpp::result<void, Error> {
   uint8_t version;
   uint32_t flags;
   std::tie(version, flags) = readFullBoxHeader();
@@ -277,7 +270,7 @@ auto AlacDecoder::readCo64() -> cpp::result<void, ICodec::Error> {
   return {};
 }
 
-auto AlacDecoder::readBox() -> cpp::result<uint64_t, ICodec::Error> {
+auto AlacDecoder::readBox() -> cpp::result<uint64_t, Error> {
   uint64_t size;
   std::array<std::byte, 4> type;
   if (auto v = readBoxHeader(); v.has_value())
@@ -328,7 +321,7 @@ auto AlacDecoder::readBox() -> cpp::result<uint64_t, ICodec::Error> {
 }
 
 auto AlacDecoder::readContainer(uint64_t size)
-    -> cpp::result<uint64_t, ICodec::Error> {
+    -> cpp::result<uint64_t, Error> {
   size -= 8 + (size > std::numeric_limits<uint32_t>::max() ? 8 : 0);
   while (size != 0) {
     if (auto v = readBox(); v.has_value())
@@ -340,7 +333,7 @@ auto AlacDecoder::readContainer(uint64_t size)
 }
 
 auto AlacDecoder::getFrameDuration(uint32_t frame)
-    -> cpp::result<uint32_t, ICodec::Error> {
+    -> cpp::result<uint32_t, Error> {
   uint32_t base = 0;
   for (size_t i = 0; i < stts_.size(); i++) {
     uint32_t count, delta;
@@ -391,7 +384,7 @@ auto AlacDecoder::getTotalFrameSize() -> uint64_t {
 }
 
 auto AlacDecoder::frameToOffset(uint32_t frame)
-    -> cpp::result<std::tuple<uint64_t, uint32_t>, ICodec::Error> {
+    -> cpp::result<std::tuple<uint64_t, uint32_t>, Error> {
   uint32_t chunk, frames, skip, targetFrame = frame;
   std::tie(chunk, frames) = stsc_[0];
   skip = frames;
@@ -430,8 +423,8 @@ auto AlacDecoder::frameToOffset(uint32_t frame)
   return cpp::fail(Error::kInternalError);
 }
 
-auto AlacDecoder::getChunkMixMaxFrames(uint32_t chunk)
-    -> cpp::result<std::tuple<uint32_t, uint32_t>, ICodec::Error> {
+auto AlacDecoder::getChunkFramesRange(uint32_t chunk)
+    -> cpp::result<std::tuple<uint32_t, uint32_t>, Error> {
   uint32_t from, frames, max, min = 0;
   std::tie(from, frames) = stsc_[0];
   if (from != 0)
@@ -460,7 +453,7 @@ auto AlacDecoder::getChunkMixMaxFrames(uint32_t chunk)
 }
 
 auto AlacDecoder::sampleToFrame(uint64_t sample)
-    -> cpp::result<std::tuple<uint32_t, uint32_t>, ICodec::Error> {
+    -> cpp::result<std::tuple<uint32_t, uint32_t>, Error> {
   uint64_t accumulator = 0;
   uint32_t frame = 0;
   for (size_t i = 0; i < stts_.size(); i++) {
@@ -500,7 +493,7 @@ AlacDecoder::~AlacDecoder() {
 }
 
 auto AlacDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
-    -> cpp::result<OutputFormat, ICodec::Error> {
+    -> cpp::result<OutputFormat, Error> {
   input_ = input;
   while (!hasStts_ || !hasStsc_ || !hasStsz_ || !hasStco_)
     if (auto v = readBox(); v.has_error())
@@ -541,10 +534,9 @@ auto AlacDecoder::OpenStream(std::shared_ptr<IStream> input, uint32_t offset)
   };
 }
 
-auto AlacDecoder::UnpackFrame(uint32_t offset)
-    -> cpp::result<void, ICodec::Error> {
+auto AlacDecoder::UnpackFrame(uint32_t offset) -> cpp::result<void, Error> {
   uint32_t min, max;
-  if (auto v = getChunkMixMaxFrames(chunk_); v.has_error())
+  if (auto v = getChunkFramesRange(chunk_); v.has_error())
     return cpp::fail(v.error());
   else
     std::tie(min, max) = v.value();
