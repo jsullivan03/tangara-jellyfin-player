@@ -143,6 +143,18 @@ return screen:new {
             backstack.push(playing:new())
           end
         end
+      end,
+      context_callback = function(item)
+        return function()
+          local contents = item:contents()
+          if type(contents) == "userdata" then
+            return;
+          else
+            backstack.push(require("context_menu"):new {
+              item = item
+            })
+          end
+        end
       end
     })
   end

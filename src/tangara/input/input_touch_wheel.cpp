@@ -44,7 +44,7 @@ TouchWheel::TouchWheel(drivers::NvsStorage& nvs,
                      threshold_ = calculateThreshold(int_val);
                      return true;
                    }),
-      centre_("centre", actions::select(), {}, {}, {}),
+      centre_("centre", actions::select(), {}, actions::longPress(), {}),
       up_("up", {}, {}, actions::scrollToTop(), actions::scrollToTop()),
       right_("right", {}),
       down_("down",

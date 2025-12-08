@@ -32,5 +32,7 @@ auto skipBack() -> HookCallback;
 auto volumeUp() -> HookCallback;
 auto volumeDown() -> HookCallback;
 
+auto longPress() -> HookCallback;
+
 }  // namespace actions
 }  // namespace input
