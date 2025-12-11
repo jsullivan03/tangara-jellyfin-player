@@ -822,7 +822,7 @@ void Lua::entry() {
     sDatabaseSkipVerification.setDirect(sServices->nvs().DbSkipVerification());
 
     auto bt = sServices->bluetooth();
-    sBluetoothEnabled.setDirect(bt.enabled());
+    sBluetoothEnabled.setDirect(sServices->nvs().OutputMode() == drivers::NvsStorage::Output::kBluetooth);
     auto paired = bt.pairedDevice();
     if (paired) {
       sBluetoothPairedDevice.setDirect(*paired);
