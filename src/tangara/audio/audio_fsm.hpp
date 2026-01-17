@@ -78,6 +78,8 @@ class AudioState : public tinyfsm::Fsm<AudioState> {
   auto updateSavedPosition(std::string uri, uint32_t position) -> void;
   auto incrementPlayCount(std::string uri) -> void;
 
+  auto loadQueue() -> void;
+
   static std::shared_ptr<system_fsm::ServiceLocator> sServices;
 
   static std::shared_ptr<FatfsStreamFactory> sStreamFactory;
