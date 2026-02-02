@@ -7,13 +7,15 @@ end
 
 function PlaylistIterator:create(fs_iterator)
   local iterator = fs_iterator:clone()
-  local obj = {};
+  local current = nil
+  local obj = {}
 
   local find_matching = function(iterate_fn)
-    local next = iterate_fn(iterator);
+    local next = iterate_fn(iterator)
     while next and (not PlaylistIterator:is_playlist(next) and not next:is_directory()) do
-      next = iterate_fn();
+      next = iterate_fn()
     end
+    current = next
     return next;
   end
 
@@ -27,6 +29,10 @@ function PlaylistIterator:create(fs_iterator)
 
   function obj:prev()
     return find_matching(iterator.prev)
+  end
+
+  function obj:value()
+    return current
   end
 
   return obj
