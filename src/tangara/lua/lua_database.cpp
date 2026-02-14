@@ -412,6 +412,9 @@ static auto lua_database(lua_State* state) -> int {
   lua_pushliteral(state, "Audiobook");
   lua_pushinteger(state, (int)database::MediaType::kAudiobook);
   lua_rawset(state, -3);
+  lua_pushliteral(state, "Any");
+  lua_pushinteger(state, (int)database::MediaType::kAny);
+  lua_rawset(state, -3);
   lua_rawset(state, -3);
 
   lua_pushliteral(state, "IndexTypes");

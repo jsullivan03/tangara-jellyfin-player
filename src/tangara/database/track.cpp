@@ -12,6 +12,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <filesystem>
 
 #include "esp_log.h"
 #include "komihash.h"
@@ -43,6 +44,12 @@ auto tagName(Tag t) -> std::string {
       return "album_order";
     case Tag::kGenres:
       return "genre";
+    case Tag::kFilepath:
+      return "filepath";
+    case Tag::kFilename:
+      return "filename";
+    case Tag::kDirectories:
+      return "directories";
   }
   return "";
 }
@@ -177,6 +184,15 @@ auto TrackTags::get(Tag t) const -> TagValue {
       return albumOrder();
     case Tag::kGenres:
       return genres();
+    case Tag::kFilename:
+      return valueOrMonostate(filename());
+      break;
+    case Tag::kFilepath:
+      return valueOrMonostate(filepath());
+      break;
+    case Tag::kDirectories:
+      return directories();
+      break;
   }
   return std::monostate{};
 }
@@ -210,6 +226,13 @@ auto TrackTags::set(Tag t, std::string_view v) -> void {
     case Tag::kGenres:
       genres(v);
       break;
+    case Tag::kFilepath:
+      filepath(v);
+      break;
+    case Tag::kFilename:
+    case Tag::kDirectories:
+      // These tags are set from filepath
+      break;
   }
 }
 
@@ -228,6 +251,9 @@ auto TrackTags::allPresent() const -> std::vector<Tag> {
   add_if_present(Tag::kDisc, disc_);
   add_if_present(Tag::kTrack, track_);
   add_if_present(Tag::kGenres, !genres_.empty());
+  add_if_present(Tag::kFilename, filename_);
+  add_if_present(Tag::kFilepath, filepath_);
+  add_if_present(Tag::kDirectories, !directories_.empty());
   return out;
 }
 
@@ -304,6 +330,36 @@ auto TrackTags::genres() const -> std::span<const std::pmr::string> {
 
 auto TrackTags::genres(const std::string_view s) -> void {
   parseDelimitedTags(s, kGenreDelimiters, genres_);
+}
+
+auto TrackTags::filename() const -> const std::optional<std::pmr::string>& {
+  return filename_;
+}
+
+auto TrackTags::directories() const -> std::span<const std::pmr::string> {
+  return directories_;
+}
+
+auto TrackTags::filepath(const std::string_view s) -> void {
+  filepath_ = s;
+  std::filesystem::path path(s);
+  std::string name = path.filename();
+  filename_ = {name.data(), name.size()};
+  directories_.clear();
+  if (path.has_parent_path()) {
+    std::stringstream stream(path.parent_path());
+    std::string segment;
+    while(std::getline(stream, segment, '/'))
+    {
+      if (segment.size() > 0) {
+        directories_.push_back({segment.data(), segment.size()});
+      }
+    }
+  }
+}
+
+auto TrackTags::filepath() const -> const std::optional<std::pmr::string>& {
+  return filepath_;
 }
 
 /*

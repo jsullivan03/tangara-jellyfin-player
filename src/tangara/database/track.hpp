@@ -64,6 +64,8 @@ enum class MediaType {
   // 'audiobook' media may be split across several files, with a playlist or
   // cue file to tie the pieces back together. May also just be one big mp3.
   kAudiobook = 3,
+  // Any playable media
+  kAny = 99
 };
 
 enum class Tag {
@@ -76,6 +78,9 @@ enum class Tag {
   kAlbumOrder = 6,
   kGenres = 7,
   kAllArtists = 8,
+  kFilepath = 9,
+  kDirectories = 10,
+  kFilename = 11,
 };
 
 using TagValue = std::variant<std::monostate,
@@ -96,7 +101,7 @@ class TrackTags {
   static auto create() -> std::shared_ptr<TrackTags>;
 
   TrackTags()
-      : encoding_(Container::kUnsupported), genres_(&memory::kSpiRamResource) {}
+      : encoding_(Container::kUnsupported), genres_(&memory::kSpiRamResource), directories_(&memory::kSpiRamResource) {}
 
   TrackTags(const TrackTags& other) = delete;
   TrackTags& operator=(TrackTags& other) = delete;
@@ -135,6 +140,12 @@ class TrackTags {
 
   auto albumOrder() const -> uint32_t;
 
+  auto filepath() const -> const std::optional<std::pmr::string>&;
+  auto filepath(std::string_view) -> void;
+
+  auto filename() const -> const std::optional<std::pmr::string>&;
+  auto directories() const -> std::span<const std::pmr::string>;
+
   auto genres() const -> std::span<const std::pmr::string>;
   auto genres(const std::string_view) -> void;
 
@@ -157,6 +168,9 @@ class TrackTags {
   std::optional<uint8_t> disc_;
   std::optional<uint16_t> track_;
   std::pmr::vector<std::pmr::string> genres_;
+  std::optional<std::pmr::string> filepath_;
+  std::optional<std::pmr::string> filename_;
+  std::pmr::vector<std::pmr::string> directories_;
 };
 
 /*

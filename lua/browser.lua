@@ -58,7 +58,7 @@ return screen:new {
       }
     end
 
-    if (self.mediatype == database.MediaTypes.Music) then
+    if (self.mediatype == database.MediaTypes.Music or self.mediatype == database.MediaTypes.Any) then
       local buttons = header:Object({
         flex = {
           flex_direction = "row",
