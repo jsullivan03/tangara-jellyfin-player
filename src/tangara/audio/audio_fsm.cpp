@@ -50,6 +50,9 @@ namespace audio {
 
 [[maybe_unused]] static const char kTag[] = "audio_fsm";
 
+static const char kQueueKey[] = "audio:queue";
+static const char kCurrentFileKey[] = "audio:current";
+
 std::shared_ptr<system_fsm::ServiceLocator> AudioState::sServices;
 
 std::shared_ptr<FatfsStreamFactory> AudioState::sStreamFactory;
@@ -106,6 +109,48 @@ auto AudioState::emitPlaybackUpdate(bool paused) -> void {
 
   events::System().Dispatch(event);
   events::Ui().Dispatch(event);
+}
+
+auto AudioState::loadQueue() -> void {
+  sServices->bg_worker().Dispatch<void>([]() {
+    auto db = sServices->database().lock();
+    if (!db) {
+      return;
+    }
+
+    // Open the queue file
+    sServices->track_queue().open();
+
+    // Restore the currently playing file before restoring the queue. This way,
+    // we can fall back to restarting the queue's current track if there's any
+    // issue restoring the current file.
+    auto current = db->get(kCurrentFileKey);
+    if (current) {
+      // Again, ensure we don't boot-loop by trying to play a track that causes
+      // a crash over and over again.
+      db->put(kCurrentFileKey, "");
+      auto [parsed, unused, err] = cppbor::parse(
+          reinterpret_cast<uint8_t*>(current->data()), current->size());
+      if (parsed->type() == cppbor::ARRAY) {
+        std::string filename = parsed->asArray()->get(0)->asTstr()->value();
+        uint32_t pos = parsed->asArray()->get(1)->asUint()->value();
+
+        events::Audio().Dispatch(SetTrack{
+            .new_track = filename,
+            .seek_to_second = pos,
+        });
+      }
+    }
+
+    auto queue = db->get(kQueueKey);
+    if (queue) {
+      // Don't restore the same queue again. This ideally should do nothing,
+      // but guards against bad edge cases where restoring the queue ends up
+      // causing a crash.
+      db->put(kQueueKey, "");
+      sServices->track_queue().deserialise(*queue);
+    }
+  });
 }
 
 void AudioState::react(const QueueUpdate& ev) {
@@ -522,11 +567,14 @@ void Uninitialised::react(const system_fsm::BootComplete& ev) {
 
   sDecoder.reset(Decoder::Start(sSampleProcessor));
 
+  // If the sd card is already mounted, load the queue here
+  auto sdState = sServices->sd();
+  if (sdState == drivers::SdState::kMounted) {
+    loadQueue();
+  }
+
   transit<Standby>();
 }
-
-static const char kQueueKey[] = "audio:queue";
-static const char kCurrentFileKey[] = "audio:current";
 
 auto Standby::entry() -> void {
   updateOutputMode();
@@ -568,45 +616,7 @@ void Standby::react(const system_fsm::SdStateChanged& ev) {
   if (state != drivers::SdState::kMounted) {
     return;
   }
-  sServices->bg_worker().Dispatch<void>([]() {
-    auto db = sServices->database().lock();
-    if (!db) {
-      return;
-    }
-
-    // Open the queue file
-    sServices->track_queue().open();
-
-    // Restore the currently playing file before restoring the queue. This way,
-    // we can fall back to restarting the queue's current track if there's any
-    // issue restoring the current file.
-    auto current = db->get(kCurrentFileKey);
-    if (current) {
-      // Again, ensure we don't boot-loop by trying to play a track that causes
-      // a crash over and over again.
-      db->put(kCurrentFileKey, "");
-      auto [parsed, unused, err] = cppbor::parse(
-          reinterpret_cast<uint8_t*>(current->data()), current->size());
-      if (parsed->type() == cppbor::ARRAY) {
-        std::string filename = parsed->asArray()->get(0)->asTstr()->value();
-        uint32_t pos = parsed->asArray()->get(1)->asUint()->value();
-
-        events::Audio().Dispatch(SetTrack{
-            .new_track = filename,
-            .seek_to_second = pos,
-        });
-      }
-    }
-
-    auto queue = db->get(kQueueKey);
-    if (queue) {
-      // Don't restore the same queue again. This ideally should do nothing,
-      // but guards against bad edge cases where restoring the queue ends up
-      // causing a crash.
-      db->put(kQueueKey, "");
-      sServices->track_queue().deserialise(*queue);
-    }
-  });
+  loadQueue();
 }
 
 static TimerHandle_t sHeartbeatTimer;
