@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <filesystem>
+#include <variant>
 
 #include "esp_log.h"
 #include "komihash.h"
@@ -377,13 +378,27 @@ auto TrackTags::Hash() const -> uint64_t {
     komihash_stream_update(&stream, &h, sizeof(h));
   };
 
-  add(tagHash(get(Tag::kTitle)));
-  add(tagHash(get(Tag::kArtist)));
-  add(tagHash(get(Tag::kAlbum)));
-  add(tagHash(get(Tag::kAlbumArtist)));
+  auto is_present = [&](const TagValue& tag) {
+    return !std::holds_alternative<std::monostate>(tag);
+  };
 
-  // TODO: Should we be including this?
-  add(tagHash(get(Tag::kAlbumOrder)));
+  auto titleTag = get(Tag::kTitle);
+  auto artistTag = get(Tag::kArtist);
+  auto albumTag = get(Tag::kAlbum);
+  auto albumArtistTag = get(Tag::kAlbumArtist);
+  if (!is_present(titleTag) && !is_present(artistTag) && !is_present(albumTag) && !is_present(albumArtistTag)) {
+    // Metadata not really useful here, so let's
+    // use the filepath as the hash
+    add(tagHash(get(Tag::kFilepath)));
+  } else {
+    add(tagHash(titleTag));
+    add(tagHash(artistTag));
+    add(tagHash(albumTag));
+    add(tagHash(albumArtistTag));
+
+    // TODO: Should we be including this?
+    add(tagHash(get(Tag::kAlbumOrder)));
+  }
 
   return komihash_stream_final(&stream);
 }
