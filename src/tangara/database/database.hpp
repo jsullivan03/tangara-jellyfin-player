@@ -39,7 +39,7 @@
 
 namespace database {
 
-const uint8_t kCurrentDbVersion = 10;
+const uint8_t kCurrentDbVersion = 11;
 
 struct SearchKey;
 class Record;
