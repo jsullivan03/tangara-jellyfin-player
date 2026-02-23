@@ -14,6 +14,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <filesystem>
 
 #include "collation.hpp"
 #include "cppbor.h"
@@ -77,17 +78,44 @@ const IndexInfo kAudiobooks{
     .components = {Tag::kAlbum, Tag::kAlbumOrder},
 };
 
+const IndexInfo kTracksByDirectory{
+    .id = 8,
+    .type = MediaType::kAny,
+    .name = "Tracks By Directory",
+    .components = {Tag::kDirectories, Tag::kFilename},
+};
+
+static auto filename(const TrackData& data) -> std::pmr::string {
+  std::filesystem::path path(data.filepath);
+  auto name =  std::pmr::string{path.filename().string()};
+  return name;
+}
+
+static auto directories(const TrackData& data) -> std::pmr::vector<std::pmr::string> {
+  std::pmr::vector<std::pmr::string> dirs = {};
+  std::filesystem::path path(data.filepath);
+  if (path.has_parent_path()) {
+    std::stringstream stream(path.parent_path());
+    std::string segment;
+    while(std::getline(stream, segment, '/'))
+    {
+      if (segment.size() > 0) {
+        dirs.push_back(std::pmr::string{segment});
+      }
+    }
+  }
+  return dirs;
+}
+
+
 static auto titleOrFilename(const TrackData& data,
                             const TrackTags& tags) -> std::pmr::string {
   auto title = tags.title();
   if (title) {
     return *title;
   }
-  auto start = data.filepath.find_last_of('/');
-  if (start == std::pmr::string::npos) {
-    return data.filepath;
-  }
-  return data.filepath.substr(start + 1);
+  auto name = filename(data);
+  return name;
 }
 
 class Indexer {
@@ -108,7 +136,7 @@ class Indexer {
                    std::span<const Tag> components) -> void;
 
   auto handleItem(const IndexKey::Header& header,
-                  std::variant<std::pmr::string, uint32_t> item,
+                  std::variant<std::pmr::string, uint32_t, std::span<const std::pmr::string>> item,
                   std::span<const Tag> components) -> void;
 
   auto missing_value(Tag tag) -> TagValue {
@@ -130,6 +158,12 @@ class Indexer {
         return 0u;
       case Tag::kAlbumOrder:
         return 0u;
+      case Tag::kFilepath:
+        return track_data_.filepath;
+      case Tag::kFilename:
+        return filename(track_data_);
+      case Tag::kDirectories:
+        return directories(track_data_);
     }
     return std::monostate{};
   }
@@ -174,8 +208,20 @@ auto Indexer::handleLevel(const IndexKey::Header& header,
           handleItem(header, arg, components);
         } else if constexpr (std::is_same_v<
                                  T, std::span<const std::pmr::string>>) {
-          for (const auto& i : arg) {
-            handleItem(header, i, components);
+          if (component == Tag::kDirectories) {
+            // Directory indexes should create a new level
+            // for each subdirectory
+            // ie (/foo/bar/track.mp3 should create foo, foo/bar, foo/bar/track.mp3)
+            std::vector<std::pmr::string> dirs = {};
+            for (const auto& i : arg) {
+              dirs.push_back(std::pmr::string{i.data(), i.size()});
+            }
+            handleItem(header, dirs, components);
+          } else {
+            // Otherwise, create individual levels
+            for (const auto& i : arg) {
+              handleItem(header, i, components);
+            }
           }
         }
       },
@@ -183,7 +229,7 @@ auto Indexer::handleLevel(const IndexKey::Header& header,
 }
 
 auto Indexer::handleItem(const IndexKey::Header& header,
-                         std::variant<std::pmr::string, uint32_t> item,
+                         std::variant<std::pmr::string, uint32_t, std::span<const std::pmr::string>> item,
                          std::span<const Tag> components) -> void {
   IndexKey key{
       .header = header,
@@ -204,13 +250,30 @@ auto Indexer::handleItem(const IndexKey::Header& header,
           // CBOR's varint encoding actually works great for lexicographical
           // sorting.
           key.item = cppbor::Uint{arg}.toString();
+        } else if constexpr (std::is_same_v<T, std::span<const std::pmr::string>>) {
+          // If an item is a span, then create nested entries
+          IndexKey::Header prevHeader = key.header;
+          for (const auto& i : arg) {
+            value = {i.data(), i.size()};
+            auto xfrm = collator_.Transform(value);
+            key.item = {xfrm.data(), xfrm.size()};
+            out_.emplace_back(key, value);
+            prevHeader = key.header;
+            key.header = ExpandHeader(key.header, key.item);
+          }
+          // The last one should get handled normally
+          key.header = prevHeader;
         }
       },
       item);
 
   std::optional<IndexKey::Header> next_level;
   if (components.size() == 1) {
-    value = titleOrFilename(track_data_, track_tags_);
+    if (components[0] == Tag::kFilename) {
+      value = filename(track_data_);
+    } else {
+      value = titleOrFilename(track_data_, track_tags_);
+    }
     key.track = track_data_.id;
   } else {
     next_level = ExpandHeader(key.header, key.item);
@@ -228,7 +291,7 @@ auto Index(locale::ICollator& collator,
            const TrackData& data,
            const TrackTags& tags)
     -> std::vector<std::pair<IndexKey, std::string>> {
-  if (index.type != data.type) {
+  if (index.type != data.type && index.type != MediaType::kAny) {
     return {};
   }
   Indexer indexer{collator, index, data, tags};

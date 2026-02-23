@@ -181,6 +181,8 @@ auto TagParserImpl::ReadAndParseTags(std::string_view path)
     return {};
   }
 
+  tags->filepath(path);
+
   // There wasn't a track number found in the track's tags. Try to synthesize
   // one from the filename, which will sometimes have a track number at the
   // start.
