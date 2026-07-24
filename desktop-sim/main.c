@@ -3,35 +3,59 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+
 #include <lvgl.h>
+#include "luavgl.h"
 
 #include "src/drivers/sdl/lv_sdl_keyboard.h"
 #include "src/drivers/sdl/lv_sdl_mouse.h"
 #include "src/drivers/sdl/lv_sdl_mousewheel.h"
 #include "src/drivers/sdl/lv_sdl_window.h"
 
-static lv_obj_t *status_label;
-
-static void button_clicked(lv_event_t *event)
+static int run_lua_file(lua_State *L, const char *filename)
 {
-    (void)event;
-    lv_label_set_text(status_label, "Button works!");
+    int status = luaL_loadfile(L, filename);
+
+    if (status == LUA_OK) {
+        status = lua_pcall(L, 0, 0, 0);
+    }
+
+    if (status != LUA_OK) {
+        const char *message = lua_tostring(L, -1);
+
+        fprintf(
+            stderr,
+            "Lua error in %s:\n%s\n",
+            filename,
+            message != NULL ? message : "Unknown Lua error"
+        );
+
+        lua_pop(L, 1);
+        return -1;
+    }
+
+    return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    const char *script =
+        argc > 1 ? argv[1] : "desktop-sim/ui.lua";
+
     lv_init();
 
     lv_display_t *display = lv_sdl_window_create(160, 128);
 
     if (display == NULL) {
-        fprintf(stderr, "Failed to create SDL display.\n");
+        fprintf(stderr, "Failed to create the SDL display.\n");
         return 1;
     }
 
-    /* 3x scale gives a 480 x 384 desktop window. */
     lv_sdl_window_set_zoom(display, 3.0f);
-    lv_sdl_window_set_title(display, "Tangara UI Simulator");
+    lv_sdl_window_set_title(display, "Tangara Lua Simulator");
     lv_sdl_window_set_resizeable(display, true);
 
     lv_indev_t *mouse = lv_sdl_mouse_create();
@@ -46,30 +70,22 @@ int main(void)
     lv_indev_set_group(keyboard, group);
     lv_indev_set_group(wheel, group);
 
-    lv_obj_t *screen = lv_screen_active();
-    lv_obj_set_style_bg_color(screen, lv_color_hex(0x10131A), 0);
+    lua_State *L = luaL_newstate();
 
-    lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "Tangara");
-    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+    if (L == NULL) {
+        fprintf(stderr, "Failed to create the Lua interpreter.\n");
+        return 1;
+    }
 
-    status_label = lv_label_create(screen);
-    lv_label_set_text(status_label, "Desktop simulator ready");
-    lv_obj_set_style_text_color(status_label, lv_color_hex(0xAEB7C5), 0);
-    lv_obj_align(status_label, LV_ALIGN_CENTER, 0, -4);
+    luaL_openlibs(L);
 
-    lv_obj_t *button = lv_button_create(screen);
-    lv_obj_set_size(button, 76, 28);
-    lv_obj_align(button, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(button, button_clicked, LV_EVENT_CLICKED, NULL);
+    luaL_requiref(L, "lvgl", luaopen_lvgl, 1);
+    lua_pop(L, 1);
 
-    lv_obj_t *button_label = lv_label_create(button);
-    lv_label_set_text(button_label, "Continue");
-    lv_obj_center(button_label);
-
-    lv_group_add_obj(group, button);
-    lv_group_focus_obj(button);
+    if (run_lua_file(L, script) != 0) {
+        lua_close(L);
+        return 1;
+    }
 
     while (true) {
         uint32_t delay_ms = lv_timer_handler();
@@ -83,5 +99,6 @@ int main(void)
         usleep(delay_ms * 1000);
     }
 
+    lua_close(L);
     return 0;
 }
