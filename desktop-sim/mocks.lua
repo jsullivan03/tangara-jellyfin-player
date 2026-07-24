@@ -146,6 +146,222 @@ function M.install(lvgl)
         return true
     end
 
+    ---------------------------------------------------------------------------
+    -- Fake desktop music database
+    ---------------------------------------------------------------------------
+
+    local fake_tracks = {
+        [1] = {
+            id = 1,
+            title = "Midnight Circuit",
+            artist = "Example Artist",
+            album = "Demo Album",
+            duration = 218,
+            filepath = "/Music/Example Artist/Demo Album/01 Midnight Circuit.mp3",
+            uri = "/Music/Example Artist/Demo Album/01 Midnight Circuit.mp3",
+            saved_position = 0,
+            play_count = 0,
+            encoding = "MP3",
+            sample_rate = 44100,
+            num_channels = 2,
+            bitrate_kbps = 320,
+            tags = {
+                title = "Midnight Circuit",
+                artist = "Example Artist",
+                album = "Demo Album",
+                track = 1,
+            },
+        },
+        [2] = {
+            id = 2,
+            title = "Afterglow",
+            artist = "Example Artist",
+            album = "Demo Album",
+            duration = 194,
+            filepath = "/Music/Example Artist/Demo Album/02 Afterglow.mp3",
+            uri = "/Music/Example Artist/Demo Album/02 Afterglow.mp3",
+            saved_position = 0,
+            play_count = 0,
+            encoding = "MP3",
+            sample_rate = 44100,
+            num_channels = 2,
+            bitrate_kbps = 320,
+            tags = {
+                title = "Afterglow",
+                artist = "Example Artist",
+                album = "Demo Album",
+                track = 2,
+            },
+        },
+        [3] = {
+            id = 3,
+            title = "Homebound",
+            artist = "Second Artist",
+            album = "Late Hours",
+            duration = 241,
+            filepath = "/Music/Second Artist/Late Hours/01 Homebound.mp3",
+            uri = "/Music/Second Artist/Late Hours/01 Homebound.mp3",
+            saved_position = 0,
+            play_count = 0,
+            encoding = "MP3",
+            sample_rate = 48000,
+            num_channels = 2,
+            bitrate_kbps = 256,
+            tags = {
+                title = "Homebound",
+                artist = "Second Artist",
+                album = "Late Hours",
+                track = 1,
+            },
+        },
+    }
+
+    local record_methods = {}
+
+    function record_methods:title()
+        return self.text
+    end
+
+    function record_methods:contents()
+        return self.content
+    end
+
+    local record_mt = {
+        __index = record_methods,
+        __tostring = function(record)
+            return record.text
+        end,
+    }
+
+    local function new_record(text_value, content)
+        return setmetatable({
+            text = text_value,
+            content = content,
+        }, record_mt)
+    end
+
+    local iterator_methods = {}
+
+    function iterator_methods:next()
+        self.position = self.position + 1
+        return self.items[self.position]
+    end
+
+    function iterator_methods:prev()
+        self.position = self.position - 1
+
+        if self.position < 1 then
+            self.position = 0
+            return nil
+        end
+
+        return self.items[self.position]
+    end
+
+    function iterator_methods:value()
+        return self.items[self.position]
+    end
+
+    function iterator_methods:clone()
+        return setmetatable({
+            items = self.items,
+            position = self.position,
+        }, getmetatable(self))
+    end
+
+    local iterator_mt = {
+        __index = iterator_methods,
+        __call = function(iterator)
+            return iterator:next()
+        end,
+    }
+
+    local function new_iterator(items)
+        return setmetatable({
+            items = items,
+            position = 0,
+        }, iterator_mt)
+    end
+
+    local database = {
+        updating = property(false),
+        auto_update = property(true),
+        skip_verification = property(false),
+
+        MediaTypes = {
+            Unknown = 0,
+            Music = 1,
+            Podcast = 2,
+            Audiobook = 3,
+            Any = 4,
+        },
+
+        IndexTypes = {
+            ALBUMS_BY_ARTIST = 1,
+            TRACKS_BY_GENRE = 2,
+            ALL_TRACKS = 3,
+            ALL_ALBUMS = 4,
+            ALL_ARTISTS = 5,
+            PODCASTS = 6,
+            AUDIOBOOKS = 7,
+        },
+    }
+
+    function database.track_by_id(id)
+        return fake_tracks[id]
+    end
+
+    function database.version()
+        return "desktop-mock-1"
+    end
+
+    function database.size()
+        return 0
+    end
+
+    function database.recreate()
+    end
+
+    function database.update()
+        database.updating:set(false)
+    end
+
+    local all_track_records = {
+        new_record("Midnight Circuit", 1),
+        new_record("Afterglow", 2),
+        new_record("Homebound", 3),
+    }
+
+    local all_tracks_index = setmetatable({
+        name_value = "All Tracks",
+    }, {
+        __tostring = function(index)
+            return index.name_value
+        end,
+        __index = {
+            name = function(index)
+                return index.name_value
+            end,
+            id = function()
+                return database.IndexTypes.ALL_TRACKS
+            end,
+            type = function()
+                return database.MediaTypes.Music
+            end,
+            iter = function()
+                return new_iterator(all_track_records)
+            end,
+        },
+    })
+
+    function database.indexes()
+        return { all_tracks_index }
+    end
+
+    ---------------------------------------------------------------------------
+    -- Fake playback queue
+    ---------------------------------------------------------------------------
+
     local queue = {
         position = property(0),
         size = property(0),
@@ -155,20 +371,82 @@ function M.install(lvgl)
         ready = property(true),
     }
 
+    local queued_ids = {}
+
+    local function select_queue_position(position)
+        local id = queued_ids[position]
+
+        if not id then
+            return
+        end
+
+        queue.position:set(position)
+        playback.position:set(0)
+        playback.track:set(database.track_by_id(id))
+    end
+
+    function queue.clear()
+        queued_ids = {}
+        queue.position:set(0)
+        queue.size:set(0)
+        playback.track:set(nil)
+        playback.position:set(0)
+    end
+
+    function queue.add(value)
+        if type(value) == "number" then
+            table.insert(queued_ids, value)
+        elseif type(value) == "table" and value.clone then
+            local iterator = value:clone()
+
+            while true do
+                local item = iterator:next()
+
+                if not item then
+                    break
+                end
+
+                local id = item:contents()
+
+                if type(id) == "number" then
+                    table.insert(queued_ids, id)
+                end
+            end
+        end
+
+        queue.size:set(#queued_ids)
+
+        if #queued_ids > 0 and queue.position:get() == 0 then
+            select_queue_position(1)
+        end
+    end
+
     function queue.next()
+        local next_position = queue.position:get() + 1
+
+        if next_position <= #queued_ids then
+            select_queue_position(next_position)
+        end
     end
 
     function queue.previous()
+        local previous_position = queue.position:get() - 1
+
+        if previous_position >= 1 then
+            select_queue_position(previous_position)
+        end
     end
 
-    local database = {
-        updating = property(false),
-        auto_update = property(true),
-        skip_verification = property(false),
-    }
-
-    function database.indexes()
-        return {}
+    function queue.play_from(filepath, position)
+        for id, track in pairs(fake_tracks) do
+            if track.filepath == filepath then
+                queued_ids = { id }
+                queue.size:set(1)
+                select_queue_position(1)
+                playback.position:set(position or 0)
+                return
+            end
+        end
     end
 
     local sd_card = {
