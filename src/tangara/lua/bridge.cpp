@@ -33,6 +33,7 @@
 #include "lua/lua_testing.hpp"
 #include "lua/lua_theme.hpp"
 #include "lua/lua_version.hpp"
+#include "lua/lua_wifi.hpp"
 #include "lvgl.h"
 
 #include "luavgl.h"
@@ -88,6 +89,7 @@ auto Bridge::installBaseModules(lua_State* L) -> void {
   RegisterNvsModule(L);
   RegisterI2CModule(L);
   RegisterGPIOModule(L);
+  RegisterWifiModule(L);
 }
 
 auto Bridge::installLvgl(lua_State* L) -> void {

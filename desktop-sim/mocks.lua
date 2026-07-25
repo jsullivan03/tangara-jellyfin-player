@@ -652,6 +652,21 @@ function M.install(lvgl)
         return true
     end
 
+    local wifi = {}
+
+    function wifi.started()
+        local ssid = nvs.wifi_ssid()
+        return ssid ~= nil and ssid ~= ""
+    end
+
+    function wifi.connected()
+        return wifi.started()
+    end
+
+    function wifi.reload()
+        return true
+    end
+
     local version = {}
 
     function version.samd()
@@ -683,6 +698,7 @@ function M.install(lvgl)
     install_module("alerts", alerts)
     install_module("time", time)
     install_module("nvs", nvs)
+    install_module("wifi", wifi)
     install_module("version", version)
 
     return {
