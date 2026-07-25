@@ -1,10 +1,10 @@
 # Tangara Sync Server
 
-The Tangara sync server converts Jellyfin audio items into device-specific manifests and proxies media downloads to Tangara devices.
+The Tangara sync server links individual Tangara devices to Jellyfin users, reads their playlists and favorites, generates device-specific download manifests, and proxies media downloads.
 
 ## Requirements
 
-Docker, Docker Compose, a running Jellyfin server, a Jellyfin API key, a Jellyfin user ID, and one or more Jellyfin audio item IDs are required.
+Docker, Docker Compose, a running Jellyfin server, a Jellyfin API key, and a Jellyfin fallback user ID are required.
 
 ## Configuration
 
@@ -16,8 +16,9 @@ Edit `.env` and provide values for:
 
 - JELLYFIN_URL
 - JELLYFIN_USER_ID
-- TANGARA_ITEM_IDS
 - TANGARA_SYNC_PORT
+- PUID
+- PGID
 
 Place the Jellyfin API key in `.jellyfin-api-key` and restrict its permissions:
 
@@ -27,24 +28,40 @@ Place the Jellyfin API key in `.jellyfin-api-key` and restrict its permissions:
 
     docker compose -f docker-compose.example.yml up -d --build
 
-## Endpoints
+## Jellyfin account linking
+
+Begin account linking:
+
+    POST /devices/<device-id>/link/start
+
+Poll until the user approves the Quick Connect code:
+
+    GET /devices/<device-id>/link/status
+
+The Jellyfin token remains on the sync server and is never returned to the device.
+
+## Sync sources
+
+List the linked user's playlists and favorites:
+
+    GET /devices/<device-id>/sync/sources
+
+Read the device's selected sync sources:
+
+    GET /devices/<device-id>/sync/preferences
+
+Replace the selected sync sources:
+
+    PUT /devices/<device-id>/sync/preferences
+
+The request body is:
+
+    {"favorites":false,"playlists":["playlist-id"]}
+
+## Device endpoints
 
     GET /health
     GET /devices/<device-id>/manifest
     GET /devices/<device-id>/items/<jellyfin-id>/media
 
-## Current limitations
-
-Assigned tracks are configured with TANGARA_ITEM_IDS. Device assignments are not yet stored separately. Playlist and collection synchronization are not yet implemented. File deletion remains disabled in the firmware.
-
-## Jellyfin account linking
-
-A device begins account linking with:
-
-    POST /devices/<device-id>/link/start
-
-The response contains a Jellyfin Quick Connect code. After the user approves the code, the device polls:
-
-    GET /devices/<device-id>/link/status
-
-The server stores the resulting Jellyfin user ID and access token in its SQLite database. The access token is never returned to the device.
+Linked devices generate manifests from their selected Jellyfin playlists and favorites. Duplicate tracks are included once. Removing a track from a selected source changes the manifest, but firmware file deletion remains disabled.

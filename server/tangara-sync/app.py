@@ -4,7 +4,13 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from flask import Flask, Response, jsonify, request, stream_with_context
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    request,
+    stream_with_context,
+)
 
 from device_links import (
     device_authentication,
@@ -13,8 +19,15 @@ from device_links import (
     valid_device_id,
 )
 
+from sync_preferences import (
+    selected_audio_items,
+    selected_item_ids,
+    sync_preferences_api,
+)
+
 app = Flask(__name__)
 app.register_blueprint(device_links)
+app.register_blueprint(sync_preferences_api)
 
 JELLYFIN_URL = os.environ.get(
     "JELLYFIN_URL",
@@ -43,9 +56,6 @@ ITEM_IDS = {
 
 if not JELLYFIN_API_KEY:
     raise RuntimeError("Jellyfin API key is empty")
-
-if not ITEM_IDS:
-    raise RuntimeError("No Tangara test items are configured")
 
 
 def jellyfin_headers(
@@ -207,27 +217,39 @@ def device_manifest(device_id):
         JELLYFIN_USER_ID,
     )
 
-    items = []
-
     try:
-        for item_id in sorted(ITEM_IDS):
-            item = get_item(
-                item_id,
-                authentication["token"],
-                authentication["user_id"],
+        if authentication["source"] == "linked_user":
+            jellyfin_items = selected_audio_items(
+                device_id,
+                authentication,
             )
 
-            if item is None:
-                return jsonify(
-                    {
-                        "error": (
-                            "Jellyfin item was not found"
-                        ),
-                        "jellyfin_id": item_id,
-                    }
-                ), 404
+            items = [
+                manifest_item(item)
+                for item in jellyfin_items
+            ]
+        else:
+            items = []
 
-            items.append(manifest_item(item))
+            for item_id in sorted(ITEM_IDS):
+                item = get_item(
+                    item_id,
+                    authentication["token"],
+                    authentication["user_id"],
+                )
+
+                if item is None:
+                    return jsonify(
+                        {
+                            "error": (
+                                "Jellyfin item was "
+                                "not found"
+                            ),
+                            "jellyfin_id": item_id,
+                        }
+                    ), 404
+
+                items.append(manifest_item(item))
     except requests.RequestException as error:
         return jsonify(
             {
@@ -263,21 +285,40 @@ def device_media(device_id, item_id):
             {"error": "Invalid device ID"}
         ), 400
 
-    if item_id not in ITEM_IDS:
-        return jsonify(
-            {
-                "error": (
-                    "Item is not assigned to this "
-                    "Tangara sync server"
-                )
-            }
-        ), 404
-
     authentication = device_authentication(
         device_id,
         JELLYFIN_API_KEY,
         JELLYFIN_USER_ID,
     )
+
+    try:
+        if authentication["source"] == "linked_user":
+            allowed_items = selected_item_ids(
+                device_id,
+                authentication,
+            )
+        else:
+            allowed_items = ITEM_IDS
+    except requests.RequestException as error:
+        return jsonify(
+            {
+                "error": (
+                    "Jellyfin authorization query "
+                    "failed"
+                ),
+                "detail": str(error),
+            }
+        ), 502
+
+    if item_id not in allowed_items:
+        return jsonify(
+            {
+                "error": (
+                    "Item is not selected for "
+                    "this device"
+                )
+            }
+        ), 404
 
     upstream_headers = jellyfin_headers(
         authentication["token"],
