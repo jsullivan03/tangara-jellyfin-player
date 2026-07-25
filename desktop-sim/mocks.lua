@@ -677,6 +677,47 @@ function M.install(lvgl)
         return "desktop-sim"
     end
 
+    local download_result = nil
+    local download_busy = false
+    local download = {}
+
+    function download.start(url, destination)
+        if download_busy then
+            return false, "download already in progress"
+        end
+
+        download_busy = true
+        download_result = {
+            ok = true,
+            status = 200,
+            bytes = 0,
+            total = 0,
+            path = destination,
+            error = nil,
+        }
+        download_busy = false
+
+        return true
+    end
+
+    function download.busy()
+        return download_busy
+    end
+
+    function download.progress()
+        return {
+            busy = download_busy,
+            bytes = 0,
+            total = 0,
+        }
+    end
+
+    function download.poll()
+        local result = download_result
+        download_result = nil
+        return result
+    end
+
     local http_result = nil
     local http_busy = false
     local http = {}
@@ -745,6 +786,7 @@ function M.install(lvgl)
     install_module("nvs", nvs)
     install_module("wifi", wifi)
     install_module("device", device)
+    install_module("download", download)
     install_module("http", http)
     install_module("version", version)
 

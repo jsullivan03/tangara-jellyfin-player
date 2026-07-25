@@ -24,6 +24,7 @@
 #include "lua/lua_controls.hpp"
 #include "lua/lua_database.hpp"
 #include "lua/lua_device.hpp"
+#include "lua/lua_download.hpp"
 #include "lua/lua_filesystem.hpp"
 #include "lua/lua_gpio.hpp"
 #include "lua/lua_i2c.hpp"
@@ -82,6 +83,7 @@ auto Bridge::installBaseModules(lua_State* L) -> void {
   RegisterPlayingScreenSettingsModule(L);
   RegisterDatabaseModule(L);
   RegisterDeviceModule(L);
+  RegisterDownloadModule(L);
   RegisterQueueModule(L);
   RegisterBluetoothModule(L);
   RegisterTestingModule(L);
