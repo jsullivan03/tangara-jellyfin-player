@@ -25,6 +25,18 @@ local function join_url(base_url, path)
     return base_url .. path
 end
 
+local function prepare(path)
+    local config = sync_config.load()
+    local valid, validation_error =
+        sync_config.valid(config)
+
+    if not valid then
+        return nil, validation_error
+    end
+
+    return M.url(path)
+end
+
 function M.url(path)
     local config = sync_config.load()
 
@@ -42,20 +54,37 @@ function M.url(path)
 end
 
 function M.get(path)
-    local config = sync_config.load()
-    local valid, validation_error = sync_config.valid(config)
-
-    if not valid then
-        return false, validation_error
-    end
-
-    local url, url_error = M.url(path)
+    local url, url_error = prepare(path)
 
     if not url then
         return false, url_error
     end
 
     return http.get(url)
+end
+
+function M.post(path, body)
+    local url, url_error = prepare(path)
+
+    if not url then
+        return false, url_error
+    end
+
+    return http.post(url, body or "")
+end
+
+function M.put(path, body)
+    local url, url_error = prepare(path)
+
+    if not url then
+        return false, url_error
+    end
+
+    if type(body) ~= "string" then
+        return false, "request body must be a string"
+    end
+
+    return http.put(url, body)
 end
 
 function M.busy()

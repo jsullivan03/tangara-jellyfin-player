@@ -16,6 +16,7 @@ namespace lua {
 namespace {
 
 constexpr size_t kMaxBodyBytes = 64 * 1024;
+constexpr size_t kMaxRequestBodyBytes = 64 * 1024;
 
 struct HttpResult {
   bool ok = false;
@@ -67,7 +68,11 @@ auto complete_request(HttpResult result) -> void {
   sBusy = false;
 }
 
-auto perform_get(std::string url) -> void {
+auto perform_request(
+    std::string url,
+    esp_http_client_method_t method,
+    std::string request_body
+) -> void {
   ResponseBuffer response;
 
   esp_http_client_config_t config{};
@@ -86,9 +91,25 @@ auto perform_get(std::string url) -> void {
     return;
   }
 
-  esp_http_client_set_method(client, HTTP_METHOD_GET);
+  esp_http_client_set_method(client, method);
   esp_http_client_set_header(client, "Accept", "application/json");
   esp_http_client_set_header(client, "Accept-Encoding", "identity");
+
+  if (method == HTTP_METHOD_POST || method == HTTP_METHOD_PUT) {
+    esp_http_client_set_header(
+        client,
+        "Content-Type",
+        "application/json"
+    );
+
+    if (!request_body.empty()) {
+      esp_http_client_set_post_field(
+          client,
+          request_body.data(),
+          static_cast<int>(request_body.size())
+      );
+    }
+  }
 
   const esp_err_t request_error = esp_http_client_perform(client);
   const int status = esp_http_client_get_status_code(client);
@@ -112,17 +133,62 @@ auto perform_get(std::string url) -> void {
   complete_request(std::move(result));
 }
 
-auto get(lua_State* state) -> int {
+auto start_request(
+    lua_State* state,
+    esp_http_client_method_t method,
+    bool accepts_body,
+    bool requires_body
+) -> int {
   Bridge* instance = Bridge::Get(state);
 
   size_t url_length = 0;
-  const char* url_value = luaL_checklstring(state, 1, &url_length);
+  const char* url_value = luaL_checklstring(
+      state,
+      1,
+      &url_length
+  );
+
   std::string url{url_value, url_length};
+  std::string request_body;
+
+  if (accepts_body) {
+    size_t body_length = 0;
+    const char* body_value = nullptr;
+
+    if (requires_body) {
+      body_value = luaL_checklstring(
+          state,
+          2,
+          &body_length
+      );
+    } else {
+      body_value = luaL_optlstring(
+          state,
+          2,
+          "",
+          &body_length
+      );
+    }
+
+    if (body_length > kMaxRequestBodyBytes) {
+      lua_pushboolean(state, false);
+      lua_pushliteral(
+          state,
+          "HTTP request body exceeded 65536 bytes"
+      );
+      return 2;
+    }
+
+    request_body.assign(body_value, body_length);
+  }
 
   if (url.rfind("http://", 0) != 0 &&
       url.rfind("https://", 0) != 0) {
     lua_pushboolean(state, false);
-    lua_pushliteral(state, "URL must begin with http:// or https://");
+    lua_pushliteral(
+        state,
+        "URL must begin with http:// or https://"
+    );
     return 2;
   }
 
@@ -137,7 +203,10 @@ auto get(lua_State* state) -> int {
 
     if (sBusy) {
       lua_pushboolean(state, false);
-      lua_pushliteral(state, "HTTP request already in progress");
+      lua_pushliteral(
+          state,
+          "HTTP request already in progress"
+      );
       return 2;
     }
 
@@ -146,13 +215,48 @@ auto get(lua_State* state) -> int {
   }
 
   instance->services().bg_worker().Dispatch<void>(
-      [url = std::move(url)]() mutable {
-        perform_get(std::move(url));
+      [
+        url = std::move(url),
+        method,
+        request_body = std::move(request_body)
+      ]() mutable {
+        perform_request(
+            std::move(url),
+            method,
+            std::move(request_body)
+        );
       }
   );
 
   lua_pushboolean(state, true);
   return 1;
+}
+
+auto get(lua_State* state) -> int {
+  return start_request(
+      state,
+      HTTP_METHOD_GET,
+      false,
+      false
+  );
+}
+
+auto post(lua_State* state) -> int {
+  return start_request(
+      state,
+      HTTP_METHOD_POST,
+      true,
+      false
+  );
+}
+
+auto put(lua_State* state) -> int {
+  return start_request(
+      state,
+      HTTP_METHOD_PUT,
+      true,
+      true
+  );
 }
 
 auto busy(lua_State* state) -> int {
@@ -208,6 +312,8 @@ auto poll(lua_State* state) -> int {
 
 const luaL_Reg kHttpFunctions[] = {
     {"get", get},
+    {"post", post},
+    {"put", put},
     {"busy", busy},
     {"poll", poll},
     {nullptr, nullptr},

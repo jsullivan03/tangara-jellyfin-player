@@ -140,11 +140,27 @@ local http = {}
 
 local http_job = nil
 
-function http.get(url)
+local function start_http_request(
+    method,
+    url,
+    body
+)
     if type(url) ~= "string" or
         not url:match("^https?://") then
         return false,
             "URL must begin with http:// or https://"
+    end
+
+    body = body or ""
+
+    if type(body) ~= "string" then
+        return false,
+            "HTTP request body must be a string"
+    end
+
+    if #body > 65536 then
+        return false,
+            "HTTP request body exceeded 65536 bytes"
     end
 
     if http_job then
@@ -152,10 +168,16 @@ function http.get(url)
             "HTTP request already in progress"
     end
 
+    if not ensure_directory(runtime_root) then
+        return false,
+            "failed to create simulator runtime directory"
+    end
+
     local prefix = runtime_root .. "/http"
     local job = {
         body = prefix .. ".body",
         error = prefix .. ".error",
+        request_body = prefix .. ".request",
         script = prefix .. ".sh",
         status = prefix .. ".status",
         status_temporary =
@@ -165,10 +187,33 @@ function http.get(url)
     remove_paths({
         job.body,
         job.error,
+        job.request_body,
         job.script,
         job.status,
         job.status_temporary,
     })
+
+    local written, write_error =
+        write_file(job.request_body, body)
+
+    if not written then
+        return false, write_error
+    end
+
+    local body_arguments = ""
+
+    if method == "POST" or method == "PUT" then
+        body_arguments =
+            " -H " ..
+            shell_quote("Content-Type: application/json")
+
+        if body ~= "" then
+            body_arguments =
+                body_arguments ..
+                " --data-binary " ..
+                shell_quote("@" .. job.request_body)
+        end
+    end
 
     local script = table.concat({
         "rm -f " ..
@@ -177,6 +222,10 @@ function http.get(url)
         "code=$(curl -sS -L " ..
             "--connect-timeout 10 " ..
             "--max-time 30 " ..
+            "-X " .. shell_quote(method) .. " " ..
+            "-H " ..
+            shell_quote("Accept: application/json") ..
+            body_arguments .. " " ..
             "-o " .. shell_quote(job.body) .. " " ..
             "-w '%{http_code}' " ..
             shell_quote(url) ..
@@ -201,6 +250,30 @@ function http.get(url)
     http_job = job
 
     return true
+end
+
+function http.get(url)
+    return start_http_request(
+        "GET",
+        url,
+        ""
+    )
+end
+
+function http.post(url, body)
+    return start_http_request(
+        "POST",
+        url,
+        body or ""
+    )
+end
+
+function http.put(url, body)
+    return start_http_request(
+        "PUT",
+        url,
+        body
+    )
 end
 
 function http.busy()
@@ -243,6 +316,7 @@ function http.poll()
     remove_paths({
         http_job.body,
         http_job.error,
+        http_job.request_body,
         http_job.script,
         http_job.status,
         http_job.status_temporary,
