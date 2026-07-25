@@ -143,6 +143,15 @@ class NvsStorage {
   auto InterfaceTheme() -> std::optional<std::string>;
   auto InterfaceTheme(std::string) -> void;
 
+  auto WifiSsid() -> std::optional<std::string>;
+  auto WifiSsid(std::string) -> void;
+
+  auto WifiPassword() -> std::optional<std::string>;
+  auto WifiPassword(std::string) -> void;
+
+  auto SyncServerUrl() -> std::optional<std::string>;
+  auto SyncServerUrl(std::string) -> void;
+
   auto ScrollSensitivity() -> uint_fast8_t;
   auto ScrollSensitivity(uint_fast8_t) -> void;
 
@@ -219,6 +228,9 @@ class NvsStorage {
   Setting<uint8_t> long_text_mode_;
 
   Setting<std::string> theme_;
+  Setting<std::string> wifi_ssid_;
+  Setting<std::string> wifi_password_;
+  Setting<std::string> sync_server_url_;
 
   Setting<bluetooth::MacAndName> bt_preferred_;
   Setting<std::vector<bluetooth::MacAndName>> bt_names_;

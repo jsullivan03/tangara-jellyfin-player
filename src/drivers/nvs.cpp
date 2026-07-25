@@ -34,6 +34,9 @@ static constexpr char kKeyOutput[] = "out";
 static constexpr char kKeyBrightness[] = "bright";
 static constexpr char kKeyTextToSpeech[] = "tts";
 static constexpr char kKeyInterfaceTheme[] = "ui_theme";
+static constexpr char kKeyWifiSsid[] = "wifi_ssid";
+static constexpr char kKeyWifiPassword[] = "wifi_pass";
+static constexpr char kKeySyncServerUrl[] = "sync_server";
 static constexpr char kKeyAmpMaxVolume[] = "hp_vol_max";
 static constexpr char kKeyAmpCurrentVolume[] = "hp_vol";
 static constexpr char kKeyAmpLeftBias[] = "hp_bias";
@@ -290,6 +293,9 @@ NvsStorage::NvsStorage(nvs_handle_t handle)
       haptics_mode_(kKeyHaptics),
       long_text_mode_{kKeyLongText},
       theme_{kKeyInterfaceTheme},
+      wifi_ssid_{kKeyWifiSsid},
+      wifi_password_{kKeyWifiPassword},
+      sync_server_url_{kKeySyncServerUrl},
       bt_preferred_(kKeyBluetoothPreferred),
       bt_names_(kKeyBluetoothNames),
       db_auto_index_(kKeyDbAutoIndex),
@@ -325,6 +331,9 @@ auto NvsStorage::Read() -> void {
   haptics_mode_.read(handle_);
   long_text_mode_.read(handle_);
   theme_.read(handle_);
+  wifi_ssid_.read(handle_);
+  wifi_password_.read(handle_);
+  sync_server_url_.read(handle_);
   bt_preferred_.read(handle_);
   bt_names_.read(handle_);
   db_auto_index_.read(handle_);
@@ -355,6 +364,9 @@ auto NvsStorage::Write() -> bool {
   haptics_mode_.write(handle_);
   long_text_mode_.write(handle_);
   theme_.write(handle_);
+  wifi_ssid_.write(handle_);
+  wifi_password_.write(handle_);
+  sync_server_url_.write(handle_);
   bt_preferred_.write(handle_);
   bt_names_.write(handle_);
   db_auto_index_.write(handle_);
@@ -617,6 +629,36 @@ auto NvsStorage::InterfaceTheme() -> std::optional<std::string> {
 auto NvsStorage::InterfaceTheme(std::string themeFile) -> void {
   std::lock_guard<std::mutex> lock{mutex_};
   theme_.set(themeFile);
+}
+
+auto NvsStorage::WifiSsid() -> std::optional<std::string> {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return wifi_ssid_.get();
+}
+
+auto NvsStorage::WifiSsid(std::string value) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  wifi_ssid_.set(value);
+}
+
+auto NvsStorage::WifiPassword() -> std::optional<std::string> {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return wifi_password_.get();
+}
+
+auto NvsStorage::WifiPassword(std::string value) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  wifi_password_.set(value);
+}
+
+auto NvsStorage::SyncServerUrl() -> std::optional<std::string> {
+  std::lock_guard<std::mutex> lock{mutex_};
+  return sync_server_url_.get();
+}
+
+auto NvsStorage::SyncServerUrl(std::string value) -> void {
+  std::lock_guard<std::mutex> lock{mutex_};
+  sync_server_url_.set(value);
 }
 
 auto NvsStorage::ScrollSensitivity() -> uint_fast8_t {
