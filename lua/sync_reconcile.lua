@@ -16,6 +16,10 @@ local function normalize_local_path(path)
         return nil, "local path contains a null byte"
     end
 
+    if path:find("[\r\n]") then
+        return nil, "local path contains a line break"
+    end
+
     local segments = {}
 
     for segment in path:gmatch("[^/]+") do
@@ -32,6 +36,8 @@ local function normalize_local_path(path)
 
     return "/" .. table.concat(segments, "/")
 end
+
+M.normalize_local_path = normalize_local_path
 
 local function storage_root()
     local root, root_error = device.storage_root()
