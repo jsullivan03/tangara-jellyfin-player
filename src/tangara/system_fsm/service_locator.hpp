@@ -21,6 +21,7 @@
 #include "drivers/samd.hpp"
 #include "drivers/storage.hpp"
 #include "drivers/touchwheel.hpp"
+#include "drivers/wifi.hpp"
 #include "input/input_lua.hpp"
 #include "tasks.hpp"
 #include "tts/provider.hpp"
@@ -63,6 +64,15 @@ class ServiceLocator {
 
   auto bluetooth(std::unique_ptr<drivers::Bluetooth> i) {
     bluetooth_ = std::move(i);
+  }
+
+  auto wifi() -> drivers::Wifi& {
+    assert(wifi_ != nullptr);
+    return *wifi_;
+  }
+
+  auto wifi(std::unique_ptr<drivers::Wifi> i) {
+    wifi_ = std::move(i);
   }
 
   auto battery() -> battery::Battery& {
@@ -161,6 +171,7 @@ class ServiceLocator {
   std::unique_ptr<drivers::TouchWheel> touchwheel_;
   std::unique_ptr<drivers::Haptics> haptics_;
   std::unique_ptr<drivers::Bluetooth> bluetooth_;
+  std::unique_ptr<drivers::Wifi> wifi_;
 
   std::unique_ptr<audio::TrackQueue> queue_;
   std::unique_ptr<battery::Battery> battery_;

@@ -35,6 +35,7 @@
 #include "drivers/samd.hpp"
 #include "drivers/spi.hpp"
 #include "drivers/touchwheel.hpp"
+#include "drivers/wifi.hpp"
 #include "events/event_queue.hpp"
 #include "system_fsm/service_locator.hpp"
 #include "system_fsm/system_events.hpp"
@@ -117,6 +118,10 @@ auto Booting::entry() -> void {
   ESP_LOGI(kTag, "init bluetooth");
   sServices->bluetooth(std::make_unique<drivers::Bluetooth>(
       sServices->nvs(), sServices->bg_worker(), bt_event_cb));
+
+  ESP_LOGI(kTag, "init wifi");
+  sServices->wifi(
+      std::make_unique<drivers::Wifi>(sServices->nvs()));
 
   BootComplete ev{.services = sServices};
   events::Ui().Dispatch(ev);
