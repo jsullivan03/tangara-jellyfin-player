@@ -68,8 +68,6 @@ function M.create(options)
             period = 50,
             repeat_count = 1,
             cb = function(timer)
-                timer:delete()
-
                 if id ~= artist_id then
                     return
                 end
@@ -117,9 +115,9 @@ function M.create(options)
         x = 117,
         y = 113,
         w = 35,
-        text = "-0:00",
+        text = "0:00",
         text_color = "#B7B8C1",
-        text_align = 2,
+        text_align = 3,
     }
 
     local title_view = root:Object {
@@ -150,8 +148,6 @@ function M.create(options)
             period = ms,
             repeat_count = 1,
             cb = function(timer)
-                timer:delete()
-
                 if id == marquee_id then
                     callback()
                 end
@@ -173,8 +169,6 @@ function M.create(options)
             period = 50,
             repeat_count = 1,
             cb = function(timer)
-                timer:delete()
-
                 if id ~= marquee_id then
                     return
                 end
@@ -223,8 +217,6 @@ function M.create(options)
                             end
                         end,
                         done_cb = function(anim)
-                            anim:delete()
-
                             if id == marquee_id then
                                 wait_ms(2000, id, backward)
                             end
@@ -251,8 +243,6 @@ function M.create(options)
                             end
                         end,
                         done_cb = function(anim)
-                            anim:delete()
-
                             if id == marquee_id then
                                 wait_ms(2000, id, forward)
                             end

@@ -9,7 +9,21 @@ end
 require("mocks").install(lvgl)
 
 local playback = require("playback")
-local manifest = require("sync_manifest")
+local json = require("json")
+
+local file, open_error = io.open(
+    "desktop-sim/sync_manifest.json",
+    "rb"
+)
+
+if not file then
+    error(open_error)
+end
+
+local manifest_text = file:read("*a")
+file:close()
+
+local manifest = json.decode(manifest_text)
 
 local screen = require("premium_now_playing_screen").create {
     background = manifest.items[1].artwork.background,
@@ -88,7 +102,7 @@ local function load_item(index)
     playback.playing:set(true)
 end
 
-lvgl.Timer {
+screen.playback_timer = lvgl.Timer {
     period = 1000,
     cb = function()
         if not playback.playing:get() then
