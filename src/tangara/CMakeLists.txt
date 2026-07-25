@@ -7,7 +7,7 @@ idf_component_register(
   "input" "lua" "system_fsm" "ui" "tts"
   INCLUDE_DIRS "."
   REQUIRES "codecs" "drivers" "locale" "memory" "tasks" "util" "graphics"
-  "tinyfsm" "lvgl" "esp_timer" "esp_http_client" "luavgl" "esp_app_format" "libcppbor" "libtags"
+  "tinyfsm" "lvgl" "esp_timer" "esp_http_client" "esp_hw_support" "luavgl" "esp_app_format" "libcppbor" "libtags"
   "komihash" "result" "esp_psram" "fatfs" "millershuffle" "speexdsp" "console"
   "esp-idf-lua" "lua-linenoise" "lua-term")
 target_compile_options(${COMPONENT_LIB} PRIVATE ${EXTRA_WARNINGS})

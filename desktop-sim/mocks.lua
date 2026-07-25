@@ -667,6 +667,12 @@ function M.install(lvgl)
         return true
     end
 
+    local device = {}
+
+    function device.id()
+        return "tangara-sim-001"
+    end
+
     local http_result = nil
     local http_busy = false
     local http = {}
@@ -734,6 +740,7 @@ function M.install(lvgl)
     install_module("time", time)
     install_module("nvs", nvs)
     install_module("wifi", wifi)
+    install_module("device", device)
     install_module("http", http)
     install_module("version", version)
 
