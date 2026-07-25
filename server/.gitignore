@@ -1,2 +1,5 @@
 .env
 .jellyfin-api-key
+data/
+__pycache__/
+*.pyc

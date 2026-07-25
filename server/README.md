@@ -36,3 +36,15 @@ Place the Jellyfin API key in `.jellyfin-api-key` and restrict its permissions:
 ## Current limitations
 
 Assigned tracks are configured with TANGARA_ITEM_IDS. Device assignments are not yet stored separately. Playlist and collection synchronization are not yet implemented. File deletion remains disabled in the firmware.
+
+## Jellyfin account linking
+
+A device begins account linking with:
+
+    POST /devices/<device-id>/link/start
+
+The response contains a Jellyfin Quick Connect code. After the user approves the code, the device polls:
+
+    GET /devices/<device-id>/link/status
+
+The server stores the resulting Jellyfin user ID and access token in its SQLite database. The access token is never returned to the device.

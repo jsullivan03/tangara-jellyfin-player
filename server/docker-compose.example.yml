@@ -3,15 +3,18 @@ services:
     build:
       context: ./tangara-sync
     restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       TZ: ${TZ:-America/Chicago}
       JELLYFIN_URL: ${JELLYFIN_URL:-http://host.docker.internal:8096}
       JELLYFIN_USER_ID: ${JELLYFIN_USER_ID}
       JELLYFIN_API_KEY_FILE: /run/secrets/jellyfin_api_key
       TANGARA_ITEM_IDS: ${TANGARA_ITEM_IDS}
+      TANGARA_DATABASE_FILE: /data/tangara-sync.db
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
       - ./.jellyfin-api-key:/run/secrets/jellyfin_api_key:ro
+      - ./data:/data
     ports:
       - "${TANGARA_SYNC_PORT:-8787}:8787"

@@ -6,7 +6,15 @@ from urllib.parse import quote
 import requests
 from flask import Flask, Response, jsonify, request, stream_with_context
 
+from device_links import (
+    device_authentication,
+    device_links,
+    linked_device_count,
+    valid_device_id,
+)
+
 app = Flask(__name__)
+app.register_blueprint(device_links)
 
 JELLYFIN_URL = os.environ.get(
     "JELLYFIN_URL",
@@ -40,9 +48,12 @@ if not ITEM_IDS:
     raise RuntimeError("No Tangara test items are configured")
 
 
-def jellyfin_headers(accept="application/json"):
+def jellyfin_headers(
+    token,
+    accept="application/json",
+):
     return {
-        "X-Emby-Token": JELLYFIN_API_KEY,
+        "X-Emby-Token": token,
         "Accept": accept,
     }
 
@@ -66,12 +77,16 @@ def safe_segment(value, fallback):
     return value
 
 
-def get_item(item_id):
+def get_item(
+    item_id,
+    token,
+    user_id,
+):
     response = requests.get(
         f"{JELLYFIN_URL}/Items",
-        headers=jellyfin_headers(),
+        headers=jellyfin_headers(token),
         params={
-            "UserId": JELLYFIN_USER_ID,
+            "UserId": user_id,
             "Ids": item_id,
             "Recursive": "true",
             "Limit": "1",
@@ -174,17 +189,33 @@ def health():
             "ok": True,
             "jellyfin_url": JELLYFIN_URL,
             "configured_items": len(ITEM_IDS),
+            "linked_devices": linked_device_count(),
         }
     )
 
 
 @app.get("/devices/<device_id>/manifest")
 def device_manifest(device_id):
+    if not valid_device_id(device_id):
+        return jsonify(
+            {"error": "Invalid device ID"}
+        ), 400
+
+    authentication = device_authentication(
+        device_id,
+        JELLYFIN_API_KEY,
+        JELLYFIN_USER_ID,
+    )
+
     items = []
 
     try:
         for item_id in sorted(ITEM_IDS):
-            item = get_item(item_id)
+            item = get_item(
+                item_id,
+                authentication["token"],
+                authentication["user_id"],
+            )
 
             if item is None:
                 return jsonify(
@@ -210,6 +241,8 @@ def device_manifest(device_id):
             "device": {
                 "id": device_id,
                 "name": device_id,
+                "authentication":
+                    authentication["source"],
                 "storage": {
                     "capacity_bytes": 0,
                     "used_bytes": 0,
@@ -225,6 +258,11 @@ def device_manifest(device_id):
     "/devices/<device_id>/items/<item_id>/media"
 )
 def device_media(device_id, item_id):
+    if not valid_device_id(device_id):
+        return jsonify(
+            {"error": "Invalid device ID"}
+        ), 400
+
     if item_id not in ITEM_IDS:
         return jsonify(
             {
@@ -235,8 +273,15 @@ def device_media(device_id, item_id):
             }
         ), 404
 
+    authentication = device_authentication(
+        device_id,
+        JELLYFIN_API_KEY,
+        JELLYFIN_USER_ID,
+    )
+
     upstream_headers = jellyfin_headers(
-        "application/octet-stream"
+        authentication["token"],
+        "application/octet-stream",
     )
 
     range_header = request.headers.get("Range")
