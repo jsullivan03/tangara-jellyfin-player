@@ -9,11 +9,11 @@ end
 require("mocks").install(lvgl)
 
 local playback = require("playback")
-local database = require("database")
+local manifest = require("sync_manifest")
 
 local screen = require("premium_now_playing_screen").create {
-    background = "/desktop-sim/generated/now-playing-background.png",
-    cover = "/desktop-sim/generated/now-playing-cover.png",
+    background = manifest.items[1].artwork.background,
+    cover = manifest.items[1].artwork.cover,
 }
 
 local function format_time(seconds)
@@ -48,27 +48,43 @@ playback.track:bind(function(track)
         return
     end
 
-    local tags = track.tags or {}
-
     screen:update {
-        title = tags.title or track.title or "",
-        artist = tags.artist or track.artist or "",
+        background = track.artwork.background,
+        cover = track.artwork.cover,
+        title = track.title,
+        artist = track.artist,
         progress = 0,
         elapsed = "0:00",
         remaining = format_time(track.duration),
     }
 end)
 
-playback.position:bind(function()
-    update_progress()
-end)
+playback.position:bind(update_progress)
 
-local current_track = 1
+local current_index = 1
 
-local function load_track(id)
-    current_track = id
+local function load_item(index)
+    local item = manifest.items[index]
+
+    if not item then
+        return
+    end
+
+    current_index = index
+
     playback.position:set(0)
-    playback.track:set(database.track_by_id(id))
+    playback.track:set {
+        id = item.id,
+        jellyfin_id = item.jellyfin_id,
+        title = item.title,
+        artist = item.artist,
+        album = item.album,
+        duration = item.duration,
+        filepath = item.local_path,
+        artwork = item.artwork,
+        sync_state = item.sync_state,
+        pinned = item.pinned,
+    }
     playback.playing:set(true)
 end
 
@@ -88,13 +104,13 @@ lvgl.Timer {
         local position = (playback.position:get() or 0) + 1
 
         if position >= track.duration then
-            local next_track = current_track + 1
+            local next_index = current_index + 1
 
-            if not database.track_by_id(next_track) then
-                next_track = 1
+            if next_index > #manifest.items then
+                next_index = 1
             end
 
-            load_track(next_track)
+            load_item(next_index)
             return
         end
 
@@ -112,13 +128,13 @@ local hitbox = screen.root:Object {
 }
 
 hitbox:onClicked(function()
-    local next_track = current_track + 1
+    local next_index = current_index + 1
 
-    if not database.track_by_id(next_track) then
-        next_track = 1
+    if next_index > #manifest.items then
+        next_index = 1
     end
 
-    load_track(next_track)
+    load_item(next_index)
 end)
 
-load_track(1)
+load_item(1)
