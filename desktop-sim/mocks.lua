@@ -667,6 +667,41 @@ function M.install(lvgl)
         return true
     end
 
+    local http_result = nil
+    local http_busy = false
+    local http = {}
+
+    function http.get(url)
+        if type(url) ~= "string" or not url:match("^https?://") then
+            return false, "URL must begin with http:// or https://"
+        end
+
+        if http_busy then
+            return false, "HTTP request already in progress"
+        end
+
+        http_busy = true
+        http_result = {
+            ok = true,
+            status = 200,
+            body = "{\"status\":\"ok\",\"source\":\"desktop-simulator\"}",
+            error = nil,
+        }
+        http_busy = false
+
+        return true
+    end
+
+    function http.busy()
+        return http_busy
+    end
+
+    function http.poll()
+        local result = http_result
+        http_result = nil
+        return result
+    end
+
     local version = {}
 
     function version.samd()
@@ -699,6 +734,7 @@ function M.install(lvgl)
     install_module("time", time)
     install_module("nvs", nvs)
     install_module("wifi", wifi)
+    install_module("http", http)
     install_module("version", version)
 
     return {
