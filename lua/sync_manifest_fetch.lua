@@ -45,6 +45,37 @@ function M.poll()
         }
     end
 
+    local expected_device_id, device_error = device_identity.id()
+
+    if not expected_device_id then
+        return {
+            ok = false,
+            status = response.status,
+            error = device_error,
+            body = response.body,
+        }
+    end
+
+    local manifest_device_id = manifest.device.id
+
+    if type(manifest_device_id) ~= "string" or manifest_device_id == "" then
+        return {
+            ok = false,
+            status = response.status,
+            error = "manifest device ID is missing",
+            body = response.body,
+        }
+    end
+
+    if manifest_device_id ~= expected_device_id then
+        return {
+            ok = false,
+            status = response.status,
+            error = "manifest device ID does not match this device",
+            body = response.body,
+        }
+    end
+
     return {
         ok = true,
         status = response.status,
