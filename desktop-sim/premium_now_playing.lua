@@ -34,21 +34,106 @@ root:Image {
     src = lvgl.ImgData("/desktop-sim/generated/now-playing-cover.png"),
 }
 
-local title = root:Label {
+local title_view = root:Object {
     x = 6,
     y = 72,
     w = 148,
     h = 15,
+    pad_all = 0,
+    border_width = 0,
+    radius = 0,
+    bg_opa = 0,
+    scrollbar_mode = lvgl.SCROLLBAR_MODE.OFF,
+}
+
+title_view:clear_flag(lvgl.FLAG.SCROLLABLE)
+
+local title = title_view:Label {
+    x = 0,
+    y = 0,
     text = "Midnight Circuit (Extended Mix)",
     text_color = "#FFFFFF",
-    text_align = 1,
 }
 
-title:set {
-}
+local function wait_ms(ms, callback)
+    lvgl.Timer {
+        period = ms,
+        repeat_count = 1,
+        cb = function(timer)
+            timer:delete()
+            callback()
+        end,
+    }
+end
 
-title:set {
-    long_mode = 2,
+local function start_marquee()
+    local coords = title:get_coords()
+    local text_width = coords.x2 - coords.x1 + 1
+    local overflow = text_width - 148
+
+    if overflow <= 0 then
+        title:set {
+            x = math.floor((148 - text_width) / 2),
+        }
+        return
+    end
+
+    local duration = math.max(
+        2800,
+        math.floor(overflow * 40)
+    )
+
+    local forward
+    local backward
+
+    forward = function()
+        title:Anim {
+            run = true,
+            start_value = 0,
+            end_value = -overflow,
+            duration = duration,
+            path = "linear",
+            exec_cb = function(obj, value)
+                obj:set {
+                    x = value,
+                }
+            end,
+            done_cb = function(anim)
+                anim:delete()
+                wait_ms(2000, backward)
+            end,
+        }
+    end
+
+    backward = function()
+        title:Anim {
+            run = true,
+            start_value = -overflow,
+            end_value = 0,
+            duration = duration,
+            path = "linear",
+            exec_cb = function(obj, value)
+                obj:set {
+                    x = value,
+                }
+            end,
+            done_cb = function(anim)
+                anim:delete()
+                wait_ms(2000, forward)
+            end,
+        }
+    end
+
+    wait_ms(2000, forward)
+end
+
+lvgl.Timer {
+    period = 50,
+    repeat_count = 1,
+    cb = function(timer)
+        timer:delete()
+        start_marquee()
+    end,
 }
 
 root:Label {
