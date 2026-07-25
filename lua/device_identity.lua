@@ -14,10 +14,23 @@ local function encode_path_segment(value)
     ))
 end
 
+local function device_path(suffix)
+    local device_id, device_error = M.id()
+
+    if not device_id then
+        return nil, device_error
+    end
+
+    return "/devices/" ..
+        encode_path_segment(device_id) ..
+        suffix
+end
+
 function M.id()
     local device_id, device_error = device.id()
 
-    if type(device_id) ~= "string" or device_id == "" then
+    if type(device_id) ~= "string" or
+        device_id == "" then
         return nil,
             device_error or
             "device identity is unavailable"
@@ -27,15 +40,7 @@ function M.id()
 end
 
 function M.manifest_path()
-    local device_id, device_error = M.id()
-
-    if not device_id then
-        return nil, device_error
-    end
-
-    return "/devices/" ..
-        encode_path_segment(device_id) ..
-        "/manifest"
+    return device_path("/manifest")
 end
 
 function M.media_path(jellyfin_id)
@@ -44,17 +49,33 @@ function M.media_path(jellyfin_id)
         return nil, "Jellyfin item ID is required"
     end
 
-    local device_id, device_error = M.id()
-
-    if not device_id then
-        return nil, device_error
-    end
-
-    return "/devices/" ..
-        encode_path_segment(device_id) ..
+    return device_path(
         "/items/" ..
         encode_path_segment(jellyfin_id) ..
         "/media"
+    )
+end
+
+function M.link_start_path(force)
+    local suffix = "/link/start"
+
+    if force == true then
+        suffix = suffix .. "?force=true"
+    end
+
+    return device_path(suffix)
+end
+
+function M.link_status_path()
+    return device_path("/link/status")
+end
+
+function M.sync_sources_path()
+    return device_path("/sync/sources")
+end
+
+function M.sync_preferences_path()
+    return device_path("/sync/preferences")
 end
 
 return M

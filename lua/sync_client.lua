@@ -3,6 +3,9 @@ local sync_config = require("sync_config")
 
 local M = {}
 
+local default_owner = "sync_client_default"
+local active_owner = nil
+
 local function join_url(base_url, path)
     base_url = base_url:gsub("/+$", "")
 
@@ -37,6 +40,35 @@ local function prepare(path)
     return M.url(path)
 end
 
+local function start_request(
+    method,
+    path,
+    body,
+    owner
+)
+    if active_owner ~= nil or http.busy() then
+        return false,
+            "HTTP request already in progress"
+    end
+
+    local url, url_error = prepare(path)
+
+    if not url then
+        return false, url_error
+    end
+
+    local started, start_error =
+        method(url, body)
+
+    if not started then
+        return false, start_error
+    end
+
+    active_owner = owner or default_owner
+
+    return true
+end
+
 function M.url(path)
     local config = sync_config.load()
 
@@ -53,46 +85,71 @@ function M.url(path)
     return join_url(config.server_url, path)
 end
 
-function M.get(path)
-    local url, url_error = prepare(path)
-
-    if not url then
-        return false, url_error
-    end
-
-    return http.get(url)
+function M.get(path, owner)
+    return start_request(
+        function(url)
+            return http.get(url)
+        end,
+        path,
+        nil,
+        owner
+    )
 end
 
-function M.post(path, body)
-    local url, url_error = prepare(path)
-
-    if not url then
-        return false, url_error
-    end
-
-    return http.post(url, body or "")
+function M.post(path, body, owner)
+    return start_request(
+        function(url, request_body)
+            return http.post(
+                url,
+                request_body or ""
+            )
+        end,
+        path,
+        body,
+        owner
+    )
 end
 
-function M.put(path, body)
-    local url, url_error = prepare(path)
-
-    if not url then
-        return false, url_error
-    end
-
+function M.put(path, body, owner)
     if type(body) ~= "string" then
         return false, "request body must be a string"
     end
 
-    return http.put(url, body)
+    return start_request(
+        http.put,
+        path,
+        body,
+        owner
+    )
 end
 
-function M.busy()
-    return http.busy()
+function M.busy(owner)
+    if owner ~= nil then
+        return active_owner == owner
+    end
+
+    return active_owner ~= nil or http.busy()
 end
 
-function M.poll()
-    return http.poll()
+function M.poll(owner)
+    local expected_owner =
+        owner or default_owner
+
+    if active_owner ~= expected_owner then
+        return nil
+    end
+
+    local response = http.poll()
+
+    if response ~= nil then
+        active_owner = nil
+    end
+
+    return response
+end
+
+function M.owner()
+    return active_owner
 end
 
 return M
