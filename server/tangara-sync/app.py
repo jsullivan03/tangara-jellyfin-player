@@ -12,6 +12,8 @@ from flask import (
     stream_with_context,
 )
 
+from library_sync import library_sync_api
+
 from device_links import (
     device_authentication,
     device_links,
@@ -28,6 +30,7 @@ from sync_preferences import (
 app = Flask(__name__)
 app.register_blueprint(device_links)
 app.register_blueprint(sync_preferences_api)
+app.register_blueprint(library_sync_api)
 
 JELLYFIN_URL = os.environ.get(
     "JELLYFIN_URL",

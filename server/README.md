@@ -58,6 +58,57 @@ The request body is:
 
     {"favorites":false,"playlists":["playlist-id"]}
 
+
+## Bidirectional library synchronization
+
+Read the linked user's playlist and favorites summary:
+
+    GET /devices/<device-id>/library
+
+Read paginated playlist or favorite tracks:
+
+    GET /devices/<device-id>/playlists/<playlist-id>/items
+    GET /devices/<device-id>/favorites/items
+
+Submit ordered, idempotent edits:
+
+    POST /devices/<device-id>/operations
+
+The request body is:
+
+    {
+      "operations": [
+        {
+          "id": "device-operation-id",
+          "type": "create_playlist",
+          "data": {
+            "local_playlist_id": "local:123",
+            "name": "Night Drive",
+            "item_ids": []
+          }
+        }
+      ]
+    }
+
+Supported operation types are:
+
+- `create_playlist`
+- `rename_playlist`
+- `delete_playlist`
+- `add_playlist_item`
+- `remove_playlist_item`
+- `move_playlist_item`
+- `set_favorite`
+
+Operation IDs are stored in SQLite. Replaying an applied operation returns its original result without applying the Jellyfin change again. A locally created playlist can be referenced by its `local_playlist_id` in later operations.
+
+Run the live integration test against the versioned server:
+
+    TANGARA_SYNC_URL=http://127.0.0.1:8788 \
+    python integration_bidirectional.py
+
+The test creates a temporary playlist, verifies replay protection, add, rename, move, remove, favorite synchronization, and deletion, then restores the original favorite state.
+
 ## Device endpoints
 
     GET /health
