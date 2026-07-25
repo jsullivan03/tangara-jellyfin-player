@@ -232,13 +232,7 @@ function M.poll()
         return nil
     end
 
-    if time.ticks() < next_poll_at then
-        return nil
-    end
-
     if sync_client.busy() then
-        next_poll_at =
-            time.ticks() + 500
         return nil
     end
 

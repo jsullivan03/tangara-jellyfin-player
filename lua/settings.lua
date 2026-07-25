@@ -1216,6 +1216,12 @@ settings.Root = widgets.MenuScreen:new {
     submenu("Input Method", settings.InputSettings)
     submenu("Playing Screen", settings.PlayingScreenSettings)
 
+    section("Network")
+    submenu(
+      "Jellyfin",
+      require("jellyfin_settings")
+    )
+
     section("Storage")
     submenu("SD Card", settings.SDSettings)
     submenu("USB", settings.MassStorageSettings)
