@@ -26,6 +26,7 @@
 #include "lua/lua_filesystem.hpp"
 #include "lua/lua_gpio.hpp"
 #include "lua/lua_i2c.hpp"
+#include "lua/lua_http.hpp"
 #include "lua/lua_nvs.hpp"
 #include "lua/lua_playing_screen_settings.hpp"
 #include "lua/lua_queue.hpp"
@@ -90,6 +91,7 @@ auto Bridge::installBaseModules(lua_State* L) -> void {
   RegisterI2CModule(L);
   RegisterGPIOModule(L);
   RegisterWifiModule(L);
+  RegisterHttpModule(L);
 }
 
 auto Bridge::installLvgl(lua_State* L) -> void {
