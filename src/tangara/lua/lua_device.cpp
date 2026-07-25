@@ -44,8 +44,14 @@ auto id(lua_State* state) -> int {
   return 1;
 }
 
+auto storage_root(lua_State* state) -> int {
+  lua_pushliteral(state, "/sd");
+  return 1;
+}
+
 const luaL_Reg kDeviceFunctions[] = {
     {"id", id},
+    {"storage_root", storage_root},
     {nullptr, nullptr},
 };
 

@@ -673,6 +673,10 @@ function M.install(lvgl)
         return "tangara-sim-001"
     end
 
+    function device.storage_root()
+        return "desktop-sim"
+    end
+
     local http_result = nil
     local http_busy = false
     local http = {}

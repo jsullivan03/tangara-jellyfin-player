@@ -1,6 +1,7 @@
 local device_identity = require("device_identity")
 local sync_client = require("sync_client")
 local sync_manifest = require("sync_manifest")
+local sync_manifest_cache = require("sync_manifest_cache")
 
 local M = {}
 
@@ -76,10 +77,15 @@ function M.poll()
         }
     end
 
+    local cache_saved, cache_error =
+        sync_manifest_cache.save(response.body)
+
     return {
         ok = true,
         status = response.status,
         manifest = manifest,
+        cache_saved = cache_saved,
+        cache_error = cache_error,
     }
 end
 
