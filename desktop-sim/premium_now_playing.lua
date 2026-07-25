@@ -9,21 +9,15 @@ end
 require("mocks").install(lvgl)
 
 local playback = require("playback")
-local json = require("json")
+local sync_manifest = require("sync_manifest")
 
-local file, open_error = io.open(
-    "desktop-sim/sync_manifest.json",
-    "rb"
+local manifest, manifest_error = sync_manifest.load(
+    "desktop-sim/sync_manifest.json"
 )
 
-if not file then
-    error(open_error)
+if not manifest then
+    error(manifest_error)
 end
-
-local manifest_text = file:read("*a")
-file:close()
-
-local manifest = json.decode(manifest_text)
 
 local screen = require("premium_now_playing_screen").create {
     background = manifest.items[1].artwork.background,
