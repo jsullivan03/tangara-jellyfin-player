@@ -23,3 +23,5 @@ sdkconfig.bak
 *.ignore
 
 /sdkconfig.local
+desktop-sim/sd/
+desktop-sim/runtime/
