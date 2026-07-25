@@ -12,6 +12,7 @@ local time = require("time")
 local sd_card = require("sd_card")
 local backstack = require("backstack")
 local main_menu = require("main_menu")
+local sync_runtime = require("sync_runtime")
 
 local saved_theme = theme.theme_filename()
 local res = theme.load_theme(saved_theme)
@@ -20,6 +21,8 @@ if not res then
   local default_theme = require("theme_light")
   theme.set(default_theme)
 end
+
+sync_runtime.start()
 
 local lock_time = time.ticks()
 
