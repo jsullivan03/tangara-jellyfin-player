@@ -8,40 +8,98 @@ end
 
 require("mocks").install(lvgl)
 
-local tracks = {
-    {
-        title = "Midnight Circuit (Extended Mix)",
-        artist = "Example Artist",
-        progress = 0.368,
-        elapsed = "1:21",
-        remaining = "-2:17",
-    },
-    {
-        title = "Afterglow",
-        artist = "Example Artist",
-        progress = 0.610,
-        elapsed = "1:58",
-        remaining = "-1:16",
-    },
-    {
-        title = "Homebound Across the Endless Skyline",
-        artist = "Second Artist",
-        progress = 0.220,
-        elapsed = "0:53",
-        remaining = "-3:08",
-    },
-}
-
-local current = 1
+local playback = require("playback")
+local database = require("database")
 
 local screen = require("premium_now_playing_screen").create {
     background = "/desktop-sim/generated/now-playing-background.png",
     cover = "/desktop-sim/generated/now-playing-cover.png",
-    title = tracks[current].title,
-    artist = tracks[current].artist,
-    progress = tracks[current].progress,
-    elapsed = tracks[current].elapsed,
-    remaining = tracks[current].remaining,
+}
+
+local function format_time(seconds)
+    seconds = math.max(0, math.floor(seconds or 0))
+    return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+local function update_progress()
+    local track = playback.track:get()
+    local position = playback.position:get() or 0
+
+    if not track then
+        return
+    end
+
+    local duration = track.duration or 0
+    local progress = 0
+
+    if duration > 0 then
+        progress = position / duration
+    end
+
+    screen:update {
+        progress = progress,
+        elapsed = format_time(position),
+        remaining = format_time(duration),
+    }
+end
+
+playback.track:bind(function(track)
+    if not track then
+        return
+    end
+
+    local tags = track.tags or {}
+
+    screen:update {
+        title = tags.title or track.title or "",
+        artist = tags.artist or track.artist or "",
+        progress = 0,
+        elapsed = "0:00",
+        remaining = format_time(track.duration),
+    }
+end)
+
+playback.position:bind(function()
+    update_progress()
+end)
+
+local current_track = 1
+
+local function load_track(id)
+    current_track = id
+    playback.position:set(0)
+    playback.track:set(database.track_by_id(id))
+    playback.playing:set(true)
+end
+
+lvgl.Timer {
+    period = 1000,
+    cb = function()
+        if not playback.playing:get() then
+            return
+        end
+
+        local track = playback.track:get()
+
+        if not track then
+            return
+        end
+
+        local position = (playback.position:get() or 0) + 1
+
+        if position >= track.duration then
+            local next_track = current_track + 1
+
+            if not database.track_by_id(next_track) then
+                next_track = 1
+            end
+
+            load_track(next_track)
+            return
+        end
+
+        playback.position:set(position)
+    end,
 }
 
 local hitbox = screen.root:Object {
@@ -54,11 +112,13 @@ local hitbox = screen.root:Object {
 }
 
 hitbox:onClicked(function()
-    current = current + 1
+    local next_track = current_track + 1
 
-    if current > #tracks then
-        current = 1
+    if not database.track_by_id(next_track) then
+        next_track = 1
     end
 
-    screen:update(tracks[current])
+    load_track(next_track)
 end)
+
+load_track(1)
