@@ -1,9 +1,16 @@
+local device_identity = require("device_identity")
 local sync_client = require("sync_client")
 local sync_manifest = require("sync_manifest")
 
 local M = {}
 
-function M.start(path)
+function M.start()
+    local path, path_error = device_identity.manifest_path()
+
+    if not path then
+        return false, path_error
+    end
+
     return sync_client.get(path)
 end
 
