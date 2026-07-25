@@ -1,4 +1,6 @@
 local device = require("device")
+local device_identity = require("device_identity")
+local sync_client = require("sync_client")
 local sync_manifest = require("sync_manifest")
 
 local M = {}
@@ -114,18 +116,38 @@ function M.plan(manifest, managed_paths, file_exists)
             return nil, "duplicate manifest path: " .. local_path
         end
 
+        local media_path, media_path_error =
+            device_identity.media_path(item.jellyfin_id)
+
+        if not media_path then
+            return nil,
+                "manifest item " .. index .. ": " ..
+                media_path_error
+        end
+
         desired_paths[local_path] = true
 
         local full_path = storage_path(root, local_path)
         local action = {
             local_path = local_path,
             storage_path = full_path,
+            media_path = media_path,
             item = item,
         }
 
         if file_exists(full_path) then
             table.insert(plan.keep, action)
         else
+            local media_url, media_url_error =
+                sync_client.url(media_path)
+
+            if not media_url then
+                return nil,
+                    "manifest item " .. index .. ": " ..
+                    media_url_error
+            end
+
+            action.media_url = media_url
             table.insert(plan.download, action)
         end
     end

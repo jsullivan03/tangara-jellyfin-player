@@ -25,6 +25,22 @@ local function join_url(base_url, path)
     return base_url .. path
 end
 
+function M.url(path)
+    local config = sync_config.load()
+
+    if type(config.server_url) ~= "string" or
+        config.server_url == "" then
+        return nil, "sync server URL is required"
+    end
+
+    if not config.server_url:match("^https?://") then
+        return nil,
+            "sync server URL must begin with http:// or https://"
+    end
+
+    return join_url(config.server_url, path)
+end
+
 function M.get(path)
     local config = sync_config.load()
     local valid, validation_error = sync_config.valid(config)
@@ -33,7 +49,7 @@ function M.get(path)
         return false, validation_error
     end
 
-    local url, url_error = join_url(config.server_url, path)
+    local url, url_error = M.url(path)
 
     if not url then
         return false, url_error
