@@ -614,9 +614,15 @@ function M.install(lvgl)
     end
 
     local nvs_values = {
-        wifi_ssid = nil,
-        wifi_password = nil,
-        sync_server_url = nil,
+        wifi_ssid =
+            os.getenv("TANGARA_SIM_WIFI_SSID") or
+            "desktop-sim",
+        wifi_password =
+            os.getenv("TANGARA_SIM_WIFI_PASSWORD") or
+            "",
+        sync_server_url =
+            os.getenv("TANGARA_SIM_SERVER_URL") or
+            "",
     }
 
     local nvs = {}
@@ -674,84 +680,17 @@ function M.install(lvgl)
     end
 
     function device.storage_root()
-        return "desktop-sim"
+        return "desktop-sim/sd"
     end
 
-    local download_result = nil
-    local download_busy = false
-    local download = {}
+    local simulator_network =
+        require("network")
 
-    function download.start(url, destination)
-        if download_busy then
-            return false, "download already in progress"
-        end
+    local download =
+        simulator_network.download
 
-        download_busy = true
-        download_result = {
-            ok = true,
-            status = 200,
-            bytes = 0,
-            total = 0,
-            path = destination,
-            error = nil,
-        }
-        download_busy = false
-
-        return true
-    end
-
-    function download.busy()
-        return download_busy
-    end
-
-    function download.progress()
-        return {
-            busy = download_busy,
-            bytes = 0,
-            total = 0,
-        }
-    end
-
-    function download.poll()
-        local result = download_result
-        download_result = nil
-        return result
-    end
-
-    local http_result = nil
-    local http_busy = false
-    local http = {}
-
-    function http.get(url)
-        if type(url) ~= "string" or not url:match("^https?://") then
-            return false, "URL must begin with http:// or https://"
-        end
-
-        if http_busy then
-            return false, "HTTP request already in progress"
-        end
-
-        http_busy = true
-        http_result = {
-            ok = true,
-            status = 200,
-            body = "{\"status\":\"ok\",\"source\":\"desktop-simulator\"}",
-            error = nil,
-        }
-        http_busy = false
-
-        return true
-    end
-
-    function http.busy()
-        return http_busy
-    end
-
-    function http.poll()
-        local result = http_result
-        http_result = nil
-        return result
-    end
+    local http =
+        simulator_network.http
 
     local version = {}
 
