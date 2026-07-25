@@ -613,13 +613,42 @@ function M.install(lvgl)
         return math.floor(os.clock() * 1000)
     end
 
+    local nvs_values = {
+        wifi_ssid = nil,
+        wifi_password = nil,
+        sync_server_url = nil,
+    }
+
     local nvs = {}
 
-    function nvs.get()
-        return nil
+    function nvs.write()
+        return true
     end
 
-    function nvs.set()
+    function nvs.wifi_ssid()
+        return nvs_values.wifi_ssid
+    end
+
+    function nvs.set_wifi_ssid(value)
+        nvs_values.wifi_ssid = value
+        return true
+    end
+
+    function nvs.wifi_password()
+        return nvs_values.wifi_password
+    end
+
+    function nvs.set_wifi_password(value)
+        nvs_values.wifi_password = value
+        return true
+    end
+
+    function nvs.sync_server_url()
+        return nvs_values.sync_server_url
+    end
+
+    function nvs.set_sync_server_url(value)
+        nvs_values.sync_server_url = value
         return true
     end
 
