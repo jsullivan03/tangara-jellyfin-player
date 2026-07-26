@@ -106,7 +106,8 @@ def get_item(
             "Fields": (
                 "Path,MediaSources,Album,AlbumArtist,"
                 "Artists,RunTimeTicks,IndexNumber,"
-                "ParentIndexNumber,Container,ImageTags"
+                "ParentIndexNumber,Container,ImageTags,"
+                "PrimaryImageItemId"
             ),
         },
         timeout=20,
@@ -276,6 +277,178 @@ def device_manifest(device_id):
             },
             "items": items,
         }
+    )
+
+
+@app.get(
+    (
+        "/devices/<device_id>/items/"
+        "<item_id>/artwork/<variant>"
+    )
+)
+def device_artwork(
+    device_id,
+    item_id,
+    variant,
+):
+    if not valid_device_id(device_id):
+        return jsonify(
+            {"error": "Invalid device ID"}
+        ), 400
+
+    if variant not in {
+        "cover",
+        "background",
+    }:
+        return jsonify(
+            {"error": "Invalid artwork variant"}
+        ), 400
+
+    authentication = device_authentication(
+        device_id,
+        JELLYFIN_API_KEY,
+        JELLYFIN_USER_ID,
+    )
+
+    if (
+        authentication["source"] != "linked_user"
+        and item_id not in ITEM_IDS
+    ):
+        return jsonify(
+            {
+                "error": (
+                    "Item is not selected for "
+                    "this device"
+                )
+            }
+        ), 404
+
+    try:
+        item = get_item(
+            item_id,
+            authentication["token"],
+            authentication["user_id"],
+        )
+    except requests.RequestException as error:
+        return jsonify(
+            {
+                "error": "Jellyfin item query failed",
+                "detail": str(error),
+            }
+        ), 502
+
+    if item is None:
+        return jsonify(
+            {"error": "Jellyfin item was not found"}
+        ), 404
+
+    source_ids = []
+
+    for source_id in (
+        item.get("PrimaryImageItemId"),
+        item.get("AlbumId"),
+        item_id,
+    ):
+        if (
+            isinstance(source_id, str)
+            and source_id
+            and source_id not in source_ids
+        ):
+            source_ids.append(source_id)
+
+    image_tags = item.get("ImageTags") or {}
+    image_tag = image_tags.get("Primary")
+
+    if variant == "cover":
+        image_params = {
+            "format": "png",
+            "fillWidth": "66",
+            "fillHeight": "66",
+            "quality": "90",
+        }
+    else:
+        image_params = {
+            "format": "png",
+            "fillWidth": "160",
+            "fillHeight": "70",
+            "quality": "85",
+            "blur": "8",
+        }
+
+    if image_tag:
+        image_params["tag"] = image_tag
+
+    upstream = None
+
+    try:
+        for source_id in source_ids:
+            candidate = requests.get(
+                (
+                    f"{JELLYFIN_URL}/Items/"
+                    f"{quote(source_id, safe='')}/"
+                    "Images/Primary"
+                ),
+                headers=jellyfin_headers(
+                    authentication["token"],
+                    "image/png",
+                ),
+                params=image_params,
+                stream=True,
+                timeout=(10, 60),
+            )
+
+            if candidate.status_code != 404:
+                upstream = candidate
+                break
+
+            candidate.close()
+    except requests.RequestException as error:
+        if upstream is not None:
+            upstream.close()
+
+        return jsonify(
+            {
+                "error": (
+                    "Jellyfin artwork request failed"
+                ),
+                "detail": str(error),
+            }
+        ), 502
+
+    if upstream is None:
+        return jsonify(
+            {"error": "Artwork was not found"}
+        ), 404
+
+    response_headers = {}
+
+    for name in (
+        "Content-Type",
+        "Content-Length",
+        "ETag",
+        "Last-Modified",
+        "Cache-Control",
+    ):
+        value = upstream.headers.get(name)
+
+        if value is not None:
+            response_headers[name] = value
+
+    def generate():
+        try:
+            for chunk in upstream.iter_content(
+                chunk_size=64 * 1024
+            ):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return Response(
+        stream_with_context(generate()),
+        status=upstream.status_code,
+        headers=response_headers,
+        direct_passthrough=True,
     )
 
 

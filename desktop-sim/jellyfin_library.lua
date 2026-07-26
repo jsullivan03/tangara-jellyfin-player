@@ -242,6 +242,229 @@ if not ok then
     )
 end
 
+local core_jellyfin_playback =
+    dofile("lua/jellyfin_playback.lua")
+
+local original_play =
+    core_jellyfin_playback.play
+
+local function shell_quote(value)
+    return "'" ..
+        tostring(value):gsub(
+            "'",
+            "'\\''"
+        ) ..
+        "'"
+end
+
+local function encode_path_segment(value)
+    return (
+        tostring(value):gsub(
+            "([^A-Za-z0-9._~-])",
+            function(character)
+                return string.format(
+                    "%%%02X",
+                    string.byte(character)
+                )
+            end
+        )
+    )
+end
+
+local function file_exists(path)
+    local file = io.open(path, "rb")
+
+    if not file then
+        return false
+    end
+
+    file:close()
+    return true
+end
+
+local function command_succeeded(command)
+    local ok, reason, code =
+        os.execute(command)
+
+    return ok == true or
+        ok == 0 or
+        (
+            reason == "exit" and
+            code == 0
+        )
+end
+
+local function download_artwork(
+    track,
+    variant,
+    destination
+)
+    if file_exists(destination) then
+        return true
+    end
+
+    local temporary =
+        destination .. ".part"
+
+    local url =
+        server_url ..
+        "/devices/" ..
+        encode_path_segment(device_id) ..
+        "/items/" ..
+        encode_path_segment(track.id) ..
+        "/artwork/" ..
+        variant
+
+    os.remove(temporary)
+
+    local command =
+        "curl -fsSL " ..
+        "--connect-timeout 10 " ..
+        "--max-time 60 " ..
+        "-o " ..
+        shell_quote(temporary) ..
+        " " ..
+        shell_quote(url) ..
+        " && mv " ..
+        shell_quote(temporary) ..
+        " " ..
+        shell_quote(destination)
+
+    if command_succeeded(command) then
+        return true
+    end
+
+    os.remove(temporary)
+    return false
+end
+
+local function cache_track_artwork(track)
+    local current_manifest =
+        manifest_cache.load()
+
+    if not current_manifest then
+        return false
+    end
+
+    local item = nil
+
+    for _, candidate in ipairs(
+        current_manifest.items or {}
+    ) do
+        if candidate.id == track.id or
+            candidate.jellyfin_id ==
+                track.id then
+            item = candidate
+            break
+        end
+    end
+
+    if not item then
+        return false
+    end
+
+    local artwork_directory =
+        root .. "/sim-artwork"
+
+    os.execute(
+        "mkdir -p " ..
+        shell_quote(artwork_directory)
+    )
+
+    local stem =
+        track.id:gsub(
+            "[^A-Za-z0-9._-]",
+            "_"
+        )
+
+    local cover_path =
+        artwork_directory ..
+        "/" ..
+        stem ..
+        "-cover.png"
+
+    local background_path =
+        artwork_directory ..
+        "/" ..
+        stem ..
+        "-background.png"
+
+    local cover_ready =
+        download_artwork(
+            track,
+            "cover",
+            cover_path
+        )
+
+    local background_ready =
+        download_artwork(
+            track,
+            "background",
+            background_path
+        )
+
+    item.artwork =
+        item.artwork or {}
+
+    if cover_ready then
+        item.artwork.cover =
+            "/" .. cover_path
+    end
+
+    if background_ready then
+        item.artwork.background =
+            "/" .. background_path
+    end
+
+    if not cover_ready and
+        not background_ready then
+        print(
+            "No Jellyfin artwork for: " ..
+            tostring(track.title)
+        )
+
+        return false
+    end
+
+    local saved, save_error =
+        manifest_cache.save(
+            json_encode.encode(
+                current_manifest
+            )
+        )
+
+    if not saved then
+        print(
+            "Artwork cache save failed: " ..
+            tostring(save_error)
+        )
+
+        return false
+    end
+
+    print(
+        "Artwork cached for: " ..
+        tostring(track.title)
+    )
+
+    return true
+end
+
+function core_jellyfin_playback.play(
+    track,
+    context
+)
+    cache_track_artwork(track)
+
+    return original_play(
+        track,
+        context
+    )
+end
+
+package.loaded["jellyfin_playback"] =
+    core_jellyfin_playback
+
 local library_screen =
     dofile("lua/jellyfin_library.lua")
 
@@ -251,4 +474,3 @@ package.loaded["jellyfin_library"] =
 simulator.backstack.push(
     library_screen:new()
 )
-

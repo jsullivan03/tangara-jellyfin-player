@@ -16,34 +16,87 @@ function M.create(options)
         border_width = 0,
         radius = 0,
         bg_color = "#020307",
-        scrollbar_mode = lvgl.SCROLLBAR_MODE.OFF,
+        scrollbar_mode =
+            lvgl.SCROLLBAR_MODE.OFF,
     }
 
     local background = root:Image {
         x = 0,
-        y = 0,
-        src = lvgl.ImgData(options.background),
+        y = -16,
+        src =
+            lvgl.ImgData(
+                options.background
+            ),
     }
+
+    local background_dimmer =
+        root:Object {
+            x = 0,
+            y = 0,
+            w = 160,
+            h = 128,
+            pad_all = 0,
+            border_width = 0,
+            radius = 0,
+            bg_color = "#000000",
+            bg_opa = 90,
+            scrollbar_mode =
+                lvgl.SCROLLBAR_MODE.OFF,
+        }
+
+    background_dimmer:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
 
     local cover = root:Image {
         x = 47,
-        y = 2,
-        src = lvgl.ImgData(options.cover),
+        y = 16,
+        src =
+            lvgl.ImgData(
+                options.cover
+            ),
     }
 
-    local artist_view = root:Object {
+    local title_view = root:Object {
         x = 6,
-        y = 88,
+        y = 83,
         w = 148,
-        h = 13,
+        h = 11,
         pad_all = 0,
         border_width = 0,
         radius = 0,
         bg_opa = 0,
-        scrollbar_mode = lvgl.SCROLLBAR_MODE.OFF,
+        scrollbar_mode =
+            lvgl.SCROLLBAR_MODE.OFF,
     }
 
-    artist_view:clear_flag(lvgl.FLAG.SCROLLABLE)
+    title_view:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+
+    local title = title_view:Label {
+        x = 0,
+        y = 0,
+        text = "",
+        text_color = "#FFFFFF",
+    }
+
+    local artist_view = root:Object {
+        x = 6,
+        y = 94,
+        w = 148,
+        h = 11,
+        pad_all = 0,
+        border_width = 0,
+        radius = 0,
+        bg_opa = 0,
+        scrollbar_mode =
+            lvgl.SCROLLBAR_MODE.OFF,
+    }
+
+    artist_view:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
 
     local artist = artist_view:Label {
         x = 0,
@@ -52,40 +105,9 @@ function M.create(options)
         text_color = "#B5B6C0",
     }
 
-    local artist_id = 0
-
-    local function set_artist(value)
-        artist_id = artist_id + 1
-        local id = artist_id
-
-        artist:set {
-            text = value or "",
-            x = 0,
-            text_opa = 0,
-        }
-
-        lvgl.Timer {
-            period = 50,
-            repeat_count = 1,
-            cb = function(timer)
-                if id ~= artist_id then
-                    return
-                end
-
-                local coords = artist:get_coords()
-                local width = coords.x2 - coords.x1 + 1
-
-                artist:set {
-                    x = math.max(0, math.floor((148 - width) / 2)),
-                    text_opa = 255,
-                }
-            end,
-        }
-    end
-
     local progress = root:Object {
         x = 8,
-        y = 106,
+        y = 107,
         w = 144,
         h = 3,
         radius = 2,
@@ -93,15 +115,16 @@ function M.create(options)
         bg_color = "#555762",
     }
 
-    local progress_fill = progress:Object {
-        x = 0,
-        y = 0,
-        w = 0,
-        h = 3,
-        radius = 2,
-        border_width = 0,
-        bg_color = "#F4F4F7",
-    }
+    local progress_fill =
+        progress:Object {
+            x = 0,
+            y = 0,
+            w = 0,
+            h = 3,
+            radius = 2,
+            border_width = 0,
+            bg_color = "#F4F4F7",
+        }
 
     local elapsed = root:Label {
         x = 8,
@@ -120,37 +143,266 @@ function M.create(options)
         text_align = 3,
     }
 
-    local title_view = root:Object {
-        x = 6,
-        y = 72,
-        w = 148,
-        h = 15,
+    local status_bar = root:Object {
+        x = 0,
+        y = 0,
+        w = 160,
+        h = 13,
+        pad_all = 0,
+        border_width = 0,
+        radius = 0,
+        bg_color = "#05060A",
+        bg_opa = 135,
+        scrollbar_mode =
+            lvgl.SCROLLBAR_MODE.OFF,
+    }
+
+    status_bar:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+
+    local back_hitbox =
+        status_bar:Button {
+            x = 0,
+            y = 0,
+            w = 18,
+            h = 13,
+            pad_all = 0,
+            border_width = 0,
+            outline_width = 0,
+            shadow_width = 0,
+            radius = 0,
+            bg_opa = 0,
+        }
+
+    local connection_ring =
+        back_hitbox:Object {
+            x = 5,
+            y = 3,
+            w = 7,
+            h = 7,
+            pad_all = 0,
+            border_width = 1,
+            border_color = "#8A8C93",
+            radius = 4,
+            bg_opa = 0,
+        }
+
+    local connection_dot =
+        connection_ring:Object {
+            x = 2,
+            y = 2,
+            w = 3,
+            h = 3,
+            pad_all = 0,
+            border_width = 0,
+            radius = 2,
+            bg_color = "#8FB9A8",
+            bg_opa = 0,
+        }
+
+    local clock = status_bar:Label {
+        x = 56,
+        y = 2,
+        w = 48,
+        text = "--:--",
+        text_align = 2,
+        text_color = "#D4D5DA",
+        text_font = font.fusion_10,
+    }
+
+    local battery = status_bar:Object {
+        x = 139,
+        y = 3,
+        w = 17,
+        h = 8,
         pad_all = 0,
         border_width = 0,
         radius = 0,
         bg_opa = 0,
-        scrollbar_mode = lvgl.SCROLLBAR_MODE.OFF,
+        scrollbar_mode =
+            lvgl.SCROLLBAR_MODE.OFF,
     }
 
-    title_view:clear_flag(lvgl.FLAG.SCROLLABLE)
+    battery:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
 
-    local title = title_view:Label {
-        x = 0,
-        y = 0,
-        text = "",
-        text_color = "#FFFFFF",
-    }
+    local battery_body =
+        battery:Object {
+            x = 0,
+            y = 0,
+            w = 14,
+            h = 8,
+            pad_all = 0,
+            border_width = 1,
+            border_color = "#D4D5DA",
+            radius = 2,
+            bg_opa = 0,
+        }
 
+    local battery_segments = {}
+
+    for index = 1, 4 do
+        battery_segments[index] =
+            battery_body:Object {
+                x = 1 + (
+                    index - 1
+                ) * 3,
+                y = 2,
+                w = 2,
+                h = 4,
+                pad_all = 0,
+                border_width = 0,
+                radius = 0,
+                bg_color = "#4E5058",
+                bg_opa = 190,
+            }
+    end
+
+    local battery_terminal =
+        battery:Object {
+            x = 14,
+            y = 2,
+            w = 2,
+            h = 4,
+            pad_all = 0,
+            border_width = 0,
+            radius = 1,
+            bg_color = "#D4D5DA",
+            bg_opa = 255,
+        }
+
+    if type(options.on_back) ==
+            "function" then
+        back_hitbox:onClicked(
+            options.on_back
+        )
+    end
+
+    if options.focus_back then
+        back_hitbox:focus()
+    end
+
+    local battery_percentage =
+        tonumber(
+            options.battery_pct
+        ) or 0
+
+    local battery_charging =
+        options.charging == true
+
+    local function update_battery()
+        local percentage =
+            math.max(
+                0,
+                math.min(
+                    100,
+                    battery_percentage
+                )
+            )
+
+        local active_segments = 0
+
+        if percentage > 0 then
+            active_segments =
+                math.ceil(
+                    percentage / 25
+                )
+        end
+
+        local active_color =
+            "#D4D5DA"
+
+        if battery_charging then
+            active_color =
+                "#74C991"
+        elseif percentage <= 10 then
+            active_color =
+                "#E06666"
+        end
+
+        battery_body:set {
+            border_color =
+                active_color,
+        }
+
+        battery_terminal:set {
+            bg_color =
+                active_color,
+        }
+
+        for index, segment in ipairs(
+            battery_segments
+        ) do
+            segment:set {
+                bg_color =
+                    index <=
+                        active_segments and
+                    active_color or
+                    "#4E5058",
+                bg_opa =
+                    index <=
+                        active_segments and
+                    255 or
+                    190,
+            }
+        end
+    end
+
+    local artist_id = 0
     local marquee_id = 0
 
-    local function wait_ms(ms, id, callback)
+    local function wait_ms(
+        milliseconds,
+        id,
+        callback
+    )
         lvgl.Timer {
-            period = ms,
+            period = milliseconds,
             repeat_count = 1,
-            cb = function(timer)
+            cb = function()
                 if id == marquee_id then
                     callback()
                 end
+            end,
+        }
+    end
+
+    local function set_artist(value)
+        artist_id = artist_id + 1
+        local id = artist_id
+
+        artist:set {
+            text = value or "",
+            x = 0,
+            text_opa = 0,
+        }
+
+        lvgl.Timer {
+            period = 50,
+            repeat_count = 1,
+            cb = function()
+                if id ~= artist_id then
+                    return
+                end
+
+                local coordinates =
+                    artist:get_coords()
+
+                local width =
+                    coordinates.x2 -
+                    coordinates.x1 + 1
+
+                artist:set {
+                    x = math.max(
+                        0,
+                        math.floor(
+                            (148 - width) / 2
+                        )
+                    ),
+                    text_opa = 255,
+                }
             end,
         }
     end
@@ -168,20 +420,32 @@ function M.create(options)
         lvgl.Timer {
             period = 50,
             repeat_count = 1,
-            cb = function(timer)
+            cb = function()
                 if id ~= marquee_id then
                     return
                 end
 
-                local coords = title:get_coords()
-                local text_width = coords.x2 - coords.x1 + 1
-                local overflow = text_width - 148
+                local coordinates =
+                    title:get_coords()
+
+                local text_width =
+                    coordinates.x2 -
+                    coordinates.x1 + 1
+
+                local overflow =
+                    text_width - 148
 
                 if overflow <= 0 then
                     title:set {
-                        x = math.floor((148 - text_width) / 2),
+                        x = math.floor(
+                            (
+                                148 -
+                                text_width
+                            ) / 2
+                        ),
                         text_opa = 255,
                     }
+
                     return
                 end
 
@@ -190,10 +454,13 @@ function M.create(options)
                     text_opa = 255,
                 }
 
-                local duration = math.max(
-                    2800,
-                    math.floor(overflow * 40)
-                )
+                local duration =
+                    math.max(
+                        2800,
+                        math.floor(
+                            overflow * 40
+                        )
+                    )
 
                 local forward
                 local backward
@@ -206,19 +473,31 @@ function M.create(options)
                     title:Anim {
                         run = true,
                         start_value = 0,
-                        end_value = -overflow,
+                        end_value =
+                            -overflow,
                         duration = duration,
                         path = "linear",
-                        exec_cb = function(obj, position)
-                            if id == marquee_id then
-                                obj:set {
-                                    x = position,
-                                }
-                            end
-                        end,
-                        done_cb = function(anim)
-                            if id == marquee_id then
-                                wait_ms(2000, id, backward)
+                        exec_cb =
+                            function(
+                                object,
+                                position
+                            )
+                                if id ==
+                                    marquee_id then
+                                    object:set {
+                                        x =
+                                            position,
+                                    }
+                                end
+                            end,
+                        done_cb = function()
+                            if id ==
+                                marquee_id then
+                                wait_ms(
+                                    2000,
+                                    id,
+                                    backward
+                                )
                             end
                         end,
                     }
@@ -231,26 +510,42 @@ function M.create(options)
 
                     title:Anim {
                         run = true,
-                        start_value = -overflow,
+                        start_value =
+                            -overflow,
                         end_value = 0,
                         duration = duration,
                         path = "linear",
-                        exec_cb = function(obj, position)
-                            if id == marquee_id then
-                                obj:set {
-                                    x = position,
-                                }
-                            end
-                        end,
-                        done_cb = function(anim)
-                            if id == marquee_id then
-                                wait_ms(2000, id, forward)
+                        exec_cb =
+                            function(
+                                object,
+                                position
+                            )
+                                if id ==
+                                    marquee_id then
+                                    object:set {
+                                        x =
+                                            position,
+                                    }
+                                end
+                            end,
+                        done_cb = function()
+                            if id ==
+                                marquee_id then
+                                wait_ms(
+                                    2000,
+                                    id,
+                                    forward
+                                )
                             end
                         end,
                     }
                 end
 
-                wait_ms(2000, id, forward)
+                wait_ms(
+                    2000,
+                    id,
+                    forward
+                )
             end,
         }
     end
@@ -264,13 +559,19 @@ function M.create(options)
 
         if values.background then
             background:set {
-                src = lvgl.ImgData(values.background),
+                src =
+                    lvgl.ImgData(
+                        values.background
+                    ),
             }
         end
 
         if values.cover then
             cover:set {
-                src = lvgl.ImgData(values.cover),
+                src =
+                    lvgl.ImgData(
+                        values.cover
+                    ),
             }
         end
 
@@ -283,10 +584,20 @@ function M.create(options)
         end
 
         if values.progress ~= nil then
-            local amount = math.max(0, math.min(1, values.progress))
+            local amount =
+                math.max(
+                    0,
+                    math.min(
+                        1,
+                        values.progress
+                    )
+                )
 
             progress_fill:set {
-                w = math.floor(144 * amount),
+                w =
+                    math.floor(
+                        144 * amount
+                    ),
             }
         end
 
@@ -301,9 +612,49 @@ function M.create(options)
                 text = values.remaining,
             }
         end
+
+        if values.clock ~= nil then
+            clock:set {
+                text = values.clock,
+            }
+        end
+
+        if values.connected ~= nil then
+            connection_ring:set {
+                border_color =
+                    values.connected and
+                    "#8FB9A8" or
+                    "#8A8C93",
+            }
+
+            connection_dot:set {
+                bg_opa =
+                    values.connected and
+                    255 or
+                    0,
+            }
+        end
+
+        if values.battery_pct ~= nil then
+            battery_percentage =
+                tonumber(
+                    values.battery_pct
+                ) or 0
+        end
+
+        if values.charging ~= nil then
+            battery_charging =
+                values.charging == true
+        end
+
+        if values.battery_pct ~= nil or
+            values.charging ~= nil then
+            update_battery()
+        end
     end
 
     screen:update(options)
+    update_battery()
 
     return screen
 end
