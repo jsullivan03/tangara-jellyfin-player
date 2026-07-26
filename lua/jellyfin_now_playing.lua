@@ -3,14 +3,16 @@ local backstack = require("backstack")
 local controls = require("controls")
 local jellyfin_playback =
     require("jellyfin_playback")
-local jellyfin_track_menu =
-    require("jellyfin_track_menu")
 local playback = require("playback")
 local power = require("power")
 local premium =
     require("premium_now_playing_screen")
 local screen = require("screen")
 local sync_config = require("sync_config")
+local sync_library_view =
+    require("sync_library_view")
+local sync_operation_queue =
+    require("sync_operation_queue")
 local sync_runtime = require("sync_runtime")
 
 local function format_time(value)
@@ -134,6 +136,104 @@ local function server_connected(active)
     return status.connected == true
 end
 
+local function favorite_state(
+    library,
+    item_id
+)
+    if not library or
+        not library.favorites then
+        return false
+    end
+
+    for _, track in ipairs(
+        library.favorites.items or {}
+    ) do
+        if track.id == item_id then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function add_sheet_button(
+    list,
+    label,
+    callback
+)
+    local button =
+        list:add_btn(nil, label)
+
+    button:set {
+        w = lvgl.PCT(100),
+        h = 15,
+        pad_left = 7,
+        pad_right = 3,
+        pad_top = 0,
+        pad_bottom = 0,
+        border_width = 0,
+        outline_width = 0,
+        shadow_width = 0,
+        radius = 0,
+        bg_opa = 0,
+        text_color = "#FFFFFF",
+        text_font = font.fusion_10,
+    }
+
+    button:onevent(
+        lvgl.EVENT.FOCUSED,
+        function()
+            button:set {
+                bg_opa = 0,
+                text_color = "#72AFFF",
+            }
+        end
+    )
+
+    button:onevent(
+        lvgl.EVENT.DEFOCUSED,
+        function()
+            button:set {
+                bg_opa = 0,
+                text_color = "#FFFFFF",
+            }
+        end
+    )
+
+    button:onClicked(callback)
+
+    return button
+end
+
+local function animate_y(
+    object,
+    start_y,
+    end_y,
+    done_callback
+)
+    object:set {
+        y = start_y,
+    }
+
+    object:Anim {
+        run = true,
+        start_value = start_y,
+        end_value = end_y,
+        duration = 170,
+        path = "linear",
+        exec_cb =
+            function(
+                animated_object,
+                position
+            )
+                animated_object:set {
+                    y = position,
+                }
+            end,
+        done_cb = done_callback,
+    }
+end
+
 local NowPlaying =
     screen:new {
         create_ui = function(self)
@@ -143,6 +243,10 @@ local NowPlaying =
             local track =
                 active and
                 active.track or {}
+
+            local context =
+                active and
+                active.context or {}
 
             local duration =
                 tonumber(track.duration)
@@ -156,34 +260,6 @@ local NowPlaying =
             self.go_back =
                 function()
                     backstack.pop()
-                end
-
-            self.open_menu =
-                function()
-                    local current =
-                        jellyfin_playback
-                            .current()
-
-                    if not current or
-                        not current.track then
-                        return
-                    end
-
-                    backstack.push(
-                        jellyfin_track_menu:new {
-                            track =
-                                current.track,
-                            collection_kind =
-                                current.context
-                                    .collection_kind,
-                            collection_id =
-                                current.context
-                                    .collection_id,
-                            entry_id =
-                                current.context
-                                    .entry_id,
-                        }
-                    )
                 end
 
             self.view =
@@ -229,10 +305,540 @@ local NowPlaying =
                 }
 
             self.root = self.view.root
+            self.sheet_open = false
+            self.sheet_animating = false
+            self.sheet_page = "main"
 
-            self.root:onevent(
+            local menu_hitbox =
+                self.root:Button {
+                    x = 0,
+                    y = 13,
+                    w = 160,
+                    h = 115,
+                    pad_all = 0,
+                    border_width = 0,
+                    outline_width = 0,
+                    shadow_width = 0,
+                    radius = 0,
+                    bg_opa = 0,
+                }
+
+            local overlay =
+                self.root:Object {
+                    x = 0,
+                    y = 0,
+                    w = 160,
+                    h = 128,
+                    pad_all = 0,
+                    border_width = 0,
+                    radius = 0,
+                    bg_opa = 0,
+                    scrollbar_mode =
+                        lvgl.SCROLLBAR_MODE.OFF,
+                }
+
+            overlay:clear_flag(
+                lvgl.FLAG.SCROLLABLE
+            )
+            overlay:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
+
+            local dimmer =
+                overlay:Button {
+                    x = 0,
+                    y = 0,
+                    w = 160,
+                    h = 128,
+                    pad_all = 0,
+                    border_width = 0,
+                    outline_width = 0,
+                    shadow_width = 0,
+                    radius = 0,
+                    bg_color = "#000000",
+                    bg_opa = 95,
+                }
+
+            local option_count = 2
+
+            if context.collection_kind ==
+                "playlist" then
+                option_count = 3
+            end
+
+            local main_height =
+                option_count * 15 + 4
+            local main_target_y =
+                128 - main_height
+
+            local main_sheet =
+                overlay:Object {
+                    x = 0,
+                    y = 128,
+                    w = 160,
+                    h = main_height,
+                    pad_all = 0,
+                    border_width = 1,
+                    border_color = "#555862",
+                    radius = 8,
+                    bg_color = "#11131A",
+                    bg_opa = 248,
+                    scrollbar_mode =
+                        lvgl.SCROLLBAR_MODE.OFF,
+                }
+
+            main_sheet:clear_flag(
+                lvgl.FLAG.SCROLLABLE
+            )
+
+            local main_list =
+                lvgl.List(
+                    main_sheet,
+                    {
+                        x = 2,
+                        y = 2,
+                        w = 156,
+                        h = main_height - 4,
+                    }
+                )
+
+            main_list:set {
+                pad_all = 0,
+                pad_row = 0,
+                border_width = 0,
+                radius = 0,
+                bg_opa = 0,
+                scrollbar_mode =
+                    lvgl.SCROLLBAR_MODE.OFF,
+            }
+
+            local playlist_height = 76
+            local playlist_target_y =
+                128 - playlist_height
+
+            local playlist_sheet =
+                overlay:Object {
+                    x = 0,
+                    y = 128,
+                    w = 160,
+                    h = playlist_height,
+                    pad_all = 0,
+                    border_width = 1,
+                    border_color = "#555862",
+                    radius = 8,
+                    bg_color = "#11131A",
+                    bg_opa = 248,
+                    scrollbar_mode =
+                        lvgl.SCROLLBAR_MODE.OFF,
+                }
+
+            playlist_sheet:clear_flag(
+                lvgl.FLAG.SCROLLABLE
+            )
+            playlist_sheet:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
+
+            local playlist_title =
+                playlist_sheet:Label {
+                    x = 6,
+                    y = 5,
+                    w = 148,
+                    text = "Add to playlist",
+                    text_align = 2,
+                    text_color = "#D7D8DE",
+                    text_font = font.fusion_10,
+                }
+
+            local playlist_list =
+                lvgl.List(
+                    playlist_sheet,
+                    {
+                        x = 4,
+                        y = 17,
+                        w = 152,
+                        h = 55,
+                    }
+                )
+
+            playlist_list:set {
+                pad_all = 0,
+                pad_row = 0,
+                border_width = 0,
+                radius = 0,
+                bg_opa = 0,
+            }
+
+            local library =
+                sync_library_view.current()
+
+            local favorite =
+                favorite_state(
+                    library,
+                    track.id
+                )
+
+            local favorite_button
+
+            local function focus_back()
+                if self.view.back_hitbox then
+                    self.view.back_hitbox
+                        :focus()
+                end
+            end
+
+            local function finish_close()
+                overlay:add_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+
+                main_sheet:clear_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+
+                playlist_sheet:add_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+
+                main_sheet:set {
+                    y = 128,
+                }
+
+                playlist_sheet:set {
+                    y = 128,
+                }
+
+                self.sheet_open = false
+                self.sheet_animating = false
+                self.sheet_page = "main"
+
+                focus_back()
+            end
+
+            self.close_sheet =
+                function()
+                    if not self.sheet_open or
+                        self.sheet_animating then
+                        return
+                    end
+
+                    self.sheet_animating = true
+
+                    local current_sheet =
+                        self.sheet_page ==
+                            "playlists" and
+                        playlist_sheet or
+                        main_sheet
+
+                    local current_y =
+                        self.sheet_page ==
+                            "playlists" and
+                        playlist_target_y or
+                        main_target_y
+
+                    animate_y(
+                        current_sheet,
+                        current_y,
+                        128,
+                        finish_close
+                    )
+                end
+
+            local function close_soon()
+                lvgl.Timer {
+                    period = 350,
+                    repeat_count = 1,
+                    cb = function()
+                        self.close_sheet()
+                    end,
+                }
+            end
+
+            local function queue_favorite()
+                local operation,
+                    operation_error =
+                    sync_operation_queue
+                        .enqueue_set_favorite(
+                            track.id,
+                            not favorite
+                        )
+
+                if not operation then
+                    favorite_button:set {
+                        text =
+                            operation_error or
+                            "Unable to queue change",
+                    }
+
+                    return
+                end
+
+                favorite = not favorite
+
+                favorite_button:set {
+                    text =
+                        favorite and
+                        "Remove favorite" or
+                        "Add favorite",
+                }
+
+                close_soon()
+            end
+
+            favorite_button =
+                add_sheet_button(
+                    main_list,
+                    favorite and
+                        "Remove favorite" or
+                        "Add favorite",
+                    queue_favorite
+                )
+
+            local function show_playlists()
+                if self.sheet_animating then
+                    return
+                end
+
+                self.sheet_animating = true
+
+                animate_y(
+                    main_sheet,
+                    main_target_y,
+                    128,
+                    function()
+                        main_sheet:add_flag(
+                            lvgl.FLAG.HIDDEN
+                        )
+
+                        playlist_sheet
+                            :clear_flag(
+                                lvgl.FLAG.HIDDEN
+                            )
+
+                        self.sheet_page =
+                            "playlists"
+                        self.sheet_animating =
+                            false
+
+                        animate_y(
+                            playlist_sheet,
+                            128,
+                            playlist_target_y
+                        )
+                    end
+                )
+            end
+
+            add_sheet_button(
+                main_list,
+                "Add to playlist",
+                show_playlists
+            )
+
+            if context.collection_kind ==
+                "playlist" then
+                local remove_button
+
+                remove_button =
+                    add_sheet_button(
+                        main_list,
+                        "Remove from playlist",
+                        function()
+                            local entry_id =
+                                context.entry_id
+
+                            if type(entry_id) ~=
+                                    "string" or
+                                entry_id == "" or
+                                entry_id:match(
+                                    "^local%-entry:"
+                                ) then
+                                remove_button:set {
+                                    text =
+                                        "Waiting for sync",
+                                }
+
+                                return
+                            end
+
+                            local operation,
+                                operation_error =
+                                sync_operation_queue
+                                    .enqueue_remove_playlist_item(
+                                        context
+                                            .collection_id,
+                                        entry_id
+                                    )
+
+                            if not operation then
+                                remove_button:set {
+                                    text =
+                                        operation_error or
+                                        "Unable to remove",
+                                }
+
+                                return
+                            end
+
+                            close_soon()
+                        end
+                    )
+            end
+
+            local playlist_back
+
+            playlist_back =
+                add_sheet_button(
+                    playlist_list,
+                    "Back",
+                    function()
+                        if self.sheet_animating then
+                            return
+                        end
+
+                        self.sheet_animating = true
+
+                        animate_y(
+                            playlist_sheet,
+                            playlist_target_y,
+                            128,
+                            function()
+                                playlist_sheet
+                                    :add_flag(
+                                        lvgl.FLAG.HIDDEN
+                                    )
+
+                                main_sheet
+                                    :clear_flag(
+                                        lvgl.FLAG.HIDDEN
+                                    )
+
+                                self.sheet_page =
+                                    "main"
+                                self.sheet_animating =
+                                    false
+
+                                animate_y(
+                                    main_sheet,
+                                    128,
+                                    main_target_y,
+                                    function()
+                                        favorite_button
+                                            :focus()
+                                    end
+                                )
+                            end
+                        )
+                    end
+                )
+
+            if library then
+                for _, playlist in ipairs(
+                    library.playlists or {}
+                ) do
+                    local playlist_copy =
+                        playlist
+
+                    add_sheet_button(
+                        playlist_list,
+                        playlist_copy.name or
+                            "Playlist",
+                        function()
+                            local playlist_id =
+                                playlist_copy
+                                    .local_id or
+                                playlist_copy.id
+
+                            local operation,
+                                operation_error =
+                                sync_operation_queue
+                                    .enqueue_add_playlist_item(
+                                        playlist_id,
+                                        track.id
+                                    )
+
+                            if not operation then
+                                playlist_title:set {
+                                    text =
+                                        operation_error or
+                                        "Unable to queue add",
+                                }
+
+                                return
+                            end
+
+                            playlist_title:set {
+                                text =
+                                    "Added to " ..
+                                    (
+                                        playlist_copy
+                                            .name or
+                                        "playlist"
+                                    ),
+                            }
+
+                            close_soon()
+                        end
+                    )
+                end
+            end
+
+            self.open_sheet =
+                function()
+                    if self.sheet_open or
+                        self.sheet_animating then
+                        return
+                    end
+
+                    self.sheet_open = true
+                    self.sheet_page = "main"
+
+                    playlist_title:set {
+                        text = "Add to playlist",
+                    }
+
+                    playlist_sheet:add_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+
+                    main_sheet:clear_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+
+                    overlay:clear_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+
+                    self.sheet_animating = true
+
+                    animate_y(
+                        main_sheet,
+                        128,
+                        main_target_y,
+                        function()
+                            self.sheet_animating =
+                                false
+                            favorite_button:focus()
+                        end
+                    )
+                end
+
+            self.toggle_sheet =
+                function()
+                    if self.sheet_open then
+                        self.close_sheet()
+                    else
+                        self.open_sheet()
+                    end
+                end
+
+            dimmer:onClicked(
+                self.close_sheet
+            )
+
+            menu_hitbox:onevent(
                 lvgl.EVENT.LONG_PRESSED,
-                self.open_menu
+                self.open_sheet
             )
 
             self.position_binding =
@@ -355,6 +961,15 @@ local NowPlaying =
             self.input_method =
                 input_method
 
+            self.handle_up =
+                function()
+                    if self.sheet_open then
+                        self.close_sheet()
+                    else
+                        self.go_back()
+                    end
+                end
+
             if input_method.up then
                 self.previous_up =
                     input_method.up
@@ -362,7 +977,7 @@ local NowPlaying =
 
                 input_method.up
                     .short_press =
-                    self.go_back
+                    self.handle_up
             end
 
             if input_method.center then
@@ -372,7 +987,7 @@ local NowPlaying =
 
                 input_method.center
                     .long_press =
-                    self.open_menu
+                    self.toggle_sheet
             end
         end,
 
@@ -387,7 +1002,7 @@ local NowPlaying =
             if input_method.up and
                 input_method.up
                     .short_press ==
-                    self.go_back then
+                    self.handle_up then
                 input_method.up
                     .short_press =
                     self.previous_up
@@ -396,7 +1011,7 @@ local NowPlaying =
             if input_method.center and
                 input_method.center
                     .long_press ==
-                    self.open_menu then
+                    self.toggle_sheet then
                 input_method.center
                     .long_press =
                     self.previous_center_long

@@ -552,6 +552,7 @@ function M.create(options)
 
     local screen = {
         root = root,
+        back_hitbox = back_hitbox,
     }
 
     function screen:update(values)
