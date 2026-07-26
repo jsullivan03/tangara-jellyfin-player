@@ -78,4 +78,8 @@ function M.sync_preferences_path()
     return device_path("/sync/preferences")
 end
 
+function M.operations_path()
+    return device_path("/operations")
+end
+
 return M
