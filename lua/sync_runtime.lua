@@ -1,6 +1,10 @@
 local lvgl = require("lvgl")
 local sync_apply = require("sync_apply")
 local sync_config = require("sync_config")
+local sync_library_refresh =
+    require("sync_library_refresh")
+local sync_library_view =
+    require("sync_library_view")
 local sync_operation_flush =
     require("sync_operation_flush")
 local sync_operation_queue =
@@ -20,8 +24,10 @@ local timer = nil
 local next_refresh_at = 0
 local next_apply_at = 0
 local next_operation_at = 0
+local next_library_at = 0
 local last_result = nil
 local last_operation_result = nil
+local last_library_result = nil
 local last_apply_result = nil
 local active_manifest = nil
 local active_plan = nil
@@ -283,8 +289,51 @@ local function finish_operations(
         end
 
         next_refresh_at = 0
+        next_library_at = 0
     else
         next_operation_at =
+            now + retry_interval_ms
+    end
+end
+
+local function start_library(
+    now,
+    status
+)
+    if now < next_library_at or
+        not status.connected then
+        return false
+    end
+
+    local started, start_error =
+        sync_library_refresh.start()
+
+    if not started then
+        last_library_result = {
+            ok = false,
+            error = start_error,
+        }
+
+        next_library_at =
+            now + retry_interval_ms
+
+        return false
+    end
+
+    return true
+end
+
+local function finish_library(
+    result,
+    now
+)
+    last_library_result = result
+
+    if result.ok then
+        next_library_at =
+            now + refresh_interval_ms
+    else
+        next_library_at =
             now + retry_interval_ms
     end
 end
@@ -310,6 +359,20 @@ local function poll()
         if operation_result then
             finish_operations(
                 operation_result,
+                now
+            )
+        end
+
+        return
+    end
+
+    if sync_library_refresh.busy() then
+        local library_result =
+            sync_library_refresh.poll()
+
+        if library_result then
+            finish_library(
+                library_result,
                 now
             )
         end
@@ -349,6 +412,10 @@ local function poll()
     local status = sync_config.status()
 
     if start_operations(now, status) then
+        return
+    end
+
+    if start_library(now, status) then
         return
     end
 
@@ -429,6 +496,18 @@ end
 
 function M.last_operation_result()
     return last_operation_result
+end
+
+function M.library()
+    return sync_library_view.current()
+end
+
+function M.library_refresh_progress()
+    return sync_library_refresh.progress()
+end
+
+function M.last_library_result()
+    return last_library_result
 end
 
 return M

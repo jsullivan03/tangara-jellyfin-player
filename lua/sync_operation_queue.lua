@@ -1125,6 +1125,28 @@ function M.resolve_playlist_id(
     ] or playlist_id
 end
 
+function M.snapshot()
+    local state, recovered, load_error =
+        load_state()
+
+    if not state then
+        return nil, load_error
+    end
+
+    return {
+        operations =
+            copy_value(state.operations),
+        playlist_aliases =
+            copy_value(
+                state.playlist_aliases
+            ),
+        client_id = state.client_id,
+        next_sequence =
+            state.next_sequence,
+        recovered = recovered == true,
+    }
+end
+
 function M.paths()
     return storage_paths()
 end

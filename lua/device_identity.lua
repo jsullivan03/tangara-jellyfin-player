@@ -82,4 +82,46 @@ function M.operations_path()
     return device_path("/operations")
 end
 
+function M.library_path()
+    return device_path("/library")
+end
+
+function M.playlist_items_path(
+    playlist_id,
+    start,
+    limit
+)
+    if type(playlist_id) ~= "string" or
+        playlist_id == "" then
+        return nil, "playlist ID is required"
+    end
+
+    start = tonumber(start) or 0
+    limit = tonumber(limit) or 500
+
+    return device_path(
+        "/playlists/" ..
+        encode_path_segment(playlist_id) ..
+        "/items?start=" ..
+        tostring(math.floor(start)) ..
+        "&limit=" ..
+        tostring(math.floor(limit))
+    )
+end
+
+function M.favorite_items_path(
+    start,
+    limit
+)
+    start = tonumber(start) or 0
+    limit = tonumber(limit) or 500
+
+    return device_path(
+        "/favorites/items?start=" ..
+        tostring(math.floor(start)) ..
+        "&limit=" ..
+        tostring(math.floor(limit))
+    )
+end
+
 return M
