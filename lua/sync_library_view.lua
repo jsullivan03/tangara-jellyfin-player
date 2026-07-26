@@ -36,6 +36,7 @@ local function placeholder_track(
         artist = "",
         album = "",
         duration = 0,
+        date_created = "",
         favorite = false,
         image_tags = {},
     }

@@ -305,6 +305,8 @@ def track_payload(item, position=None):
         "track_number": item.get("IndexNumber"),
         "disc_number":
             item.get("ParentIndexNumber"),
+        "date_created":
+            item.get("DateCreated") or "",
         "image_tags": item.get("ImageTags") or {},
     }
 
@@ -321,6 +323,8 @@ def playlist_revision(items):
                 "PlaylistItemId"
             ),
             "item_id": item.get("Id"),
+            "date_created":
+                item.get("DateCreated") or "",
         }
         for item in items
     ])
@@ -328,7 +332,11 @@ def playlist_revision(items):
 
 def favorites_revision(items):
     return revision([
-        item.get("Id")
+        {
+            "item_id": item.get("Id"),
+            "date_created":
+                item.get("DateCreated") or "",
+        }
         for item in items
         if item.get("Id")
     ])

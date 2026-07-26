@@ -130,10 +130,7 @@ return widgets.MenuScreen:new {
 
     local playlist_btn = indexes_list:add_btn(nil, "Playlists")
     playlist_btn:onClicked(function()
-      backstack.push(require("playlist_browser"):new {
-        title = "Playlists",
-        iterator = filesystem.iterator("/Playlists")
-      })
+      backstack.push(require("jellyfin_library"):new())
     end)
     playlist_btn:add_style(styles.list_item)
 
@@ -171,22 +168,8 @@ return widgets.MenuScreen:new {
           idx.object:add_flag(lvgl.FLAG.HIDDEN)
         end
       end
-      if has_valid_index then
-        hide_no_indexes()
-
-        -- If we have valid indexes, then also check for playlists
-        if filesystem.iterator("/Playlists/"):next() == nil then
-          hide_playlist_listing()
-        else
-          show_playlist_listing()
-        end
-      else
-        if require("database").updating:get() then
-          show_no_indexes("The database is updating for the first time. Please wait.")
-        else
-          show_no_indexes("No compatible media was found on your SD Card.")
-        end
-      end
+      hide_no_indexes()
+      show_playlist_listing()
     end
 
     self.bindings = self.bindings + {
