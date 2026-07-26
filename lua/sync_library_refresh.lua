@@ -135,6 +135,15 @@ local function collection_metadata(
             or 0,
         keep_downloaded =
             summary.keep_downloaded == true,
+        artwork_item_id =
+            type(summary.artwork_item_id) ==
+                "string" and
+            summary.artwork_item_id or "",
+        artwork_tag =
+            type(summary.artwork_tag) ==
+                "string" and
+            summary.artwork_tag or "",
+        artwork = nil,
         items = {},
     }
 end
@@ -167,6 +176,16 @@ local function prepare_library(
             copy_value(
                 cached.favorites.items or {}
             )
+
+        if cached.favorites.artwork_tag ==
+                library.favorites
+                    .artwork_tag then
+            library.favorites.artwork =
+                copy_value(
+                    cached.favorites
+                        .artwork
+                )
+        end
 
         reused = reused + 1
     else
@@ -205,6 +224,14 @@ local function prepare_library(
                 copy_value(
                     previous.items or {}
                 )
+
+            if previous.artwork_tag ==
+                    playlist.artwork_tag then
+                playlist.artwork =
+                    copy_value(
+                        previous.artwork
+                    )
+            end
 
             reused = reused + 1
         else

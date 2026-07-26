@@ -9,6 +9,13 @@ package.path =
     "lua/?.lua;" ..
     package.path
 
+function tangara_sim_back()
+    local navigation =
+        require("jellyfin_navigation")
+
+    navigation.back()
+end
+
 local lvgl = require("lvgl")
 
 lvgl.ImgData = function(path)
@@ -134,6 +141,156 @@ end
 
 assert(result, "library refresh timed out")
 assert(result.ok, result.error)
+
+local function playlist_shell_quote(value)
+    return "'" ..
+        tostring(value):gsub(
+            "'",
+            "'\\''"
+        ) ..
+        "'"
+end
+
+local function playlist_encode_segment(value)
+    return (
+        tostring(value):gsub(
+            "([^A-Za-z0-9._~-])",
+            function(character)
+                return string.format(
+                    "%%%02X",
+                    string.byte(character)
+                )
+            end
+        )
+    )
+end
+
+local function playlist_command_ok(command)
+    local ok, reason, code =
+        os.execute(command)
+
+    return ok == true or
+        ok == 0 or
+        (
+            reason == "exit" and
+            code == 0
+        )
+end
+
+local playlist_artwork_root =
+    root .. "/sim-playlist-artwork"
+
+os.execute(
+    "mkdir -p " ..
+    playlist_shell_quote(
+        playlist_artwork_root
+    )
+)
+
+local function cache_collection_artwork(
+    collection,
+    name
+)
+    local item_id =
+        collection.artwork_item_id
+
+    if type(item_id) ~= "string" or
+        item_id == "" then
+        return false
+    end
+
+    local stem =
+        tostring(name):gsub(
+            "[^A-Za-z0-9._-]",
+            "_"
+        )
+
+    local destination =
+        playlist_artwork_root ..
+        "/" ..
+        stem ..
+        ".png"
+
+    local temporary =
+        destination .. ".part"
+
+    local url =
+        server_url ..
+        "/devices/" ..
+        playlist_encode_segment(
+            device_id
+        ) ..
+        "/items/" ..
+        playlist_encode_segment(
+            item_id
+        ) ..
+        "/artwork/thumbnail"
+
+    os.remove(temporary)
+
+    local command =
+        "curl -fsSL " ..
+        "--connect-timeout 10 " ..
+        "--max-time 60 " ..
+        "-o " ..
+        playlist_shell_quote(
+            temporary
+        ) ..
+        " " ..
+        playlist_shell_quote(url) ..
+        " && mv " ..
+        playlist_shell_quote(
+            temporary
+        ) ..
+        " " ..
+        playlist_shell_quote(
+            destination
+        )
+
+    if not playlist_command_ok(
+        command
+    ) then
+        os.remove(temporary)
+        return false
+    end
+
+    collection.artwork = {
+        cover =
+            "/" .. destination,
+    }
+
+    print(
+        "Playlist artwork cached for: " ..
+        tostring(
+            collection.name or name
+        )
+    )
+
+    return true
+end
+
+cache_collection_artwork(
+    result.library.favorites,
+    "favorites"
+)
+
+for _, playlist in ipairs(
+    result.library.playlists or {}
+) do
+    cache_collection_artwork(
+        playlist,
+        playlist.id
+    )
+end
+
+local sync_library_cache =
+    require("sync_library_cache")
+
+assert(
+    sync_library_cache.save(
+        result.library
+    )
+)
 
 local json_encode =
     require("json_encode")

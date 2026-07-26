@@ -1,6 +1,8 @@
 local lvgl = require("lvgl")
 local backstack = require("backstack")
 local controls = require("controls")
+local jellyfin_navigation =
+    require("jellyfin_navigation")
 local jellyfin_playback =
     require("jellyfin_playback")
 local playback = require("playback")
@@ -298,10 +300,6 @@ local NowPlaying =
                             :get(),
                     charging =
                         charging_state(),
-                    on_back =
-                        self.go_back,
-                    focus_back =
-                        simulator_mode(),
                 }
 
             self.root = self.view.root
@@ -322,6 +320,9 @@ local NowPlaying =
                     radius = 0,
                     bg_opa = 0,
                 }
+
+            self.menu_hitbox =
+                menu_hitbox
 
             local overlay =
                 self.root:Object {
@@ -480,13 +481,6 @@ local NowPlaying =
 
             local favorite_button
 
-            local function focus_back()
-                if self.view.back_hitbox then
-                    self.view.back_hitbox
-                        :focus()
-                end
-            end
-
             local function finish_close()
                 overlay:add_flag(
                     lvgl.FLAG.HIDDEN
@@ -512,7 +506,7 @@ local NowPlaying =
                 self.sheet_animating = false
                 self.sheet_page = "main"
 
-                focus_back()
+                menu_hitbox:focus()
             end
 
             self.close_sheet =
@@ -832,13 +826,52 @@ local NowPlaying =
                     end
                 end
 
+            self.handle_back =
+                function()
+                    if self.sheet_open then
+                        self.close_sheet()
+                    else
+                        self.go_back()
+                    end
+                end
+
+            local suppress_player_click =
+                false
+
             dimmer:onClicked(
                 self.close_sheet
             )
 
             menu_hitbox:onevent(
                 lvgl.EVENT.LONG_PRESSED,
-                self.open_sheet
+                function()
+                    suppress_player_click =
+                        true
+                    self.open_sheet()
+
+                    lvgl.Timer {
+                        period = 1000,
+                        repeat_count = 1,
+                        cb = function()
+                            suppress_player_click =
+                                false
+                        end,
+                    }
+                end
+            )
+
+            menu_hitbox:onClicked(
+                function()
+                    if suppress_player_click then
+                        suppress_player_click =
+                            false
+                        return
+                    end
+
+                    playback.playing:set(
+                        not playback.playing:get()
+                    )
+                end
             )
 
             self.position_binding =
@@ -947,6 +980,16 @@ local NowPlaying =
         end,
 
         on_show = function(self)
+            jellyfin_navigation.set_back(
+                self.handle_back
+            )
+
+            if self.menu_hitbox then
+                lvgl.group.focus_obj(
+                    self.menu_hitbox
+                )
+            end
+
             local hooks =
                 controls.hooks()
 
@@ -961,23 +1004,14 @@ local NowPlaying =
             self.input_method =
                 input_method
 
-            self.handle_up =
-                function()
-                    if self.sheet_open then
-                        self.close_sheet()
-                    else
-                        self.go_back()
-                    end
-                end
-
             if input_method.up then
-                self.previous_up =
+                self.previous_up_long =
                     input_method.up
-                        .short_press
+                        .long_press
 
                 input_method.up
-                    .short_press =
-                    self.handle_up
+                    .long_press =
+                    self.handle_back
             end
 
             if input_method.center then
@@ -992,6 +1026,10 @@ local NowPlaying =
         end,
 
         on_hide = function(self)
+            jellyfin_navigation.clear_back(
+                self.handle_back
+            )
+
             local input_method =
                 self.input_method
 
@@ -1001,11 +1039,11 @@ local NowPlaying =
 
             if input_method.up and
                 input_method.up
-                    .short_press ==
-                    self.handle_up then
+                    .long_press ==
+                    self.handle_back then
                 input_method.up
-                    .short_press =
-                    self.previous_up
+                    .long_press =
+                    self.previous_up_long
             end
 
             if input_method.center and

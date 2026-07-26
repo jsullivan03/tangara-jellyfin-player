@@ -56,6 +56,33 @@ function M.media_path(jellyfin_id)
     )
 end
 
+function M.artwork_path(
+    item_id,
+    variant
+)
+    if type(item_id) ~= "string" or
+        item_id == "" then
+        return nil,
+            "Jellyfin item ID is required"
+    end
+
+    variant = variant or "cover"
+
+    if variant ~= "cover" and
+        variant ~= "background" and
+        variant ~= "thumbnail" then
+        return nil,
+            "invalid artwork variant"
+    end
+
+    return device_path(
+        "/items/" ..
+        encode_path_segment(item_id) ..
+        "/artwork/" ..
+        variant
+    )
+end
+
 function M.link_start_path(force)
     local suffix = "/link/start"
 

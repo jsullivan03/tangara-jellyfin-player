@@ -131,7 +131,7 @@ def fetch_playlists(authentication):
             "SortBy": "SortName",
             "SortOrder": "Ascending",
             "Limit": "1000",
-            "Fields": "ChildCount",
+            "Fields": ("ChildCount,ImageTags,""PrimaryImageItemId"),
         },
     )
 

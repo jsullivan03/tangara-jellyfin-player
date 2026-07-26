@@ -3,6 +3,8 @@ local sync_apply = require("sync_apply")
 local sync_config = require("sync_config")
 local sync_library_refresh =
     require("sync_library_refresh")
+local sync_library_artwork =
+    require("sync_library_artwork")
 local sync_library_view =
     require("sync_library_view")
 local sync_operation_flush =
@@ -28,6 +30,7 @@ local next_library_at = 0
 local last_result = nil
 local last_operation_result = nil
 local last_library_result = nil
+local last_artwork_result = nil
 local last_apply_result = nil
 local active_manifest = nil
 local active_plan = nil
@@ -330,6 +333,23 @@ local function finish_library(
     last_library_result = result
 
     if result.ok then
+        local started, start_error =
+            sync_library_artwork.start(
+                result.library
+            )
+
+        result.artwork_started =
+            started
+        result.artwork_error =
+            start_error
+
+        if not started then
+            last_artwork_result = {
+                ok = false,
+                error = start_error,
+            }
+        end
+
         next_library_at =
             now + refresh_interval_ms
     else
@@ -340,6 +360,24 @@ end
 
 local function poll()
     local now = time.ticks()
+
+    if sync_library_artwork.busy() then
+        local artwork_result =
+            sync_library_artwork.poll()
+
+        if artwork_result then
+            last_artwork_result =
+                artwork_result
+
+            if type(last_library_result) ==
+                    "table" then
+                last_library_result.artwork =
+                    artwork_result
+            end
+        end
+
+        return
+    end
 
     if sync_apply.busy() then
         local apply_result =
@@ -508,6 +546,10 @@ end
 
 function M.last_library_result()
     return last_library_result
+end
+
+function M.last_artwork_result()
+    return last_artwork_result
 end
 
 return M

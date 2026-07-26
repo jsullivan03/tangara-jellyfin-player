@@ -1290,6 +1290,18 @@ def get_device_library(device_id):
                 playlist_id,
             )
 
+            image_tags = (
+                playlist.get("ImageTags")
+                or {}
+            )
+            artwork_tag = (
+                image_tags.get("Primary")
+                or playlist.get(
+                    "PrimaryImageItemId"
+                )
+                or ""
+            )
+
             playlist_payloads.append({
                 "id": playlist_id,
                 "name": (
@@ -1299,6 +1311,10 @@ def get_device_library(device_id):
                 "track_count": len(items),
                 "revision":
                     playlist_revision(items),
+                "artwork_item_id":
+                    playlist_id,
+                "artwork_tag":
+                    artwork_tag,
                 "keep_downloaded":
                     playlist_id in selected_ids,
                 "items_path": (
@@ -1320,6 +1336,28 @@ def get_device_library(device_id):
             "detail": str(error),
         }), 502
 
+    favorites_artwork_item_id = ""
+    favorites_artwork_tag = ""
+
+    if favorites:
+        favorites_artwork_item_id = (
+            favorites[0].get("Id")
+            or ""
+        )
+        favorites_image_tags = (
+            favorites[0].get("ImageTags")
+            or {}
+        )
+        favorites_artwork_tag = (
+            favorites_image_tags.get(
+                "Primary"
+            )
+            or favorites[0].get(
+                "PrimaryImageItemId"
+            )
+            or favorites_artwork_item_id
+        )
+
     summary = {
         "user": {
             "id": authentication["user_id"],
@@ -1332,6 +1370,10 @@ def get_device_library(device_id):
             "track_count": len(favorites),
             "revision":
                 favorites_revision(favorites),
+            "artwork_item_id":
+                favorites_artwork_item_id,
+            "artwork_tag":
+                favorites_artwork_tag,
             "keep_downloaded":
                 preferences["favorites"],
             "items_path": (
@@ -1344,14 +1386,20 @@ def get_device_library(device_id):
     }
 
     summary["revision"] = revision({
-        "favorites":
-            summary["favorites"]["revision"],
+        "favorites": {
+            "revision":
+                summary["favorites"]["revision"],
+            "artwork_tag":
+                summary["favorites"]["artwork_tag"],
+        },
         "playlists": [
             {
                 "id": playlist["id"],
                 "name": playlist["name"],
                 "revision":
                     playlist["revision"],
+                "artwork_tag":
+                    playlist["artwork_tag"],
             }
             for playlist in playlist_payloads
         ],

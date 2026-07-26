@@ -1,9 +1,11 @@
 import os
 import re
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 
 import requests
+from PIL import Image, ImageOps
 from flask import (
     Flask,
     Response,
@@ -299,6 +301,7 @@ def device_artwork(
     if variant not in {
         "cover",
         "background",
+        "thumbnail",
     }:
         return jsonify(
             {"error": "Invalid artwork variant"}
@@ -359,7 +362,14 @@ def device_artwork(
     image_tags = item.get("ImageTags") or {}
     image_tag = image_tags.get("Primary")
 
-    if variant == "cover":
+    if variant == "thumbnail":
+        image_params = {
+            "format": "png",
+            "fillWidth": "28",
+            "fillHeight": "28",
+            "quality": "88",
+        }
+    elif variant == "cover":
         image_params = {
             "format": "png",
             "fillWidth": "66",
@@ -419,6 +429,63 @@ def device_artwork(
         return jsonify(
             {"error": "Artwork was not found"}
         ), 404
+
+    if variant == "thumbnail":
+        try:
+            image_bytes = upstream.content
+            upstream.close()
+
+            with Image.open(
+                BytesIO(image_bytes)
+            ) as image:
+                image = ImageOps.exif_transpose(
+                    image
+                )
+                image = image.convert("RGBA")
+                image = ImageOps.fit(
+                    image,
+                    (28, 28),
+                    method=(
+                        Image.Resampling.LANCZOS
+                    ),
+                    centering=(0.5, 0.5),
+                )
+
+                output = BytesIO()
+                image.save(
+                    output,
+                    format="PNG",
+                    optimize=True,
+                )
+                thumbnail = output.getvalue()
+        except (
+            OSError,
+            ValueError,
+        ) as error:
+            return jsonify(
+                {
+                    "error": (
+                        "Artwork thumbnail "
+                        "processing failed"
+                    ),
+                    "detail": str(error),
+                }
+            ), 502
+
+        return Response(
+            thumbnail,
+            status=200,
+            headers={
+                "Content-Length":
+                    str(len(thumbnail)),
+                "Cache-Control":
+                    upstream.headers.get(
+                        "Cache-Control",
+                        "private, max-age=86400",
+                    ),
+            },
+            mimetype="image/png",
+        )
 
     response_headers = {}
 

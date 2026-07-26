@@ -161,22 +161,26 @@ function M.create(options)
         lvgl.FLAG.SCROLLABLE
     )
 
-    local back_hitbox =
-        status_bar:Button {
+    local connection_container =
+        status_bar:Object {
             x = 0,
             y = 0,
             w = 18,
             h = 13,
             pad_all = 0,
             border_width = 0,
-            outline_width = 0,
-            shadow_width = 0,
             radius = 0,
             bg_opa = 0,
+            scrollbar_mode =
+                lvgl.SCROLLBAR_MODE.OFF,
         }
 
+    connection_container:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+
     local connection_ring =
-        back_hitbox:Object {
+        connection_container:Object {
             x = 5,
             y = 3,
             w = 7,
@@ -272,17 +276,6 @@ function M.create(options)
             bg_color = "#D4D5DA",
             bg_opa = 255,
         }
-
-    if type(options.on_back) ==
-            "function" then
-        back_hitbox:onClicked(
-            options.on_back
-        )
-    end
-
-    if options.focus_back then
-        back_hitbox:focus()
-    end
 
     local battery_percentage =
         tonumber(
@@ -550,9 +543,27 @@ function M.create(options)
         }
     end
 
+    pcall(
+        function()
+            lvgl.group.remove_obj(
+                status_bar
+            )
+            lvgl.group.remove_obj(
+                connection_container
+            )
+            lvgl.group.remove_obj(
+                connection_ring
+            )
+            lvgl.group.remove_obj(
+                connection_dot
+            )
+            lvgl.group.remove_obj(clock)
+            lvgl.group.remove_obj(battery)
+        end
+    )
+
     local screen = {
         root = root,
-        back_hitbox = back_hitbox,
     }
 
     function screen:update(values)

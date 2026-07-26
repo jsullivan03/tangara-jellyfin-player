@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <SDL2/SDL.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -14,6 +15,23 @@
 #include "src/drivers/sdl/lv_sdl_mouse.h"
 #include "src/drivers/sdl/lv_sdl_mousewheel.h"
 #include "src/drivers/sdl/lv_sdl_window.h"
+
+static SDL_atomic_t back_requested;
+
+static int SDLCALL watch_sdl_event(void *userdata, SDL_Event *event)
+{
+    (void)userdata;
+
+    if (
+        event->type == SDL_KEYDOWN &&
+        event->key.repeat == 0 &&
+        event->key.keysym.sym == SDLK_ESCAPE
+    ) {
+        SDL_AtomicSet(&back_requested, 1);
+    }
+
+    return 1;
+}
 
 static int run_lua_file(lua_State *L, const char *filename)
 {
@@ -38,6 +56,28 @@ static int run_lua_file(lua_State *L, const char *filename)
     }
 
     return 0;
+}
+
+static void call_lua_back(lua_State *L)
+{
+    lua_getglobal(L, "tangara_sim_back");
+
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+
+    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        const char *message = lua_tostring(L, -1);
+
+        fprintf(
+            stderr,
+            "Simulator back handler failed:\n%s\n",
+            message != NULL ? message : "Unknown Lua error"
+        );
+
+        lua_pop(L, 1);
+    }
 }
 
 int main(int argc, char **argv)
@@ -82,13 +122,20 @@ int main(int argc, char **argv)
     luaL_requiref(L, "lvgl", luaopen_lvgl, 1);
     lua_pop(L, 1);
 
+    SDL_AddEventWatch(watch_sdl_event, NULL);
+
     if (run_lua_file(L, script) != 0) {
+        SDL_DelEventWatch(watch_sdl_event, NULL);
         lua_close(L);
         return 1;
     }
 
     while (true) {
         uint32_t delay_ms = lv_timer_handler();
+
+        if (SDL_AtomicCAS(&back_requested, 1, 0)) {
+            call_lua_back(L);
+        }
 
         if (delay_ms < 1) {
             delay_ms = 1;
@@ -99,6 +146,7 @@ int main(int argc, char **argv)
         usleep(delay_ms * 1000);
     }
 
+    SDL_DelEventWatch(watch_sdl_event, NULL);
     lua_close(L);
     return 0;
 }
