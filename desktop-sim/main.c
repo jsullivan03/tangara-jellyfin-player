@@ -11,6 +11,7 @@
 #include <lvgl.h>
 #include "luavgl.h"
 #include "firmware_backstack.h"
+#include "sim_metrics.h"
 
 #include "src/drivers/sdl/lv_sdl_keyboard.h"
 #include "src/drivers/sdl/lv_sdl_mouse.h"
@@ -130,6 +131,9 @@ int main(int argc, char **argv)
         luaopen_firmware_backstack,
         1
     );
+    lua_pop(L, 1);
+
+    luaL_requiref(L, "sim_metrics", luaopen_sim_metrics, 1);
     lua_pop(L, 1);
 
     SDL_AddEventWatch(watch_sdl_event, NULL);

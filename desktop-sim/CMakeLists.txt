@@ -28,6 +28,7 @@ add_executable(
     tangara-sim
     main.c
     firmware_backstack.c
+    sim_metrics.c
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib/luavgl/src/luavgl.c"
 )
 
