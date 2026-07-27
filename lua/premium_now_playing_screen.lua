@@ -1,4 +1,6 @@
 local lvgl = require("lvgl")
+local jellyfin_marquee =
+    require("jellyfin_marquee")
 
 local M = {}
 
@@ -57,53 +59,35 @@ function M.create(options)
             ),
     }
 
-    local title_view = root:Object {
-        x = 6,
-        y = 83,
-        w = 148,
-        h = 11,
-        pad_all = 0,
-        border_width = 0,
-        radius = 0,
-        bg_opa = 0,
-        scrollbar_mode =
-            lvgl.SCROLLBAR_MODE.OFF,
-    }
+    local title_marquee =
+        jellyfin_marquee.create(
+            root,
+            {
+                x = 6,
+                y = 83,
+                w = 148,
+                h = 12,
+                text = "",
+                align = "center",
+                text_color = "#FFFFFF",
+                autostart = true,
+            }
+        )
 
-    title_view:clear_flag(
-        lvgl.FLAG.SCROLLABLE
-    )
-
-    local title = title_view:Label {
-        x = 0,
-        y = 0,
-        text = "",
-        text_color = "#FFFFFF",
-    }
-
-    local artist_view = root:Object {
-        x = 6,
-        y = 94,
-        w = 148,
-        h = 11,
-        pad_all = 0,
-        border_width = 0,
-        radius = 0,
-        bg_opa = 0,
-        scrollbar_mode =
-            lvgl.SCROLLBAR_MODE.OFF,
-    }
-
-    artist_view:clear_flag(
-        lvgl.FLAG.SCROLLABLE
-    )
-
-    local artist = artist_view:Label {
-        x = 0,
-        y = 0,
-        text = "",
-        text_color = "#B5B6C0",
-    }
+    local artist_marquee =
+        jellyfin_marquee.create(
+            root,
+            {
+                x = 6,
+                y = 95,
+                w = 148,
+                h = 12,
+                text = "",
+                align = "center",
+                text_color = "#B5B6C0",
+                autostart = true,
+            }
+        )
 
     local progress = root:Object {
         x = 8,
@@ -343,206 +327,6 @@ function M.create(options)
         end
     end
 
-    local artist_id = 0
-    local marquee_id = 0
-
-    local function wait_ms(
-        milliseconds,
-        id,
-        callback
-    )
-        lvgl.Timer {
-            period = milliseconds,
-            repeat_count = 1,
-            cb = function()
-                if id == marquee_id then
-                    callback()
-                end
-            end,
-        }
-    end
-
-    local function set_artist(value)
-        artist_id = artist_id + 1
-        local id = artist_id
-
-        artist:set {
-            text = value or "",
-            x = 0,
-            text_opa = 0,
-        }
-
-        lvgl.Timer {
-            period = 50,
-            repeat_count = 1,
-            cb = function()
-                if id ~= artist_id then
-                    return
-                end
-
-                local coordinates =
-                    artist:get_coords()
-
-                local width =
-                    coordinates.x2 -
-                    coordinates.x1 + 1
-
-                artist:set {
-                    x = math.max(
-                        0,
-                        math.floor(
-                            (148 - width) / 2
-                        )
-                    ),
-                    text_opa = 255,
-                }
-            end,
-        }
-    end
-
-    local function set_title(value)
-        marquee_id = marquee_id + 1
-        local id = marquee_id
-
-        title:set {
-            text = value or "",
-            x = 0,
-            text_opa = 0,
-        }
-
-        lvgl.Timer {
-            period = 50,
-            repeat_count = 1,
-            cb = function()
-                if id ~= marquee_id then
-                    return
-                end
-
-                local coordinates =
-                    title:get_coords()
-
-                local text_width =
-                    coordinates.x2 -
-                    coordinates.x1 + 1
-
-                local overflow =
-                    text_width - 148
-
-                if overflow <= 0 then
-                    title:set {
-                        x = math.floor(
-                            (
-                                148 -
-                                text_width
-                            ) / 2
-                        ),
-                        text_opa = 255,
-                    }
-
-                    return
-                end
-
-                title:set {
-                    x = 0,
-                    text_opa = 255,
-                }
-
-                local duration =
-                    math.max(
-                        2800,
-                        math.floor(
-                            overflow * 40
-                        )
-                    )
-
-                local forward
-                local backward
-
-                forward = function()
-                    if id ~= marquee_id then
-                        return
-                    end
-
-                    title:Anim {
-                        run = true,
-                        start_value = 0,
-                        end_value =
-                            -overflow,
-                        duration = duration,
-                        path = "linear",
-                        exec_cb =
-                            function(
-                                object,
-                                position
-                            )
-                                if id ==
-                                    marquee_id then
-                                    object:set {
-                                        x =
-                                            position,
-                                    }
-                                end
-                            end,
-                        done_cb = function()
-                            if id ==
-                                marquee_id then
-                                wait_ms(
-                                    2000,
-                                    id,
-                                    backward
-                                )
-                            end
-                        end,
-                    }
-                end
-
-                backward = function()
-                    if id ~= marquee_id then
-                        return
-                    end
-
-                    title:Anim {
-                        run = true,
-                        start_value =
-                            -overflow,
-                        end_value = 0,
-                        duration = duration,
-                        path = "linear",
-                        exec_cb =
-                            function(
-                                object,
-                                position
-                            )
-                                if id ==
-                                    marquee_id then
-                                    object:set {
-                                        x =
-                                            position,
-                                    }
-                                end
-                            end,
-                        done_cb = function()
-                            if id ==
-                                marquee_id then
-                                wait_ms(
-                                    2000,
-                                    id,
-                                    forward
-                                )
-                            end
-                        end,
-                    }
-                end
-
-                wait_ms(
-                    2000,
-                    id,
-                    forward
-                )
-            end,
-        }
-    end
-
     pcall(
         function()
             lvgl.group.remove_obj(
@@ -588,11 +372,17 @@ function M.create(options)
         end
 
         if values.title ~= nil then
-            set_title(values.title)
+            title_marquee:set(
+                values.title
+            )
+            title_marquee:start()
         end
 
         if values.artist ~= nil then
-            set_artist(values.artist)
+            artist_marquee:set(
+                values.artist
+            )
+            artist_marquee:start()
         end
 
         if values.progress ~= nil then

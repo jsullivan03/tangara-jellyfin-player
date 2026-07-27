@@ -112,20 +112,57 @@ return widgets.MenuScreen:new {
     })
     local indexes = {}
 
+    local artists_btn =
+      indexes_list:add_btn(nil, "Artists")
+    artists_btn:onClicked(function()
+      backstack.push(
+        require("jellyfin_local_library")
+          .Artists:new()
+      )
+    end)
+    artists_btn:add_style(styles.list_item)
+
+    local albums_btn =
+      indexes_list:add_btn(nil, "Albums")
+    albums_btn:onClicked(function()
+      backstack.push(
+        require("jellyfin_local_library")
+          .Albums:new()
+      )
+    end)
+    albums_btn:add_style(styles.list_item)
+
+    local tracks_btn =
+      indexes_list:add_btn(nil, "Tracks")
+    tracks_btn:onClicked(function()
+      backstack.push(
+        require("jellyfin_local_library")
+          .Tracks:new()
+      )
+    end)
+    tracks_btn:add_style(styles.list_item)
+
     for _, idx in ipairs(database.indexes()) do
-      local btn = indexes_list:add_btn(nil, tostring(idx))
-      btn:onClicked(function()
-        backstack.push(browser:new {
-          title = tostring(idx),
-          iterator = idx:iter(),
-          mediatype = idx:type(),
+      if idx:type() ~=
+          database.MediaTypes.Music then
+        local btn =
+          indexes_list:add_btn(
+            nil,
+            tostring(idx)
+          )
+        btn:onClicked(function()
+          backstack.push(browser:new {
+            title = tostring(idx),
+            iterator = idx:iter(),
+            mediatype = idx:type(),
+          })
+        end)
+        btn:add_style(styles.list_item)
+        table.insert(indexes, {
+          object = btn,
+          index = idx,
         })
-      end)
-      btn:add_style(styles.list_item)
-      table.insert(indexes, {
-        object = btn,
-        index = idx,
-      })
+      end
     end
 
     local playlist_btn = indexes_list:add_btn(nil, "Playlists")
@@ -144,7 +181,9 @@ return widgets.MenuScreen:new {
       no_indexes_container:add_flag(lvgl.FLAG.HIDDEN)
       indexes_list:clear_flag(lvgl.FLAG.HIDDEN)
 
-      if indexes[1] then
+      if artists_btn then
+        artists_btn:focus()
+      elseif indexes[1] then
         indexes[1].object:focus()
       end
     end

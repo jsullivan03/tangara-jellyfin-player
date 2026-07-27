@@ -94,6 +94,8 @@ function M.plan(manifest, managed_paths, file_exists)
     local plan = {
         keep = {},
         download = {},
+        artwork = {},
+        actions = {},
         delete = {},
     }
 
@@ -125,10 +127,14 @@ function M.plan(manifest, managed_paths, file_exists)
                 media_path_error
         end
 
-        desired_paths[local_path] = true
+        desired_paths[local_path] =
+            "media"
 
-        local full_path = storage_path(root, local_path)
+        local full_path =
+            storage_path(root, local_path)
+
         local action = {
+            kind = "media",
             local_path = local_path,
             storage_path = full_path,
             media_path = media_path,
@@ -149,6 +155,80 @@ function M.plan(manifest, managed_paths, file_exists)
 
             action.media_url = media_url
             table.insert(plan.download, action)
+            table.insert(plan.actions, action)
+        end
+
+        local artwork = item.artwork
+
+        if type(artwork) == "table" and
+            type(artwork.thumbnail) == "string" and
+            artwork.thumbnail ~= "" and
+            type(artwork.thumbnail_item_id) == "string" and
+            artwork.thumbnail_item_id ~= "" then
+            local artwork_local_path,
+                artwork_path_error =
+                normalize_local_path(
+                    artwork.thumbnail
+                )
+
+            if not artwork_local_path then
+                return nil,
+                    "manifest item " .. index ..
+                    " artwork: " .. artwork_path_error
+            end
+
+            local existing_kind =
+                desired_paths[artwork_local_path]
+
+            if existing_kind and existing_kind ~= "artwork" then
+                return nil,
+                    "artwork path conflicts with media path: " ..
+                    artwork_local_path
+            end
+
+            if not existing_kind then
+                desired_paths[artwork_local_path] = "artwork"
+
+                local artwork_storage_path =
+                    storage_path(root, artwork_local_path)
+
+                if not file_exists(artwork_storage_path) then
+                    local artwork_path,
+                        artwork_path_error =
+                        device_identity.artwork_path(
+                            artwork.thumbnail_item_id,
+                            "thumbnail"
+                        )
+
+                    if not artwork_path then
+                        return nil,
+                            "manifest item " .. index ..
+                            " artwork: " .. artwork_path_error
+                    end
+
+                    local artwork_url,
+                        artwork_url_error =
+                        sync_client.url(artwork_path)
+
+                    if not artwork_url then
+                        return nil,
+                            "manifest item " .. index ..
+                            " artwork: " .. artwork_url_error
+                    end
+
+                    local artwork_action = {
+                        kind = "artwork",
+                        local_path = artwork_local_path,
+                        storage_path = artwork_storage_path,
+                        artwork_path = artwork_path,
+                        artwork_url = artwork_url,
+                        item = item,
+                    }
+
+                    table.insert(plan.artwork, artwork_action)
+                    table.insert(plan.actions, artwork_action)
+                end
+            end
         end
     end
 
@@ -189,6 +269,8 @@ function M.plan(manifest, managed_paths, file_exists)
     plan.counts = {
         keep = #plan.keep,
         download = #plan.download,
+        artwork = #plan.artwork,
+        actions = #plan.actions,
         delete = #plan.delete,
     }
 

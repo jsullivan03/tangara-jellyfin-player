@@ -21,7 +21,7 @@ AUDIO_FIELDS = (
     "MediaSources,Container,"
     "RunTimeTicks,IndexNumber,"
     "ParentIndexNumber,ImageTags,"
-    "DateCreated"
+    "DateCreated,AlbumId,ArtistItems"
 )
 
 sync_preferences_api = Blueprint(

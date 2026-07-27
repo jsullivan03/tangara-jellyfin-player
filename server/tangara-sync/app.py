@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 from io import BytesIO
@@ -109,7 +110,8 @@ def get_item(
                 "Path,MediaSources,Album,AlbumArtist,"
                 "Artists,RunTimeTicks,IndexNumber,"
                 "ParentIndexNumber,Container,ImageTags,"
-                "PrimaryImageItemId"
+                "PrimaryImageItemId,AlbumId,ArtistItems,"
+                "DateCreated"
             ),
         },
         timeout=20,
@@ -181,17 +183,65 @@ def manifest_item(item):
     except (TypeError, ValueError):
         duration = 0
 
+    album_id = item.get("AlbumId") or ""
+    artist_items = item.get("ArtistItems") or []
+
+    artist_id = ""
+
+    if artist_items and isinstance(
+        artist_items[0],
+        dict,
+    ):
+        artist_id = artist_items[0].get("Id") or ""
+
+    artwork_source_id = (
+        album_id
+        or item.get("PrimaryImageItemId")
+        or item["Id"]
+    )
+
+    artwork_key = album_id
+
+    if not artwork_key:
+        artwork_key = hashlib.sha1(
+            (
+                (item.get("AlbumArtist") or "")
+                + "\0"
+                + (item.get("Album") or "")
+            ).encode("utf-8")
+        ).hexdigest()
+
+    artwork_key = re.sub(
+        r"[^A-Za-z0-9._-]",
+        "_",
+        artwork_key,
+    )
+
     return {
         "id": item["Id"],
         "jellyfin_id": item["Id"],
         "title": item.get("Name") or title,
         "artist": item.get("AlbumArtist")
         or (artists[0] if artists else ""),
+        "artist_id": artist_id,
         "album": item.get("Album") or "",
+        "album_id": album_id,
         "duration": duration,
+        "date_created": item.get("DateCreated") or "",
+        "track_number": item.get("IndexNumber") or 0,
+        "disc_number": item.get("ParentIndexNumber") or 0,
         "local_path": (
             f"/Music/{artist}/{album}/{filename}"
         ),
+        "artwork": {
+            "thumbnail": (
+                "/.tangara-artwork/albums/"
+                + artwork_key
+                + ".png"
+            ),
+            "thumbnail_item_id":
+                artwork_source_id,
+        },
         "sync_state": "ready",
         "pinned": True,
         "size_bytes": media_source.get("Size"),

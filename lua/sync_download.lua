@@ -1,11 +1,41 @@
 local device = require("device")
 local download = require("download")
+local filesystem = require("filesystem")
 local sync_managed_paths = require("sync_managed_paths")
 local sync_reconcile = require("sync_reconcile")
 
 local M = {}
 
 local active_action = nil
+
+local function ensure_parent_directory(local_path)
+    local parent = local_path:match("^/(.+)/[^/]+$")
+
+    if not parent then
+        return true
+    end
+
+    local current = ""
+
+    for segment in parent:gmatch("[^/]+") do
+        if current == "" then
+            current = segment
+        else
+            current = current .. "/" .. segment
+        end
+
+        if not filesystem.chkdir(current) then
+            local created = filesystem.mkdir(current)
+
+            if not created and not filesystem.chkdir(current) then
+                return false,
+                    "unable to create " .. current
+            end
+        end
+    end
+
+    return true
+end
 
 local function prepare_action(action)
     if type(action) ~= "table" then
@@ -21,10 +51,24 @@ local function prepare_action(action)
         return nil, path_error
     end
 
-    if type(action.media_url) ~= "string" or
-        not action.media_url:match("^https?://") then
+    local kind = action.kind or "media"
+
+    if kind ~= "media" and kind ~= "artwork" then
+        return nil, "unsupported download action kind"
+    end
+
+    local source_url
+
+    if kind == "artwork" then
+        source_url = action.artwork_url
+    else
+        source_url = action.media_url
+    end
+
+    if type(source_url) ~= "string" or
+        not source_url:match("^https?://") then
         return nil,
-            "download media URL must begin with http:// or https://"
+            "download URL must begin with http:// or https://"
     end
 
     local root, root_error = device.storage_root()
@@ -37,11 +81,20 @@ local function prepare_action(action)
 
     root = root:gsub("/+$", "")
 
+    local ready, ready_error =
+        ensure_parent_directory(local_path)
+
+    if not ready then
+        return nil, ready_error
+    end
+
     return {
+        kind = kind,
         local_path = local_path,
         storage_path = root .. local_path,
-        media_url = action.media_url,
+        download_url = source_url,
         media_path = action.media_path,
+        artwork_path = action.artwork_path,
         item = action.item,
     }
 end
@@ -60,7 +113,7 @@ function M.start(action)
 
     local started, start_error =
         download.start(
-            prepared.media_url,
+            prepared.download_url,
             prepared.storage_path
         )
 
@@ -116,9 +169,11 @@ function M.poll()
         }
     end
 
+    result.kind = action.kind
     result.local_path = action.local_path
     result.storage_path = action.storage_path
     result.media_path = action.media_path
+    result.artwork_path = action.artwork_path
     result.item = action.item
 
     if not result.ok then
@@ -135,10 +190,18 @@ function M.poll()
         return result
     end
 
-    table.insert(
-        managed_paths,
-        action.local_path
-    )
+    local already_managed = false
+
+    for _, path in ipairs(managed_paths) do
+        if path == action.local_path then
+            already_managed = true
+            break
+        end
+    end
+
+    if not already_managed then
+        table.insert(managed_paths, action.local_path)
+    end
 
     local saved, save_error =
         sync_managed_paths.save(managed_paths)

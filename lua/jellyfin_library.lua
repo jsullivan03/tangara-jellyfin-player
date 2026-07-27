@@ -1,16 +1,14 @@
-local lvgl = require("lvgl")
 local backstack = require("backstack")
-local controls = require("controls")
-local jellyfin_navigation =
-    require("jellyfin_navigation")
+local jellyfin_list_ui =
+    require("jellyfin_list_ui")
 local jellyfin_now_playing =
     require("jellyfin_now_playing")
 local jellyfin_playback =
     require("jellyfin_playback")
+local jellyfin_local_index =
+    require("jellyfin_local_index")
 local jellyfin_sort =
     require("jellyfin_sort")
-local jellyfin_status_bar =
-    require("jellyfin_status_bar")
 local jellyfin_track_menu =
     require("jellyfin_track_menu")
 local screen = require("screen")
@@ -20,610 +18,113 @@ local sync_library_view =
 local LibraryScreen
 local CollectionScreen
 
-local function text(value, fallback)
-    if type(value) == "string" and
-        value ~= "" then
-        return value
-    end
-
-    return fallback or ""
-end
-
-local function track_count_text(count)
-    count = tonumber(count) or 0
-
-    if count == 1 then
-        return "1 track"
-    end
-
-    return tostring(count) ..
-        " tracks"
-end
-
 local function artwork_path(
     collection,
     fallback
 )
-    if type(collection) == "table" and
-        type(collection.artwork) ==
-            "table" and
-        type(collection.artwork.cover) ==
-            "string" and
-        collection.artwork.cover ~= "" then
-        return collection.artwork.cover
+    local artwork =
+        type(collection) == "table" and
+        collection.artwork or nil
+
+    if type(artwork) == "table" then
+        for _, key in ipairs({
+            "thumbnail",
+            "cover",
+            "album_thumbnail",
+            "playlist_thumbnail",
+        }) do
+            local value = artwork[key]
+
+            if type(value) == "string" and
+                value ~= "" then
+                return value
+            end
+        end
     end
 
     return fallback
 end
 
-local function create_text_window(
-    parent,
-    options
-)
-    local view =
-        parent:Object {
-            x = options.x,
-            y = options.y,
-            w = options.w,
-            h = options.h,
-            pad_all = 0,
-            border_width = 0,
-            radius = 0,
-            bg_opa = 0,
-            scrollbar_mode =
-                lvgl.SCROLLBAR_MODE.OFF,
-        }
-
-    view:clear_flag(
-        lvgl.FLAG.SCROLLABLE
-    )
-    view:clear_flag(
-        lvgl.FLAG.CLICKABLE
-    )
-
-    local label =
-        view:Label {
-            x = 0,
-            y = 0,
-            text = options.text or "",
-            text_color =
-                options.text_color or
-                "#FFFFFF",
-            text_font =
-                options.text_font or
-                font.fusion_10,
-        }
-
-    label:clear_flag(
-        lvgl.FLAG.CLICKABLE
-    )
-
-    local function set_mode(mode)
-        label:set {
-            long_mode = mode,
-            w = options.w,
-            h = options.h,
-        }
+local function normalized_album_name(value)
+    if type(value) ~= "string" then
+        return nil
     end
 
-    local function stop()
-        set_mode(
-            lvgl.LABEL.LONG_CLIP
-        )
+    local normalized =
+        value:lower()
+            :gsub("^%s+", "")
+            :gsub("%s+$", "")
+            :gsub("%s+", " ")
+
+    if normalized == "" then
+        return nil
     end
 
-    local function start()
-        set_mode(
-            lvgl.LABEL
-                .LONG_SCROLL_CIRCULAR
-        )
-    end
-
-    stop()
-
-    return {
-        view = view,
-        label = label,
-        start = start,
-        stop = stop,
-    }
+    return normalized
 end
 
-local function create_root(
-    self,
-    title
-)
-    self.root = lvgl.Object(nil, {
-        x = 0,
-        y = 0,
-        w = 160,
-        h = 128,
-        pad_all = 0,
-        border_width = 0,
-        radius = 0,
-        bg_color = "#07080C",
-        bg_opa = 255,
-        scrollbar_mode =
-            lvgl.SCROLLBAR_MODE.OFF,
-    })
+local function local_album_artwork()
+    local library =
+        jellyfin_local_index.load()
 
-    self.root:clear_flag(
-        lvgl.FLAG.SCROLLABLE
-    )
+    local by_name = {}
 
-    self.go_back =
-        function()
-            backstack.pop()
-        end
-
-    self.status =
-        jellyfin_status_bar.create(
-            self.root
-        )
-
-    self.bindings =
-        self.status.bindings
-
-    self.header =
-        self.root:Label {
-            x = 5,
-            y = 15,
-            w = 150,
-            h = 11,
-            text = title or "",
-            text_align = 2,
-            text_color = "#FFFFFF",
-            text_font = font.fusion_10,
-        }
-
-    self.list =
-        lvgl.List(
-            self.root,
-            {
-                x = 2,
-                y = 28,
-                w = 156,
-                h = 100,
-            }
-        )
-
-    self.list:set {
-        pad_all = 0,
-        pad_row = 1,
-        border_width = 0,
-        radius = 0,
-        bg_color = "#07080C",
-        bg_opa = 255,
-        scrollbar_mode =
-            lvgl.SCROLLBAR_MODE.OFF,
-    }
-end
-
-local function install_controls(self)
-    local group =
-        lvgl.group.get_default()
-
-    self.focus_group = group
-
-    local got_wrap, previous_wrap =
-        pcall(
-            function()
-                return group:get_wrap()
-            end
-        )
-
-    self.previous_group_wrap =
-        got_wrap and
-        previous_wrap or
-        true
-
-    pcall(
-        function()
-            group:set_wrap(false)
-        end
-    )
-
-    if self.list then
-        lvgl.group.remove_obj(
-            self.list
-        )
+    if type(library) ~= "table" then
+        return by_name
     end
 
-    if self.first_row then
-        lvgl.group.focus_obj(
-            self.first_row
-        )
-    end
-
-    jellyfin_navigation.set_back(
-        self.go_back
-    )
-
-    local hooks =
-        controls.hooks()
-
-    local input_method =
-        hooks.wheel or
-        hooks.dpad
-
-    if not input_method then
-        return
-    end
-
-    self.input_method =
-        input_method
-
-    if input_method.up then
-        self.previous_up_long =
-            input_method.up.long_press
-
-        input_method.up.long_press =
-            self.go_back
-    end
-end
-
-local function restore_controls(self)
-    jellyfin_navigation.clear_back(
-        self.go_back
-    )
-
-    if self.focus_group then
-        pcall(
-            function()
-                self.focus_group:set_wrap(
-                    self.previous_group_wrap
-                        ~= false
-                )
-            end
-        )
-    end
-
-    self.focus_group = nil
-
-    local input_method =
-        self.input_method
-
-    if not input_method then
-        return
-    end
-
-    if input_method.up and
-        input_method.up.long_press ==
-            self.go_back then
-        input_method.up.long_press =
-            self.previous_up_long
-    end
-
-    self.input_method = nil
-end
-
-local function set_row_focus(
-    row,
-    focused
-)
-    row:set {
-        bg_color = "#34363F",
-        bg_opa =
-            focused and
-            255 or
-            0,
-    }
-end
-
-local function add_playlist_row(
-    list,
-    collection,
-    fallback_artwork,
-    callback,
-    focus
-)
-    local row =
-        list:Button {
-            w = lvgl.PCT(100),
-            h = 32,
-            pad_all = 0,
-            border_width = 0,
-            outline_width = 0,
-            shadow_width = 0,
-            radius = 3,
-            bg_opa = 0,
-        }
-
-    local artwork_view =
-        row:Object {
-            x = 2,
-            y = 2,
-            w = 28,
-            h = 28,
-            pad_all = 0,
-            border_width = 0,
-            radius = 2,
-            bg_color = "#161820",
-            bg_opa = 255,
-            scrollbar_mode =
-                lvgl.SCROLLBAR_MODE.OFF,
-        }
-
-    artwork_view:clear_flag(
-        lvgl.FLAG.SCROLLABLE
-    )
-    artwork_view:clear_flag(
-        lvgl.FLAG.CLICKABLE
-    )
-
-    local artwork =
-        artwork_view:Image {
-        x = 0,
-        y = 0,
-        src =
-            lvgl.ImgData(
-                artwork_path(
-                    collection,
-                    fallback_artwork
-                )
-            ),
-        }
-
-    artwork:clear_flag(
-        lvgl.FLAG.CLICKABLE
-    )
-
-    local name =
-        create_text_window(
-            row,
-            {
-                x = 35,
-                y = 4,
-                w = 116,
-                h = 11,
-                text =
-                    text(
-                        collection.name,
-                        "Playlist"
-                    ),
-                text_color =
-                    "#FFFFFF",
-            }
-        )
-
-    local detail =
-        track_count_text(
-            collection.track_count or
-            #(collection.items or {})
-        )
-
-    if collection.pending then
-        detail =
-            detail .. " - pending"
-    end
-
-    create_text_window(
-        row,
-        {
-            x = 35,
-            y = 17,
-            w = 116,
-            h = 10,
-            text = detail,
-            text_color = "#AEB0B8",
-        }
-    )
-
-    row:onevent(
-        lvgl.EVENT.FOCUSED,
-        function()
-            set_row_focus(
-                row,
-                true
+    for _, album in ipairs(
+        library.albums or {}
+    ) do
+        local name =
+            normalized_album_name(
+                album.name or
+                album.title
             )
-            name.start()
-        end
-    )
 
-    row:onevent(
-        lvgl.EVENT.DEFOCUSED,
-        function()
-            set_row_focus(
-                row,
-                false
+        local source =
+            artwork_path(
+                album,
+                nil
             )
-            name.stop()
+
+        if name and source then
+            by_name[name] = source
         end
-    )
-
-    row:onevent(
-        lvgl.EVENT.PRESSED,
-        function()
-            lvgl.group.focus_obj(row)
-        end
-    )
-
-    row:onClicked(callback)
-
-    if focus then
-        row:focus()
     end
 
-    return row
+    return by_name
 end
 
-local function add_track_row(
-    list,
+local function track_artwork_path(
     track,
-    click_callback,
-    context_callback,
-    focus
+    by_album_name
 )
-    local row =
-        list:Button {
-            w = lvgl.PCT(100),
-            h = 25,
-            pad_all = 0,
-            border_width = 0,
-            outline_width = 0,
-            shadow_width = 0,
-            radius = 3,
-            bg_opa = 0,
-        }
-
-    local title =
-        create_text_window(
-            row,
-            {
-                x = 5,
-                y = 3,
-                w = 146,
-                h = 11,
-                text =
-                    text(
-                        track.title,
-                        "Unknown Track"
-                    ),
-                text_color =
-                    "#FFFFFF",
-            }
+    local direct =
+        artwork_path(
+            track,
+            nil
         )
 
-    create_text_window(
-        row,
-        {
-            x = 5,
-            y = 14,
-            w = 146,
-            h = 9,
-            text =
-                text(
-                    track.artist,
-                    track.album
-                ),
-            text_color = "#AEB0B8",
-        }
-    )
-
-    local suppress_click = false
-
-    row:onevent(
-        lvgl.EVENT.FOCUSED,
-        function()
-            set_row_focus(
-                row,
-                true
-            )
-            title.start()
-        end
-    )
-
-    row:onevent(
-        lvgl.EVENT.DEFOCUSED,
-        function()
-            set_row_focus(
-                row,
-                false
-            )
-            title.stop()
-        end
-    )
-
-    row:onevent(
-        lvgl.EVENT.LONG_PRESSED,
-        function()
-            suppress_click = true
-            context_callback()
-
-            lvgl.Timer {
-                period = 1000,
-                repeat_count = 1,
-                cb = function()
-                    suppress_click = false
-                end,
-            }
-        end
-    )
-
-    row:onevent(
-        lvgl.EVENT.PRESSED,
-        function()
-            lvgl.group.focus_obj(row)
-        end
-    )
-
-    row:onClicked(
-        function()
-            if suppress_click then
-                suppress_click = false
-                return
-            end
-
-            click_callback()
-        end
-    )
-
-    if focus then
-        row:focus()
+    if direct then
+        return direct
     end
 
-    return row
-end
-
-local function add_message(
-    list,
-    message,
-    focus
-)
-    local row =
-        list:Button {
-            w = lvgl.PCT(100),
-            h = 25,
-            pad_all = 0,
-            border_width = 0,
-            outline_width = 0,
-            shadow_width = 0,
-            radius = 3,
-            bg_opa = 0,
-        }
-
-    row:Label {
-        x = 5,
-        y = 7,
-        w = 146,
-        text = message,
-        text_align = 2,
-        text_color = "#B8BAC2",
-        text_font = font.fusion_10,
-    }
-
-    row:onevent(
-        lvgl.EVENT.FOCUSED,
-        function()
-            set_row_focus(
-                row,
-                true
+    local album_name =
+        normalized_album_name(
+            track and
+            (
+                track.album or
+                track.album_name
             )
-        end
-    )
+        )
 
-    row:onevent(
-        lvgl.EVENT.DEFOCUSED,
-        function()
-            set_row_focus(
-                row,
-                false
-            )
-        end
-    )
-
-    row:onevent(
-        lvgl.EVENT.PRESSED,
-        function()
-            lvgl.group.focus_obj(row)
-        end
-    )
-
-    if focus then
-        row:focus()
+    if album_name and
+        by_album_name[album_name] then
+        return by_album_name[album_name]
     end
 
-    return row
+    return nil
 end
 
 local function find_playlist(
@@ -643,34 +144,141 @@ local function find_playlist(
     return nil
 end
 
+local function selection_state(
+    sort_key
+)
+    local selected =
+        jellyfin_sort.current(
+            sort_key,
+            "tracks"
+        )
+
+    selected.alpha_label =
+        jellyfin_sort.order_label(
+            sort_key,
+            "alpha",
+            "tracks"
+        )
+
+    selected.recent_label =
+        jellyfin_sort.order_label(
+            sort_key,
+            "recent",
+            "tracks"
+        )
+
+    return selected
+end
+
+local function create_track_sort(
+    self,
+    sort_key
+)
+    jellyfin_sort.ensure(
+        sort_key,
+        "tracks",
+        {
+            "alpha",
+            "recent",
+        }
+    )
+
+    local current =
+        selection_state(
+            sort_key
+        )
+
+    jellyfin_list_ui.add_sort_control(
+        self,
+        {
+            methods = {
+                "alpha",
+                "recent",
+            },
+            current_method =
+                current.method,
+            current_label =
+                current.label,
+            alpha_label =
+                current.alpha_label,
+            recent_label =
+                current.recent_label,
+            on_highlight =
+                function(method)
+                    local selected =
+                        jellyfin_sort.choose(
+                            sort_key,
+                            method,
+                            "tracks"
+                        )
+
+                    if not selected then
+                        return nil
+                    end
+
+                    return selection_state(
+                        sort_key
+                    )
+                end,
+            on_toggle =
+                function(method)
+                    local selected =
+                        jellyfin_sort.toggle(
+                            sort_key,
+                            method,
+                            "tracks"
+                        )
+
+                    if not selected then
+                        return nil
+                    end
+
+                    return selection_state(
+                        sort_key
+                    )
+                end,
+            on_apply =
+                function()
+                    if type(
+                        self.apply_sort
+                    ) == "function" then
+                        self.apply_sort()
+                    end
+                end,
+        }
+    )
+end
+
 CollectionScreen =
     screen:new {
         create_ui = function(self)
-            create_root(
+            jellyfin_list_ui.create_root(
                 self,
-                self.title or
-                    "Playlist"
+                self.title or "Playlist"
             )
 
-            local library, library_error =
+            local library,
+                library_error =
                 sync_library_view.current()
 
             if not library then
-                self.first_row =
-                    add_message(
-                        self.list,
-                        library_error or
-                            "Library unavailable",
-                        false
-                    )
+                local row =
+                    jellyfin_list_ui
+                        .add_message(
+                            self,
+                            library_error or
+                                "Library unavailable"
+                        )
 
+                self.first_row =
+                    row.object
                 return
             end
 
             local collection
 
             if self.collection_kind ==
-                "favorites" then
+                    "favorites" then
                 collection =
                     library.favorites
             else
@@ -682,140 +290,232 @@ CollectionScreen =
             end
 
             if not collection then
-                self.first_row =
-                    add_message(
-                        self.list,
-                        "Playlist unavailable",
-                        false
-                    )
-
-                return
-            end
-
-            local sorted_items =
-                jellyfin_sort.newest_added(
-                    collection.items or {}
-                )
-
-            if #sorted_items == 0 then
-                self.first_row =
-                    add_message(
-                        self.list,
-                        "No tracks",
-                        false
-                    )
-
-                return
-            end
-
-            for index, track in ipairs(
-                sorted_items
-            ) do
-                local track_copy = track
-                local context = {
-                    collection_kind =
-                        self.collection_kind,
-                    collection_id =
-                        self.collection_id,
-                    entry_id =
-                        track_copy
-                            .playlist_entry_id,
-                }
-
                 local row =
-                    add_track_row(
-                        self.list,
-                        track_copy,
-                        function()
-                            local played =
-                                jellyfin_playback
-                                    .play(
-                                        track_copy,
-                                        context
-                                    )
+                    jellyfin_list_ui
+                        .add_message(
+                            self,
+                            "Playlist unavailable"
+                        )
 
-                            if not played then
-                                return
-                            end
+                self.first_row =
+                    row.object
+                return
+            end
 
-                            backstack.push(
-                                jellyfin_now_playing
-                                    :new()
-                            )
-                        end,
-                        function()
-                            backstack.push(
-                                jellyfin_track_menu
-                                    :new {
-                                        track =
-                                            track_copy,
-                                        collection_kind =
-                                            context
-                                                .collection_kind,
-                                        collection_id =
-                                            context
-                                                .collection_id,
-                                        entry_id =
-                                            context
-                                                .entry_id,
-                                    }
-                            )
-                        end,
-                        false
+            local album_artwork =
+                local_album_artwork()
+
+            local sort_key
+
+            if self.collection_kind ==
+                    "favorites" then
+                sort_key = "favorites"
+            else
+                sort_key =
+                    "playlist:" ..
+                    tostring(
+                        self.collection_id or
+                        collection.id or
+                        "unknown"
+                    )
+            end
+
+            create_track_sort(
+                self,
+                sort_key
+            )
+
+            local items =
+                collection.items or {}
+
+            if #items == 0 then
+                local row =
+                    jellyfin_list_ui
+                        .add_message(
+                            self,
+                            "No tracks"
+                        )
+
+                self.media_rows = {row}
+                self.first_row = row.object
+                return
+            end
+
+            self.media_rows = {}
+
+            for _, track in ipairs(
+                items
+            ) do
+                local row =
+                    jellyfin_list_ui
+                        .add_track_row(
+                            self,
+                            track,
+                            {
+                                artwork =
+                                    track_artwork_path(
+                                        track,
+                                        album_artwork
+                                    ),
+                                detail =
+                                    track.artist,
+                                on_click =
+                                    function()
+                                    end,
+                            }
+                        )
+
+                table.insert(
+                    self.media_rows,
+                    row
+                )
+            end
+
+            function self.apply_sort()
+                local sorted =
+                    jellyfin_sort.sort(
+                        sort_key,
+                        items,
+                        "tracks"
                     )
 
-                if index == 1 then
-                    self.first_row = row
+                for index, track in ipairs(
+                    sorted
+                ) do
+                    local track_copy =
+                        track
+
+                    local context = {
+                        collection_kind =
+                            self.collection_kind,
+                        collection_id =
+                            self.collection_id,
+                        entry_id =
+                            track_copy
+                                .playlist_entry_id,
+                    }
+
+                    self.media_rows[index]
+                        :update(
+                            track_copy,
+                            {
+                                artwork =
+                                    track_artwork_path(
+                                        track_copy,
+                                        album_artwork
+                                    ),
+                                detail =
+                                    track_copy.artist,
+                                on_click =
+                                    function()
+                                        local played =
+                                            jellyfin_playback
+                                                .play(
+                                                    track_copy,
+                                                    context
+                                                )
+
+                                        if played then
+                                            backstack.push(
+                                                jellyfin_now_playing
+                                                    :new()
+                                            )
+                                        end
+                                    end,
+                                on_long_press =
+                                    function()
+                                        backstack.push(
+                                            jellyfin_track_menu
+                                                :new {
+                                                    track =
+                                                        track_copy,
+                                                    collection_kind =
+                                                        context
+                                                            .collection_kind,
+                                                    collection_id =
+                                                        context
+                                                            .collection_id,
+                                                    entry_id =
+                                                        context
+                                                            .entry_id,
+                                                }
+                                        )
+                                    end,
+                            }
+                        )
                 end
+
+                self.first_row =
+                    self.media_rows[1]
+                        .object
             end
+
+            self.apply_sort()
         end,
 
-        on_show = install_controls,
-        on_hide = restore_controls,
+        on_show =
+            jellyfin_list_ui
+                .install_controls,
+        on_hide =
+            jellyfin_list_ui
+                .restore_controls,
     }
 
 LibraryScreen =
     screen:new {
         create_ui = function(self)
-            create_root(
+            jellyfin_list_ui.create_root(
                 self,
                 "Playlists"
             )
 
-            local library, library_error =
+            local library,
+                library_error =
                 sync_library_view.current()
 
             if not library then
-                self.first_row =
-                    add_message(
-                        self.list,
-                        library_error or
-                            "Library unavailable",
-                        false
-                    )
+                local row =
+                    jellyfin_list_ui
+                        .add_message(
+                            self,
+                            library_error or
+                                "Library unavailable"
+                        )
 
+                self.first_row =
+                    row.object
                 return
             end
 
-            local favorites =
-                library.favorites
+            local favorites = {}
+
+            for key, value in pairs(
+                library.favorites or {}
+            ) do
+                favorites[key] = value
+            end
+
+            favorites.artwork = nil
+
+            local favorites_row =
+                jellyfin_list_ui
+                    .add_playlist_row(
+                        self,
+                        favorites,
+                        "__favorites_star__",
+                        function()
+                            backstack.push(
+                                CollectionScreen:new {
+                                    title = "Favorites",
+                                    collection_kind =
+                                        "favorites",
+                                }
+                            )
+                        end
+                    )
 
             self.first_row =
-                add_playlist_row(
-                    self.list,
-                    favorites,
-                    "//lua/img/favorites_playlist.png",
-                    function()
-                        backstack.push(
-                            CollectionScreen:new {
-                                title = "Favorites",
-                                collection_kind =
-                                    "favorites",
-                            }
-                        )
-                    end,
-                    false
-                )
+                favorites_row.object
 
             for _, playlist in ipairs(
                 library.playlists or {}
@@ -827,33 +527,40 @@ LibraryScreen =
                     playlist_copy.local_id or
                     playlist_copy.id
 
-                add_playlist_row(
-                    self.list,
-                    playlist_copy,
-                    "//lua/img/playlist_placeholder.png",
-                    function()
-                        backstack.push(
-                            CollectionScreen:new {
-                                title =
-                                    text(
-                                        playlist_copy
-                                            .name,
-                                        "Playlist"
-                                    ),
-                                collection_kind =
-                                    "playlist",
-                                collection_id =
-                                    playlist_id,
-                            }
-                        )
-                    end,
-                    false
-                )
+                jellyfin_list_ui
+                    .add_playlist_row(
+                        self,
+                        playlist_copy,
+                        artwork_path(
+                            playlist_copy,
+                            "//lua/img/playlist_placeholder.png"
+                        ),
+                        function()
+                            backstack.push(
+                                CollectionScreen:new {
+                                    title =
+                                        playlist_copy.name or
+                                        "Playlist",
+                                    collection_kind =
+                                        "playlist",
+                                    collection_id =
+                                        playlist_id,
+                                }
+                            )
+                        end
+                    )
             end
         end,
 
-        on_show = install_controls,
-        on_hide = restore_controls,
+        on_show =
+            jellyfin_list_ui
+                .install_controls,
+        on_hide =
+            jellyfin_list_ui
+                .restore_controls,
     }
+
+LibraryScreen.Collection =
+    CollectionScreen
 
 return LibraryScreen

@@ -40,9 +40,8 @@ if type(server_url) ~= "string" or
 end
 
 local root =
-    "desktop-sim/sd/jellyfin-library-ui-clean"
+    "desktop-sim/sd/jellyfin-library-ui"
 
-os.execute("rm -rf " .. root)
 os.execute("mkdir -p " .. root)
 
 local simulator =
@@ -335,6 +334,35 @@ local function add_track(track)
     file:write("simulator")
     file:close()
 
+    local artwork_key
+
+    if type(track.album_id) == "string" and
+        track.album_id ~= "" then
+        artwork_key = track.album_id
+    else
+        artwork_key =
+            tostring(track.artist or "") ..
+            "-" ..
+            tostring(track.album or "")
+    end
+
+    artwork_key = artwork_key:gsub(
+        "[^A-Za-z0-9._-]",
+        "_"
+    )
+
+    if artwork_key == "" then
+        artwork_key = tostring(track.id):gsub(
+            "[^A-Za-z0-9._-]",
+            "_"
+        )
+    end
+
+    local thumbnail =
+        "/.tangara-artwork/albums/" ..
+        artwork_key ..
+        ".png"
+
     table.insert(
         manifest.items,
         {
@@ -345,10 +373,24 @@ local function add_track(track)
             album = track.album,
             duration =
                 track.duration or 240,
+            date_created =
+                track.date_created or "",
+            album_id =
+                track.album_id or "",
+            artist_id =
+                track.artist_id or "",
+            track_number =
+                track.track_number or
+                track.index_number or 0,
+            disc_number =
+                track.disc_number or
+                track.parent_index_number or 0,
             local_path = local_path,
             sync_state = "ready",
             pinned = true,
             artwork = {
+                thumbnail = thumbnail,
+                thumbnail_item_id = track.id,
                 cover =
                     "//lua/img/cover_placeholder.png",
                 background =
@@ -628,6 +670,17 @@ local library_screen =
 package.loaded["jellyfin_library"] =
     library_screen
 
+local local_library =
+    dofile(
+        "lua/jellyfin_local_library.lua"
+    )
+
+package.loaded[
+    "jellyfin_local_library"
+] = local_library
+
+simulator.backstack.pop()
+
 simulator.backstack.push(
-    library_screen:new()
+    local_library.Root:new()
 )

@@ -34,6 +34,8 @@ local function finish(ok, error_message, download_result)
         remaining =
             session.total - session.completed,
         download = download_result,
+        artwork_failed =
+            session.artwork_failed or 0,
     }
 
     if session.current then
@@ -75,8 +77,22 @@ function M.start(plan)
         return false, "sync plan must be a table"
     end
 
+    local planned_actions = plan.actions
+
+    if type(planned_actions) ~= "table" then
+        planned_actions = {}
+
+        for _, action in ipairs(plan.download or {}) do
+            table.insert(planned_actions, action)
+        end
+
+        for _, action in ipairs(plan.artwork or {}) do
+            table.insert(planned_actions, action)
+        end
+    end
+
     local actions, actions_error =
-        copy_actions(plan.download)
+        copy_actions(planned_actions)
 
     if not actions then
         return false, actions_error
@@ -88,6 +104,7 @@ function M.start(plan)
         completed = 0,
         total = #actions,
         current = nil,
+        artwork_failed = 0,
     }
 
     last_result = nil
@@ -156,6 +173,39 @@ function M.poll()
     end
 
     if not download_result.ok then
+        if session.current and
+            session.current.kind ==
+                "artwork" then
+            session.artwork_failed =
+                session.artwork_failed + 1
+            session.completed =
+                session.completed + 1
+            session.index =
+                session.index + 1
+            session.current = nil
+
+            local started, start_error,
+                complete = start_next()
+
+            if not started then
+                return finish(
+                    false,
+                    start_error,
+                    download_result
+                )
+            end
+
+            if complete then
+                return finish(
+                    true,
+                    nil,
+                    download_result
+                )
+            end
+
+            return nil
+        end
+
         return finish(
             false,
             download_result.error or
