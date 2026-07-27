@@ -514,7 +514,8 @@ ArtistsScreen =
                             artist.name,
                             artist.release_count,
                             function()
-                            end
+                            end,
+                            artist.key
                         )
 
                 table.insert(
@@ -551,7 +552,8 @@ ArtistsScreen =
                                             artist_copy.key,
                                     }
                                 )
-                            end
+                            end,
+                            artist_copy.key
                         )
                 end
 
@@ -840,7 +842,8 @@ RootScreen =
                                     "jellyfin_library"
                                 ):new()
                             )
-                        end
+                        end,
+                        "root:playlists"
                     )
 
             jellyfin_list_ui.add_count_row(
@@ -851,7 +854,8 @@ RootScreen =
                     backstack.push(
                         ArtistsScreen:new()
                     )
-                end
+                end,
+                "root:artists"
             )
 
             jellyfin_list_ui.add_count_row(
@@ -862,7 +866,8 @@ RootScreen =
                     backstack.push(
                         AlbumsScreen:new()
                     )
-                end
+                end,
+                "root:albums"
             )
 
             jellyfin_list_ui.add_count_row(
@@ -873,7 +878,8 @@ RootScreen =
                     backstack.push(
                         TracksScreen:new()
                     )
-                end
+                end,
+                "root:tracks"
             )
 
             self.first_row =

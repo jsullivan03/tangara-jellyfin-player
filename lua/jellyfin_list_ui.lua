@@ -34,10 +34,85 @@ local INITIAL_SCROLL_Y = 25
 local INITIAL_SCROLL_ATTEMPTS = 30
 local INITIAL_SCROLL_ROOM = 100
 
+local function normalize_selection_id(value)
+    if value == nil then
+        return nil
+    end
+
+    local text = tostring(value)
+
+    if text == "" then
+        return nil
+    end
+
+    return text
+end
+
+local function item_selection_id(item)
+    if type(item) ~= "table" then
+        return nil
+    end
+
+    for _, key in ipairs({
+        "key",
+        "id",
+        "jellyfin_id",
+        "local_path",
+    }) do
+        local value =
+            normalize_selection_id(
+                item[key]
+            )
+
+        if value then
+            return value
+        end
+    end
+
+    return nil
+end
+
+local function update_model_selection(
+    model,
+    value
+)
+    model.selection_id =
+        normalize_selection_id(value)
+
+    if model.focused and
+        model.owner and
+        model.selection_id then
+        model.owner.selected_item_id =
+            model.selection_id
+    end
+end
+
+local function selected_row_object(self)
+    local selected_id =
+        normalize_selection_id(
+            self and
+            self.selected_item_id
+        )
+
+    if not selected_id then
+        return nil
+    end
+
+    for _, model in ipairs(
+        self.rows or {}
+    ) do
+        if model.selection_id ==
+                selected_id then
+            return model.object
+        end
+    end
+
+    return nil
+end
+
 local function apply_initial_scroll(self)
     if not self or
         not self.ui_active or
-        not self.screen_loaded or
         not self.list or
         not self.sort_row or
         not self.first_row or
@@ -50,12 +125,11 @@ local function apply_initial_scroll(self)
 
     pcall(
         function()
-            self.list:update_layout()
-            self.list:scroll_to_y(
-                INITIAL_SCROLL_Y,
-                false
-            )
-            self.list:update_layout()
+            self.list:scroll_to {
+                x = 0,
+                y = INITIAL_SCROLL_Y,
+                anim = false,
+            }
 
             local list_coordinates =
                 self.list:get_coords()
@@ -147,7 +221,6 @@ local function schedule_initial_scroll(self)
 
     if not self or
         not self.ui_active or
-        not self.screen_loaded or
         not self.sort_row or
         not self.first_row or
         self.first_row ==
@@ -286,6 +359,7 @@ local function register_model(
     model
 )
     self.rows = self.rows or {}
+    model.owner = self
 
     table.insert(
         self.rows,
@@ -306,6 +380,15 @@ local function attach_row_events(model)
         lvgl.EVENT.FOCUSED,
         function()
             model.focused = true
+
+            if model.owner and
+                model.owner.ui_active and
+                not model.owner.suppress_selection_tracking and
+                model.selection_id then
+                model.owner.selected_item_id =
+                    model.selection_id
+            end
+
             set_row_focus(
                 object,
                 true
@@ -1364,6 +1447,17 @@ function M.install_controls(self)
         end
     )
 
+    local resuming =
+        self.controls_installed_once ==
+            true
+
+    local restored_object =
+        resuming and
+        selected_row_object(self) or
+        nil
+
+    self.suppress_selection_tracking = true
+
     for _, model in ipairs(
         self.rows or {}
     ) do
@@ -1377,6 +1471,7 @@ function M.install_controls(self)
     end
 
     local initial_object =
+        restored_object or
         self.first_row or
         (
             self.rows[1] and
@@ -1385,8 +1480,13 @@ function M.install_controls(self)
 
     focus_object(initial_object)
 
+    self.suppress_selection_tracking = false
 
-    schedule_initial_scroll(self)
+    if not resuming then
+        schedule_initial_scroll(self)
+    end
+
+    self.controls_installed_once = true
 
     jellyfin_navigation.set_back(
         self.go_back
@@ -1416,6 +1516,7 @@ end
 
 function M.restore_controls(self)
     self.ui_active = false
+    self.suppress_selection_tracking = true
     pending_initial_scrolls[self] = nil
 
     if self.sort_menu_open and
@@ -1479,6 +1580,7 @@ function M.restore_controls(self)
     end
 
     self.input_method = nil
+    self.suppress_selection_tracking = false
 end
 
 function M.focus_first_row(self)
@@ -1503,7 +1605,8 @@ function M.add_count_row(
     self,
     title,
     count,
-    callback
+    callback,
+    selection_id
 )
     local row =
         self.list:Button {
@@ -1547,12 +1650,17 @@ function M.add_count_row(
         title = title_marquee,
         badge = badge,
         on_click = callback,
+        selection_id =
+            normalize_selection_id(
+                selection_id
+            ),
     }
 
     function model:update(
         next_title,
         next_count,
-        next_callback
+        next_callback,
+        next_selection_id
     )
         local width =
             badge:set(
@@ -1567,6 +1675,10 @@ function M.add_count_row(
         )
         model.on_click =
             next_callback
+        update_model_selection(
+            model,
+            next_selection_id
+        )
     end
 
     attach_row_events(model)
@@ -1655,6 +1767,8 @@ function M.add_album_row(
         artist = artist,
         badge = badge,
         on_click = callback,
+        selection_id =
+            item_selection_id(album),
     }
 
     function model:update(
@@ -1693,6 +1807,12 @@ function M.add_album_row(
 
         model.on_click =
             next_callback
+        update_model_selection(
+            model,
+            item_selection_id(
+                next_album
+            )
+        )
     end
 
     attach_row_events(model)
@@ -1762,6 +1882,10 @@ function M.add_playlist_row(
         name = name,
         badge = badge,
         on_click = callback,
+        selection_id =
+            item_selection_id(
+                collection
+            ),
     }
 
     function model:update(
@@ -1799,6 +1923,12 @@ function M.add_playlist_row(
 
         model.on_click =
             next_callback
+        update_model_selection(
+            model,
+            item_selection_id(
+                next_collection
+            )
+        )
     end
 
     attach_row_events(model)
@@ -1895,6 +2025,8 @@ function M.add_track_row(
         on_click = options.on_click,
         on_long_press =
             options.on_long_press,
+        selection_id =
+            item_selection_id(track),
     }
 
     function model:update(
@@ -1929,6 +2061,12 @@ function M.add_track_row(
             next_options.on_click
         model.on_long_press =
             next_options.on_long_press
+        update_model_selection(
+            model,
+            item_selection_id(
+                next_track
+            )
+        )
     end
 
     attach_row_events(model)

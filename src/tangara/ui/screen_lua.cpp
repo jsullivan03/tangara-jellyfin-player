@@ -29,6 +29,10 @@ Lua::~Lua() {
 }
 
 auto Lua::onShown() -> void {
+  if (s_) {
+    luavgl_set_root(s_, content());
+    lv_group_set_default(group());
+  }
   callMethod("on_show");
   forEachBinding([&](lua::Binding* b) {
     b->active = true;

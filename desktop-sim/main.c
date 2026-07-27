@@ -10,6 +10,7 @@
 
 #include <lvgl.h>
 #include "luavgl.h"
+#include "firmware_backstack.h"
 
 #include "src/drivers/sdl/lv_sdl_keyboard.h"
 #include "src/drivers/sdl/lv_sdl_mouse.h"
@@ -122,15 +123,31 @@ int main(int argc, char **argv)
     luaL_requiref(L, "lvgl", luaopen_lvgl, 1);
     lua_pop(L, 1);
 
+    firmware_backstack_init(L, keyboard, wheel);
+    luaL_requiref(
+        L,
+        "firmware_backstack",
+        luaopen_firmware_backstack,
+        1
+    );
+    lua_pop(L, 1);
+
     SDL_AddEventWatch(watch_sdl_event, NULL);
 
     if (run_lua_file(L, script) != 0) {
         SDL_DelEventWatch(watch_sdl_event, NULL);
-        lua_close(L);
+
+        /*
+         * Lua/LVGL objects can still reference each other after a failed
+         * chunk unwinds. The process is about to terminate, so let the OS
+         * reclaim them instead of running an unsafe partial teardown that
+         * can double-delete Lua-owned LVGL objects.
+         */
         return 1;
     }
 
     while (true) {
+        firmware_backstack_service();
         uint32_t delay_ms = lv_timer_handler();
 
         if (SDL_AtomicCAS(&back_requested, 1, 0)) {
@@ -147,6 +164,7 @@ int main(int argc, char **argv)
     }
 
     SDL_DelEventWatch(watch_sdl_event, NULL);
+    firmware_backstack_shutdown();
     lua_close(L);
     return 0;
 }

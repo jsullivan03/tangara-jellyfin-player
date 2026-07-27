@@ -27,6 +27,7 @@ add_subdirectory(
 add_executable(
     tangara-sim
     main.c
+    firmware_backstack.c
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib/luavgl/src/luavgl.c"
 )
 
