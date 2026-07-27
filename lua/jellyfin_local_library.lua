@@ -9,6 +9,8 @@ local jellyfin_playback =
     require("jellyfin_playback")
 local jellyfin_sort =
     require("jellyfin_sort")
+local jellyfin_virtual_track_list =
+    require("jellyfin_virtual_track_list")
 local screen = require("screen")
 local sync_library_view =
     require("sync_library_view")
@@ -222,7 +224,7 @@ local function create_sortable_root(
                     if type(
                         self.apply_sort
                     ) == "function" then
-                        self.apply_sort()
+                        self.apply_sort(true)
                     end
                 end,
         }
@@ -707,36 +709,9 @@ TracksScreen =
                 return
             end
 
-            self.media_rows = {}
-
-            for _, track in ipairs(
-                tracks
-            ) do
-                local row =
-                    jellyfin_list_ui
-                        .add_track_row(
-                            self,
-                            track,
-                            {
-                                artwork =
-                                    artwork_path(
-                                        track
-                                    ),
-                                detail =
-                                    track.artist,
-                                on_click =
-                                    function()
-                                    end,
-                            }
-                        )
-
-                table.insert(
-                    self.media_rows,
-                    row
-                )
-            end
-
-            function self.apply_sort()
+            function self.apply_sort(
+                reset_selection
+            )
                 local sorted =
                     jellyfin_sort.sort(
                         "tracks",
@@ -744,26 +719,33 @@ TracksScreen =
                         "tracks"
                     )
 
-                for index, track in ipairs(
-                    sorted
-                ) do
-                    local track_copy =
-                        track
-
-                    self.media_rows[index]
-                        :update(
-                            track_copy,
+                if self.virtual_track_list then
+                    self.virtual_track_list
+                        :set_items(
+                            sorted,
+                            {
+                                reset_selection =
+                                    reset_selection ==
+                                    true,
+                            }
+                        )
+                else
+                    jellyfin_virtual_track_list
+                        .create(
+                            self,
+                            sorted,
                             {
                                 artwork =
-                                    artwork_path(
-                                        track_copy
-                                    ),
+                                    artwork_path,
                                 detail =
-                                    track_copy.artist,
+                                    function(track)
+                                        return
+                                            track.artist
+                                    end,
                                 on_click =
-                                    function()
+                                    function(track)
                                         play_track(
-                                            track_copy,
+                                            track,
                                             {
                                                 collection_kind =
                                                     "local_tracks",

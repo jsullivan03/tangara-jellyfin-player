@@ -1,132 +1,330 @@
-# Tangara Premium Jellyfin Player — Project Handoff
+# Tangara Jellyfin Player — Project Handoff
 
-**Checkpoint date:** 2026-07-27  
-**Branch:** `custom-jellyfin-player`  
-**Previous committed checkpoint:** `2c152960 Add dark playlist UI and consistent navigation`  
-**Checkpoint commit target:** `Stabilize Jellyfin library UI and sorting`
+**Checkpoint date:** 2026-07-27
+**Branch:** `custom-jellyfin-player`
+**Checkpoint:** the commit containing this handoff
+**Parent checkpoint:** `61312be7 Measure Tangara local library scaling`
 
-## 1. Product direction
+## 1. Project goal
 
-This fork is turning Tangara into a premium Jellyfin-first music player while retaining Tangara’s existing hardware controls, local SD playback, queue/playback foundation, power management, and offline capability.
+This fork is turning Tangara into a premium Jellyfin-first ESP32 music player while preserving:
 
-The visual target is a modern dark interface inspired by Finamp and Spotify. The system should remain a real local music player rather than a thin streaming client.
+- Local SD-card playback
+- Offline use
+- Tangara’s physical controls
+- Existing audio pipeline and queue foundation
+- Selective per-device Jellyfin synchronization
+- Wi-Fi only when needed
+- A compact, dark, modern interface
 
-Important constraints:
+The target is not a thin streaming client. Music should be synchronized to local storage and remain playable without the backend.
 
-- One Jellyfin server and one Jellyfin account per Tangara.
-- Jellyfin credentials and tokens remain on the backend where practical.
-- Devices have limited storage, so full-library mirroring is not the default.
-- Each device needs its own selective sync preferences and download queue.
-- Sync should be resumable, storage-aware, and able to turn Wi-Fi off when finished.
-- Local playback must remain usable without the sync server or network.
+## 2. Development rules established during this work
 
-## 2. Confirmed working checkpoint
+- Make one focused change at a time.
+- Use the real LVGL desktop simulator for UI work.
+- Automated tests do not count as visual confirmation.
+- Do not commit until automated tests and the interactive simulator both pass.
+- Long changes should use rollback-guarded `.sh` scripts.
+- Do not rerun old patches unless explicitly directed.
+- Use short, paste-safe terminal commands when the user may send them through Discord.
+- `status` is read-only in zsh; use `rc` for exit codes.
+- Never claim a behavior is fixed only because a headless test passed.
+- Preserve the last known-good commit before structural work.
 
-### Desktop development
+## 3. Important commits
 
-- Stock Tangara firmware remains available in the repository.
-- A real LVGL/Lua desktop simulator is working.
-- Desktop hardware mocks and Jellyfin test fixtures are present.
-- The simulator can load the current Jellyfin library from the sync backend.
-- Album artwork can be prefetched for desktop testing.
+```text
+0f8765d4  Stabilize Jellyfin library UI and sorting
+e6cfa659  Fix Tangara library navigation and simulator parity
+e0a82fc2  Cache Tangara local library index
+61312be7  Measure Tangara local library scaling
+```
 
-### Library and playlists
+The commit containing this file adds verified top-level Tracks virtualization and the updated handoff.
 
-- Modern dark Local Library and Playlists screens are implemented.
-- Artists, Albums, Tracks, Favorites, normal playlists, and playlist contents use the shared dark list renderer.
-- Playlist tracks show the track’s album artwork rather than reusing playlist artwork.
-- Favorites uses a native star on a pure-black artwork tile.
-- Individual artist pages no longer show a Sort row.
-- Returning from an album, artist, track, or playlist subsection preserves the parent selection and does not sweep through the list.
-- Returning from an individual artist page returns directly to the selected artist.
-- Text alignment, scrolling labels, count badges, and dynamic Sort badges are stable.
+## 4. Verified Local Library behavior
 
-### Sorting
+The following has been confirmed interactively:
 
-- Artists use one direct Sort row that toggles `A-Z` and `Z-A`.
-- Other sortable screens expose:
+- Dark Artists, Albums, Tracks, Playlists, Favorites, and collection screens work.
+- Fresh entry selects the first media row with Sort above the viewport.
+- One upward movement reveals Sort.
+- Artists directly toggle `A-Z` and `Z-A`.
+- Other sortable screens support:
   - Alphabetical
   - Recently Added
-- Highlighting a method changes the pending method.
-- Enter toggles only that method’s direction:
-  - `A-Z` / `Z-A`
-  - `NEW` / `OLD`
-- Moving between methods retains each method’s independent direction.
-- Back/Escape applies the highlighted method and closes the popup.
-- Opening the popup no longer scrolls the background list.
-- Sort settings persist independently by screen.
+- Each method retains its own direction.
+- Closing Sort applies the selected method.
+- Changing Sort on the virtual Tracks screen resets to logical result 1.
+- The first and second moves below Sort select logical results 1 and 2 without skipping.
+- Returning from artist detail restores the exact selected artist.
+- Returning from a track after sorting restores that selected track.
+- Individual artist pages do not show Sort.
+- Opening Sort does not move the background list.
+- Playlist songs use album artwork.
+- Favorites has an acceptable star tile on pure black.
+- Text alignment, marquee behavior, badges, and focus restoration are stable.
 
-### Shared UI lifecycle
+## 5. Interactive simulator launch
 
-- Marquee rendering is shared across Jellyfin list screens.
-- The marquee scheduler uses a retained timer rather than disposable timers that could be finalized twice.
-- The prior simulator crash in `luavgl_timer_delete` was resolved.
-- Repeated screen opening and Sort-popup lifecycle tests pass.
+Use the custom Jellyfin launcher, not `stock.lua` or `ui.lua`:
 
-### Backend and sync foundation
+```bash
+cd ~/tangara-fw; pkill -x tangara-sim 2>/dev/null || true; TANGARA_SIM_SERVER_URL=http://100.99.105.21:8788 TANGARA_SIM_DEVICE_ID=tangara-sim-001 ./desktop-sim/build/tangara-sim desktop-sim/jellyfin_library.lua
+```
 
-The repository already contains work for:
+Notes:
 
-- Jellyfin device/account linking.
-- Jellyfin Quick Connect controller.
-- JSON POST and PUT support.
-- Per-device sync preferences.
-- Favorites and playlist source selection.
-- Bidirectional Jellyfin library operations.
-- Date-created metadata and Recently Added sorting.
-- Device-specific manifest/download/reconcile flow.
-- Local index generation and local library views.
+- `desktop-sim/ui.lua` is only a small smoke-test screen.
+- `desktop-sim/stock.lua` opens Tangara’s original gray stock menu.
+- Automated test scripts open and close immediately.
+- The custom launcher above is the visual test target used for the verified Jellyfin UI.
 
-## 3. Known unresolved issue
+## 6. Shared defects that were fixed
 
-### Fresh entry still shows the Sort row
+### Luavgl vertical scrolling
 
-Desired behavior:
+The shared Lua binding for:
 
-- When entering a sortable screen for the first time, the first media row should be selected and positioned at the top of the viewport.
-- The Sort row should exist directly above it and require one upward wheel movement to reveal.
+```lua
+object:scroll_to { y = value }
+```
 
-Current behavior:
+incorrectly called `lv_obj_scroll_to_x()`.
 
-- On fresh entry, the first media row is selected, but the Sort row remains visible.
-- After entering a subsection and returning, the same screen behaves correctly: the first/previous row is positioned normally and Sort is above the viewport.
+It now calls `lv_obj_scroll_to_y()`. This shared source is used by both Tangara and the simulator.
 
-This is the only accepted unresolved regression in the current checkpoint.
+### Native Lua screen resume ordering
 
-### Do not repeat these failed approaches
+Tangara previously called the parent Lua screen’s `on_show()` before restoring that screen’s Luavgl root and focus group.
 
-Several experiments were reverted because they either did nothing or introduced navigation regressions:
+The corrected order is:
 
-- Depending on a `SCREEN_LOADED` flag. In the simulator logs, it stayed false.
-- Re-running fresh-entry positioning whenever a parent screen resumed.
-  - This caused visible list sweeps on return.
-- Rebuilding the LVGL focus group while recording focus.
-  - This could replace the saved artist with the final row.
-- Invisible focus-anchor experiments.
-  - They did not change the initial viewport.
-- Calling `update_layout()`.
-  - That method is not exposed by this Lua binding.
-- Calling `scroll_to_y()`.
-  - That method is not exposed by this Lua binding.
-- A detached LVGL smoke test that created objects without loading the test screen.
-  - It could not validate real scrolling.
-- Timer probes that were blocked by the same invalid lifecycle condition.
+```text
+restore screen root
+restore screen focus group
+run on_show
+attach input to the active group
+```
 
-The stable source deliberately restores the pre-regression `jellyfin_list_ui.lua`.
+The firmware-parity simulator mirrors this order.
 
-### Recommended next approach
+### Explicit selection restoration
 
-Do not patch the current return/restoration path.
+Selection is now tracked by stable media IDs rather than relying only on whichever LVGL object happens to emit focus events.
 
-Build a minimal simulator test that loads an actual screen and proves the exact supported scrolling primitive before integrating it. A structural solution may be safer than another lifecycle timer, such as making the Sort row an intentional row above the initial viewport rather than trying to correct the viewport after the screen appears.
+Selection updates are suppressed while a focus group is being rebuilt so automatic LVGL focus cannot overwrite the saved item.
 
-## 4. Settings work that still needs to be built
+## 7. Simulator parity infrastructure
 
-A real top-level **Settings** section is still required. Planned sections:
+The repository contains:
+
+```text
+desktop-sim/firmware_backstack.c
+desktop-sim/firmware_backstack.h
+desktop-sim/firmware_backstack_test.lua
+desktop-sim/jellyfin_firmware_lifecycle_characterization_test.lua
+desktop-sim/luavgl_scroll_binding_test.lua
+desktop-sim/FIRMWARE_PARITY.md
+```
+
+These tests validate:
+
+- Separate root/content objects
+- Separate focus groups per screen
+- Firmware-order show/hide behavior
+- Native-style pop/resume behavior
+- Correct vertical scroll binding
+- Fresh-entry Sort positioning
+- Stable middle-item restoration
+
+The ordinary interactive launcher still uses the existing desktop integration. The parity backstack is currently strongest as an automated lifecycle test target.
+
+## 8. Local Library index cache
+
+`jellyfin_local_index.lua` now caches one normalized in-memory index.
+
+Repeated Local Library screen openings no longer:
+
+- Reread the manifest
+- Rebuild Artists, Albums, and Tracks
+- Probe every downloaded media file
+
+The cache is invalidated when:
+
+- A new manifest is saved
+- Sync changes local files
+- A generation change is explicitly recorded
+
+Relevant files:
+
+```text
+lua/jellyfin_local_index.lua
+lua/jellyfin_local_index_generation.lua
+lua/sync_apply.lua
+lua/sync_manifest_cache.lua
+```
+
+Relevant tests:
+
+```text
+desktop-sim/jellyfin_local_index_cache_test.lua
+desktop-sim/sync_apply_index_invalidation_test.lua
+desktop-sim/sync_manifest_cache_invalidation_test.lua
+```
+
+## 9. Tracks virtualization
+
+Only the top-level Tracks screen is virtualized so far.
+
+It uses:
+
+```text
+7 reusable media rows
+```
+
+instead of one LVGL row per track.
+
+Relevant files:
+
+```text
+lua/jellyfin_virtual_track_list.lua
+lua/jellyfin_list_ui.lua
+lua/jellyfin_local_library.lua
+desktop-sim/jellyfin_virtual_track_list_test.lua
+desktop-sim/local_library_virtualized_case.lua
+desktop-sim/run_local_library_virtualized.sh
+desktop-sim/TRACK_VIRTUALIZATION.md
+```
+
+Virtualized behavior verified:
+
+- Row recycling
+- Forward and backward navigation
+- Activation
+- Long press
+- Sorting
+- Sort-to-first-result transition
+- No skipped results below Sort
+- Child-screen restoration
+- Constant row-pool size
+
+Artists, Albums, Playlists, Favorites, and detail screens still use eager rows.
+
+## 10. Performance measurements
+
+### Original eager Tracks screen
+
+| Tracks | Create time | Extra LVGL objects | Lua UI memory |
+|---:|---:|---:|---:|
+| 118 | 65.435 ms | 858 | 738.2 KB |
+| 500 | 290.727 ms | 3,532 | 3,107.6 KB |
+| 1,000 | 752.206 ms | 7,032 | 6,139.2 KB |
+| 5,000 | 18,991.899 ms | 35,032 | 32,023.0 KB |
+
+### Virtualized Tracks screen
+
+| Tracks | Create time | Extra LVGL objects | Lua UI memory |
+|---:|---:|---:|---:|
+| 118 | 5.870 ms | 81 | 66.2 KB |
+| 500 | 11.755 ms | 81 | 104.2 KB |
+| 1,000 | 22.999 ms | 81 | 80.2 KB |
+| 5,000 | 118.229 ms | 81 | 316.8 KB |
+
+At 5,000 tracks, creation improved from roughly 19 seconds to 118 ms. LVGL object count became constant.
+
+Desktop RSS is not directly equivalent to ESP32 memory. LVGL object count, Lua allocations, construction time, and hardware heap measurements are the more useful embedded indicators.
+
+## 11. Tests to preserve
+
+```bash
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_virtual_track_list_test.lua
+./desktop-sim/run_local_library_virtualized.sh
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_local_index_cache_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/sync_apply_index_invalidation_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/sync_manifest_cache_invalidation_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_local_index_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_firmware_lifecycle_characterization_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/luavgl_scroll_binding_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/firmware_backstack_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_sort_modes_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_sort_persistence_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_ui_lifecycle_test.lua
+./desktop-sim/build/tangara-sim desktop-sim/jellyfin_sort_interaction_test.lua
+```
+
+## 12. Remaining optimization work
+
+### Virtualize other potentially large screens
+
+The reusable-row architecture should be generalized carefully to:
+
+1. Albums
+2. Artists
+3. Playlist/Favorites contents
+4. Other large collections
+
+Do one screen type at a time and preserve its specific visual layout.
+
+### Shared status service
+
+Each Jellyfin screen can still create a status/clock timer. Replace per-screen polling with one shared service whose visible views subscribe and hidden views unsubscribe.
+
+### Sort persistence
+
+Sort popup navigation can still write preference state more often than necessary.
+
+Preferred design:
+
+- Copy applied Sort state into a draft
+- Change the draft while the popup is open
+- Apply and persist once when closing
+
+### Playlist view cache
+
+The Jellyfin playlist/favorites working view still performs JSON loading, copying, operation projection, and reindexing more often than ideal. Add explicit caching and invalidation similar to the Local Library index.
+
+### Background sync work
+
+Some sync polling and filesystem/JSON work still occurs from LVGL timer callbacks. Long-term, move heavier work to a low-priority worker and deliver compact results to the UI.
+
+## 13. Fonts and international metadata
+
+This remains an important unfinished requirement.
+
+The simulator and Tangara must load the exact same compiled font artifacts.
+
+Minimum desired metadata coverage:
+
+- Spanish and Latin accents
+- Polish and Latin Extended
+- Cyrillic
+- Greek
+- Japanese
+- Simplified and Traditional Chinese
+- Korean
+
+Recommended architecture:
+
+- Built-in Latin Extended core font
+- Optional regional font packs
+- Backend-generated library-specific glyph subsets for CJK efficiency
+- LVGL fallback chain
+- Automated multilingual test screen
+
+Complex scripts such as Arabic, Hebrew, and Indic scripts also require shaping and bidirectional support, not only glyph files.
+
+Do not use desktop system fonts as proof that Tangara supports a glyph.
+
+## 14. Settings and clock work
+
+A real top-level Settings section is still required:
 
 - Playback
 - Audio
 - Display
+- Language and Text
 - Wi-Fi
 - Jellyfin
 - Sync
@@ -134,178 +332,105 @@ A real top-level **Settings** section is still required. Planned sections:
 - Updates
 - About
 
-### Jellyfin settings
-
-Move production configuration out of hardcoded simulator assumptions and expose:
-
-- Sync server URL
-- Device identity/name
-- Link/account status
-- Start or repeat Jellyfin linking
-- Linked Jellyfin user
-- Connection test/status
-- Unlink/reset controls
-- Last successful backend contact
-- Clear error states
-
-The design remains one Jellyfin server and one account per Tangara.
-
-Existing backend flow to preserve:
-
-- `POST /devices/<device-id>/link/start`
-- `GET /devices/<device-id>/link/status`
-- `GET /devices/<device-id>/sync/sources`
-- `GET /devices/<device-id>/sync/preferences`
-- `PUT /devices/<device-id>/sync/preferences`
-
-### Sync settings
-
-The Settings section should expose:
-
-- Manual, automatic, or charging-only sync
-- Favorites sync toggle
-- Selective playlist sync
-- Storage limit
-- Remove-from-device behavior
-- Wi-Fi-off-after-sync behavior
-- Retry/cancellation controls
-- Sync and download status
-- Last sync time and last error
-
-The sync and Streamrip/Add Music screens should include a storage visualization so requests cannot silently exceed device capacity.
-
-## 5. Clock and status-bar work to redo
-
-The clock is visually present in the status bar, but its backend is still basic:
-
-```lua
-os.date("%H:%M")
-```
-
-It does not yet provide reliable:
+The status-bar clock currently relies on basic local time formatting. It still needs:
 
 - Network time synchronization
-- Timezone selection
-- Daylight-saving handling
-- Time retention across restarts or offline periods
-- User-selectable 12-hour or 24-hour display
+- Timezone
+- DST
+- 12/24-hour preference
+- Offline retained time
+- One shared time service
 - Settings integration
 
-Required work:
+Jellyfin Settings should expose:
 
-1. Add a time service/backend rather than formatting the host/device clock directly in each screen.
-2. Synchronize time after Wi-Fi becomes available.
-3. Store timezone and display format in Settings.
-4. Apply DST through a timezone-aware source rather than a fixed offset.
-5. Keep a usable cached time when offline.
-6. Let the status bar subscribe to one shared clock source.
-7. Decide whether clock visibility belongs in Display settings.
+- Backend URL
+- Device identity/name
+- Link status
+- Link/relink flow
+- Linked user
+- Connection test
+- Last backend contact
+- Unlink/reset
 
-The current status-bar visuals can remain, but the clock source and settings path need to be redone cleanly.
+## 15. Sync work still open
 
-## 6. Sync/download work still open
-
-The intended sync sequence remains:
-
-1. Connect to known Wi-Fi.
-2. Fetch the device manifest.
-3. Compare manifest data with local storage/index.
-4. Check available space.
-5. Queue missing or changed files.
-6. Download to temporary `.part` names.
-7. Resume interrupted downloads.
-8. Verify completed files.
-9. Atomically rename completed files.
-10. Rebuild/update the local library.
-11. Reconcile removals and operations.
-12. Turn Wi-Fi off when finished, if enabled.
-
-Remaining implementation/polish:
-
-- Robust `.part` file handling
-- Download cancellation
-- Retry limits and backoff
-- Free-space checks before and during sync
-- Storage-limit enforcement
-- Bulk remove-from-device rules
-- Automatic versus manual versus charging-only sync
-- Clear per-device queue and progress UI
-- Pause or reduce heavy sync work during high-resolution playback
-- Useful offline, timeout, and server-error states
-- Recovery testing after power loss or network interruption
-
-## 7. UI work still open
-
-- Finish the top-level Settings screens and navigation.
-- Finish production backend configuration inside Settings.
-- Finish the clock/time service.
-- Add first-boot Wi-Fi and Jellyfin setup flow.
-- Add Sync, Add Music/Streamrip, Downloads, Storage, and error-state screens.
-- Continue Now Playing polish toward the Finamp/Spotify-inspired target, including the blurred album-cover background.
-- Confirm queue behavior and navigation from Now Playing.
-- Test long library lists for performance and memory use.
-- Add useful loading states instead of blank screens.
-- Keep wheel behavior, focus restoration, and Back behavior consistent.
-- The current Favorites star is acceptable but may be revisited later as low-priority polish.
-
-## 8. Stable core hashes at this checkpoint
-
-These hashes identify the confirmed source state before committing:
+The intended sync sequence is:
 
 ```text
-90eee082025301cc8820a6b35a6753f484e19cda5a00af778a238bd12b6c33ca  lua/jellyfin_list_ui.lua
-f614fcb3691a74f0b7811b4f7b6bf0669bde059ea5a1f23c1a80995c74f86187  lua/jellyfin_local_library.lua
-616a9cb9bb878c4ce7aa4a8227c279bc25cd5fde394160ad0606222d52bb1f98  lua/jellyfin_library.lua
-eb0ddc72ce5ce8f01632d5b315deb22aa9861f8dc3e5840dce8fee5b3464fec5  lua/jellyfin_sort.lua
-8dc333dd3358061c50866a403d4fc5b3b5d75aaeec09553c39bfe66b90013e1a  lua/jellyfin_marquee.lua
-dc24b099b4ba4204e7240fe7e5b3e321a448a3715360d0809d95109dd7357f18  desktop-sim/jellyfin_ui_lifecycle_test.lua
-f25d733b9f6e54592ff0ba1b4a75bb570c7be9f49355512540817604a1948110  desktop-sim/jellyfin_sort_interaction_test.lua
+connect Wi-Fi
+fetch device manifest
+compare local state
+check storage
+download to .part
+resume interrupted files
+verify
+atomically rename
+update local index
+reconcile removals and operations
+turn Wi-Fi off when configured
 ```
 
-## 9. Tests to run before future UI commits
+Remaining work includes:
+
+- Robust partial-file handling
+- Cancellation
+- Retry/backoff
+- Storage-limit enforcement
+- Manual/automatic/charging-only modes
+- Download queue and progress UI
+- Playback-aware throttling
+- Offline and server-error states
+- Power-loss recovery testing
+
+## 16. Hardware validation still needed
+
+The desktop simulator proves UI logic but not:
+
+- PSRAM fragmentation
+- Internal heap pressure
+- SD-card contention
+- Audio underruns
+- Wi-Fi/audio interaction
+- Physical wheel behavior
+- Real font storage and decoding
+
+Before deeper feature work, run a complete ESP-IDF build:
 
 ```bash
-luac -p \
-  lua/jellyfin_marquee.lua \
-  lua/jellyfin_list_ui.lua \
-  lua/jellyfin_sort.lua \
-  lua/jellyfin_local_index.lua \
-  lua/jellyfin_local_library.lua \
-  lua/jellyfin_library.lua \
-  desktop-sim/jellyfin_sort_modes_test.lua \
-  desktop-sim/jellyfin_sort_persistence_test.lua \
-  desktop-sim/jellyfin_ui_lifecycle_test.lua \
-  desktop-sim/jellyfin_sort_interaction_test.lua \
-  desktop-sim/jellyfin_local_index_test.lua
-
-python3 -m py_compile \
-  desktop-sim/prefetch_local_album_artwork.py \
-  server/tangara-sync/*.py
-
-./desktop-sim/build/tangara-sim \
-  desktop-sim/jellyfin_sort_modes_test.lua
-
-./desktop-sim/build/tangara-sim \
-  desktop-sim/jellyfin_sort_persistence_test.lua
-
-./desktop-sim/build/tangara-sim \
-  desktop-sim/jellyfin_ui_lifecycle_test.lua
-
-./desktop-sim/build/tangara-sim \
-  desktop-sim/jellyfin_sort_interaction_test.lua
-
-./desktop-sim/build/tangara-sim \
-  desktop-sim/jellyfin_local_index_test.lua
-
-git diff --check
+cd ~/tangara-fw; git submodule update --init --recursive; . ./.env; idf.py build
 ```
 
-## 10. Next-session starting point
+Later hardware profiling should record:
 
-1. Read this handoff before changing UI lifecycle code.
-2. Confirm the branch and clean working tree.
-3. Launch the current simulator and verify the checkpoint behavior.
-4. Treat fresh-entry Sort visibility as a separate isolated task.
-5. Do not modify return/restoration behavior while solving fresh entry.
-6. After that isolated fix, build Settings and the shared clock/time backend.
-7. Continue sync/storage/error-state work only after Settings owns the relevant configuration.
+- Free and minimum internal heap
+- Largest free internal block
+- PSRAM free/minimum/largest block
+- Task stack high-water marks
+- Audio underruns
+- SD read latency
+- UI callback time
+- Sync activity during playback
+
+Do not flash unless the device is connected and flashing is intentionally requested.
+
+## 17. Recommended next task
+
+After confirming the firmware build:
+
+1. Generalize the virtual row engine for Albums while preserving its existing artwork and subtitle layout.
+2. Benchmark 100, 500, 1,000, and 5,000 albums.
+3. Verify fresh Sort behavior, sorting, activation, and restoration interactively.
+4. Commit before moving to Artists or Playlists.
+
+A shared status/clock service is also a reasonable next task if development shifts from Local Library scaling to Settings.
+
+## 18. New-chat workflow
+
+In a new conversation:
+
+1. Upload this file.
+2. Upload the generated `tangara-next-chat-<commit>.tar.gz`.
+3. Paste `NEW_CHAT_STARTER_PROMPT.txt`.
+4. Ask the assistant to read the handoff and inspect the archive before proposing changes.
+5. Do not rely on conversation memory or old patch scripts as source of truth.

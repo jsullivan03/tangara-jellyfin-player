@@ -81,6 +81,8 @@ local function update_model_selection(
 
     if model.focused and
         model.owner and
+        not model.owner
+            .suppress_selection_tracking and
         model.selection_id then
         model.owner.selected_item_id =
             model.selection_id
@@ -96,6 +98,20 @@ local function selected_row_object(self)
 
     if not selected_id then
         return nil
+    end
+
+    if self and
+        type(
+            self.selection_object_for_id
+        ) == "function" then
+        local object =
+            self.selection_object_for_id(
+                selected_id
+            )
+
+        if object then
+            return object
+        end
     end
 
     for _, model in ipairs(
@@ -394,6 +410,11 @@ local function attach_row_events(model)
                 true
             )
             start_marquees(model)
+
+            if type(model.on_focus) ==
+                    "function" then
+                model.on_focus()
+            end
         end
     )
 

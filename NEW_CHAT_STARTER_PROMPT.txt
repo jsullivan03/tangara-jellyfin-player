@@ -1,0 +1,28 @@
+I am continuing a Tangara ESP32 Jellyfin music-player firmware project.
+
+I uploaded:
+1. `TANGARA_PROJECT_HANDOFF.md`
+2. A `tangara-next-chat-<commit>.tar.gz` source archive
+
+Treat those files as the source of truth. Read the handoff first, then inspect the exact source archive before proposing or generating any patch.
+
+Current verified checkpoint includes:
+- Shared Luavgl vertical-scroll fix
+- Native Tangara/simulator screen lifecycle parity fixes
+- Stable media-ID selection restoration
+- Local Library index caching
+- Top-level Tracks virtualization with seven reusable LVGL rows
+- Correct Sort reset with no skipped results
+- Interactive simulator verification
+- Scaling benchmarks through 5,000 tracks
+
+Working rules:
+- One focused change at a time
+- Do not rerun old patches
+- Use rollback-guarded scripts for substantial edits
+- Provide paste-safe terminal commands
+- Do not commit until automated tests and the interactive simulator both pass
+- Do not claim a visual behavior is fixed from a headless test alone
+- Do not flash hardware unless explicitly requested
+
+First, summarize the current checkpoint and the recommended next task from the handoff. Do not modify code yet.
