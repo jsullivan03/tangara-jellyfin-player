@@ -9,6 +9,8 @@ local jellyfin_playback =
     require("jellyfin_playback")
 local jellyfin_sort =
     require("jellyfin_sort")
+local jellyfin_virtual_list =
+    require("jellyfin_virtual_list")
 local jellyfin_virtual_track_list =
     require("jellyfin_virtual_track_list")
 local screen = require("screen")
@@ -607,28 +609,9 @@ AlbumsScreen =
                 return
             end
 
-            self.media_rows = {}
-
-            for _, album in ipairs(
-                albums
-            ) do
-                local row =
-                    jellyfin_list_ui
-                        .add_album_row(
-                            self,
-                            album,
-                            artwork_path(album),
-                            function()
-                            end
-                        )
-
-                table.insert(
-                    self.media_rows,
-                    row
-                )
-            end
-
-            function self.apply_sort()
+            function self.apply_sort(
+                reset_selection
+            )
                 local sorted =
                     jellyfin_sort.sort(
                         "albums",
@@ -636,29 +619,71 @@ AlbumsScreen =
                         "albums"
                     )
 
-                for index, album in ipairs(
-                    sorted
-                ) do
-                    local album_copy =
-                        album
-
-                    self.media_rows[index]
-                        :update(
-                            album_copy,
-                            artwork_path(
-                                album_copy
-                            ),
-                            function()
-                                backstack.push(
-                                    AlbumScreen:new {
-                                        title =
-                                            album_copy.name,
-                                        album_key =
-                                            album_copy.key,
-                                    }
-                                )
-                            end
+                if self.virtual_album_list then
+                    self.virtual_album_list
+                        :set_items(
+                            sorted,
+                            {
+                                reset_selection =
+                                    reset_selection ==
+                                    true,
+                            }
                         )
+                else
+                    self.virtual_album_list =
+                        jellyfin_virtual_list
+                            .create(
+                                self,
+                                sorted,
+                                {
+                                    item_label =
+                                        "album",
+                                    item_plural =
+                                        "albums",
+                                    create_row =
+                                        function(
+                                            owner,
+                                            album
+                                        )
+                                            return
+                                                jellyfin_list_ui
+                                                    .add_album_row(
+                                                        owner,
+                                                        album,
+                                                        artwork_path(
+                                                            album
+                                                        ),
+                                                        nil
+                                                    )
+                                        end,
+                                    update_row =
+                                        function(
+                                            model,
+                                            album,
+                                            handlers
+                                        )
+                                            model:update(
+                                                album,
+                                                artwork_path(
+                                                    album
+                                                ),
+                                                handlers
+                                                    .on_click
+                                            )
+                                        end,
+                                    on_click =
+                                        function(album)
+                                            backstack.push(
+                                                AlbumScreen:new {
+                                                    title =
+                                                        album.name,
+                                                    album_key =
+                                                        album.key,
+                                                }
+                                            )
+                                        end,
+                                }
+                            )
                 end
 
                 set_first_media_row(
