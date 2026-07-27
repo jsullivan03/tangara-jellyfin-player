@@ -1,8 +1,18 @@
 local device = require("device")
 local sync_manifest_cache =
     require("sync_manifest_cache")
+local index_generation =
+    require("jellyfin_local_index_generation")
 
 local M = {}
+
+local cached_generation = -1
+local cached_root = nil
+local cached_library = nil
+local cached_error = nil
+local cache_hits = 0
+local cache_builds = 0
+local cache_file_checks = 0
 
 local function copy_value(value)
     if type(value) ~= "table" then
@@ -548,15 +558,40 @@ function M.from_manifest(
     }
 end
 
-function M.load()
-    local manifest, manifest_error =
-        sync_manifest_cache.load()
+local function clear_cache()
+    cached_generation = -1
+    cached_root = nil
+    cached_library = nil
+    cached_error = nil
+end
 
-    if not manifest then
-        return nil,
-            manifest_error or
-            "download manifest is unavailable"
-    end
+function M.invalidate(reason)
+    clear_cache()
+
+    return index_generation.invalidate(reason)
+end
+
+function M.cache_stats()
+    local generation =
+        index_generation.snapshot()
+
+    return {
+        hits = cache_hits,
+        builds = cache_builds,
+        file_checks = cache_file_checks,
+        generation = generation.generation,
+        last_invalidation =
+            generation.last_reason,
+        cached =
+            cached_generation ==
+                generation.generation,
+        cached_root = cached_root,
+    }
+end
+
+function M.load()
+    local generation =
+        index_generation.current()
 
     local root, root_error =
         device.storage_root()
@@ -568,11 +603,50 @@ function M.load()
             "storage root is unavailable"
     end
 
-    return M.from_manifest(
-        manifest,
-        root,
-        file_exists
-    )
+    root = root:gsub("/+$", "")
+
+    if cached_generation == generation and
+        cached_root == root then
+        cache_hits = cache_hits + 1
+
+        return cached_library,
+            cached_error
+    end
+
+    clear_cache()
+
+    local manifest, manifest_error =
+        sync_manifest_cache.load()
+
+    local library
+    local library_error
+
+    if manifest then
+        library, library_error =
+            M.from_manifest(
+                manifest,
+                root,
+                function(path)
+                    cache_file_checks =
+                        cache_file_checks + 1
+
+                    return file_exists(path)
+                end
+            )
+    else
+        library_error =
+            manifest_error or
+            "download manifest is unavailable"
+    end
+
+    cache_builds = cache_builds + 1
+    cached_generation = generation
+    cached_root = root
+    cached_library = library
+    cached_error = library_error
+
+    return cached_library,
+        cached_error
 end
 
 return M

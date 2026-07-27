@@ -1,6 +1,8 @@
 local device = require("device")
 local device_identity = require("device_identity")
 local sync_manifest = require("sync_manifest")
+local index_generation =
+    require("jellyfin_local_index_generation")
 
 local M = {}
 
@@ -157,6 +159,10 @@ function M.save(text)
     end
 
     os.remove(paths.backup)
+
+    index_generation.invalidate(
+        "manifest cache saved"
+    )
 
     return true
 end

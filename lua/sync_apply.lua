@@ -1,4 +1,6 @@
 local sync_download = require("sync_download")
+local index_generation =
+    require("jellyfin_local_index_generation")
 
 local M = {}
 
@@ -26,6 +28,12 @@ local function copy_actions(actions)
 end
 
 local function finish(ok, error_message, download_result)
+    if session.changed_local_files then
+        index_generation.invalidate(
+            "sync apply changed local files"
+        )
+    end
+
     local result = {
         ok = ok,
         error = error_message,
@@ -105,6 +113,7 @@ function M.start(plan)
         total = #actions,
         current = nil,
         artwork_failed = 0,
+        changed_local_files = false,
     }
 
     last_result = nil
@@ -213,6 +222,8 @@ function M.poll()
             download_result
         )
     end
+
+    session.changed_local_files = true
 
     if not download_result.inventory_saved then
         return finish(
