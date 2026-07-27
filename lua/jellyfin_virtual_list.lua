@@ -346,41 +346,35 @@ function M.create(
         return model.object
     end
 
-    function controller:on_row_focused(model)
-        if self.rebalancing or
-            screen.suppress_selection_tracking then
-            return
-        end
+    function controller:rebind_focused_index(
+        logical_index,
+        next_start,
+        focused_model
+    )
+        local previous_y = nil
 
-        local logical_index =
-            model.virtual_index
-
-        if type(logical_index) ~=
-                "number" then
-            return
-        end
-
-        self.selected_index =
-            logical_index
-
-        local selected =
-            self.items[logical_index]
-        local selected_id =
-            item_id(selected)
-
-        if selected_id then
-            screen.selected_item_id =
-                selected_id
-        end
-
-        local next_start =
-            self:window_for(
-                logical_index
+        if focused_model and
+            focused_model.object then
+            pcall(
+                function()
+                    focused_model.object
+                        :scroll_to_view(false)
+                end
             )
 
-        if next_start ==
-                self.window_start then
-            return
+            local ok, coordinates =
+                pcall(
+                    function()
+                        return
+                            focused_model.object
+                                :get_coords()
+                    end
+                )
+
+            if ok and coordinates then
+                previous_y =
+                    coordinates.y1
+            end
         end
 
         self.rebalancing = true
@@ -401,11 +395,122 @@ function M.create(
             focus_object(
                 next_model.object
             )
+
+            if previous_y and
+                screen.list then
+                pcall(
+                    function()
+                        local coordinates =
+                            next_model.object
+                                :get_coords()
+                        local delta =
+                            previous_y -
+                            coordinates.y1
+
+                        if delta ~= 0 then
+                            screen.list
+                                :scroll_by_bounded(
+                                    0,
+                                    delta,
+                                    false
+                                )
+                        end
+                    end
+                )
+            end
         end
 
         screen.suppress_selection_tracking =
             previous_suppression
         self.rebalancing = false
+
+        return next_model
+    end
+
+    function controller:on_row_focused(model)
+        if self.rebalancing or
+            screen.suppress_selection_tracking then
+            return
+        end
+
+        local logical_index =
+            model.virtual_index
+
+        if type(logical_index) ~=
+                "number" then
+            return
+        end
+
+        local previous_index =
+            self.selected_index
+        local direction = 0
+
+        if logical_index > previous_index then
+            direction = 1
+        elseif logical_index < previous_index then
+            direction = -1
+        end
+
+        self.selected_index =
+            logical_index
+
+        local selected =
+            self.items[logical_index]
+        local selected_id =
+            item_id(selected)
+
+        if selected_id then
+            screen.selected_item_id =
+                selected_id
+        end
+
+        local selected_slot =
+            model.virtual_slot or
+            self:slot_for(
+                logical_index
+            )
+        local target_slot = nil
+
+        if direction > 0 and
+            selected_slot >
+                self.forward_slot then
+            target_slot =
+                self.forward_slot
+        elseif direction < 0 and
+            selected_slot <
+                self.backward_slot then
+            target_slot =
+                self.backward_slot
+        end
+
+        if not target_slot then
+            return
+        end
+
+        local maximum_start =
+            math.max(
+                1,
+                #self.items -
+                    #self.pool + 1
+            )
+        local next_start =
+            clamp(
+                logical_index -
+                    target_slot + 1,
+                1,
+                maximum_start
+            )
+
+        if next_start ==
+                self.window_start then
+            return
+        end
+
+        self:rebind_focused_index(
+            logical_index,
+            next_start,
+            model
+        )
 
         if selected_id then
             screen.selected_item_id =
@@ -471,6 +576,16 @@ function M.create(
         math.min(
             controller.anchor,
             pool_count
+        )
+    controller.backward_slot =
+        math.max(
+            1,
+            controller.anchor - 1
+        )
+    controller.forward_slot =
+        math.min(
+            pool_count,
+            controller.anchor + 1
         )
 
     screen.media_rows = {}
@@ -564,11 +679,18 @@ function M.create(
             controller.selected_index =
                 index
 
-            controller:bind_window(
-                controller:window_for(
-                    index
+            local slot =
+                controller:slot_for(index)
+
+            if slot < 1 or
+                slot >
+                    #controller.pool then
+                controller:bind_window(
+                    controller:window_for(
+                        index
+                    )
                 )
-            )
+            end
 
             local model =
                 controller:model_for_index(

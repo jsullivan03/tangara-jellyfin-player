@@ -265,7 +265,50 @@ assert(
     group:get_focused() ==
         selected_model.object
 )
+assert(
+    selected_model.virtual_slot ==
+        virtual.forward_slot,
+    "continued downward navigation should settle on the lower focus-band slot"
+)
 
+local downward_window_start =
+    virtual.window_start
+
+group:focus_prev()
+backstack.flush(2)
+
+assert(
+    virtual.selected_index == 24,
+    "reversing upward should select logical index 24, got " ..
+        tostring(virtual.selected_index)
+)
+assert(
+    virtual.window_start ==
+        downward_window_start,
+    "the first upward reversal should move focus within the visible window before recycling"
+)
+assert(
+    virtual:selected_model().virtual_slot ==
+        virtual.forward_slot - 1,
+    "the first upward reversal should move the highlight up one physical row"
+)
+
+group:focus_next()
+backstack.flush(2)
+
+assert(
+    virtual.selected_index == 25,
+    "returning downward should restore logical index 25, got " ..
+        tostring(virtual.selected_index)
+)
+assert(
+    virtual.window_start ==
+        downward_window_start,
+    "returning downward inside the focus band should not recycle the row pool"
+)
+
+selected_model =
+    assert(virtual:selected_model())
 selected_model.on_click()
 
 assert(
@@ -367,6 +410,47 @@ assert(
     tracks_screen.focus_group
         :get_focused() ==
         selected_model.object
+)
+assert(
+    selected_model.virtual_slot ==
+        virtual.backward_slot,
+    "child return should preserve the selected row at the upper focus-band slot"
+)
+
+local restored_window_start =
+    virtual.window_start
+
+tracks_screen.focus_group:focus_next()
+backstack.flush(2)
+
+assert(
+    virtual.selected_index == 16,
+    "the first downward move after child return should select logical index 16, got " ..
+        tostring(virtual.selected_index)
+)
+assert(
+    virtual.window_start ==
+        restored_window_start,
+    "the first downward move after child return should move the highlight before scrolling"
+)
+assert(
+    virtual:selected_model().virtual_slot ==
+        virtual.backward_slot + 1,
+    "the first downward move after child return should move the highlight down one physical row"
+)
+
+tracks_screen.focus_group:focus_prev()
+backstack.flush(2)
+
+assert(
+    virtual.selected_index == 15,
+    "returning upward should restore logical index 15, got " ..
+        tostring(virtual.selected_index)
+)
+assert(
+    virtual.window_start ==
+        restored_window_start,
+    "returning upward inside the focus band should not recycle the row pool"
 )
 
 tracks_screen.open_sort_menu()
