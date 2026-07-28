@@ -446,6 +446,14 @@ local core_jellyfin_playback =
 
 local original_play =
     core_jellyfin_playback.play
+local original_current =
+    core_jellyfin_playback.current
+local original_sync_position =
+    core_jellyfin_playback.sync_position
+local original_next =
+    core_jellyfin_playback.next
+local original_previous =
+    core_jellyfin_playback.previous
 
 local function shell_quote(value)
     return "'" ..
@@ -605,14 +613,20 @@ local function cache_track_artwork(track)
     item.artwork =
         item.artwork or {}
 
+    track.artwork =
+        track.artwork or {}
+
     if cover_ready then
-        item.artwork.cover =
-            "/" .. cover_path
+        local value = "/" .. cover_path
+        item.artwork.cover = value
+        track.artwork.cover = value
     end
 
     if background_ready then
-        item.artwork.background =
+        local value =
             "/" .. background_path
+        item.artwork.background = value
+        track.artwork.background = value
     end
 
     if not cover_ready and
@@ -649,6 +663,43 @@ local function cache_track_artwork(track)
     return true
 end
 
+local function refreshed_active(
+    active,
+    download
+)
+    if not active or
+        type(active.track) ~= "table" then
+        return active
+    end
+
+    if download then
+        cache_track_artwork(
+            active.track
+        )
+    end
+
+    local current_manifest =
+        manifest_cache.load()
+
+    if current_manifest then
+        for _, item in ipairs(
+            current_manifest.items or {}
+        ) do
+            if item.id == active.track.id or
+                item.jellyfin_id ==
+                    active.track.id then
+                active.item = item
+                active.track.artwork =
+                    item.artwork or
+                    active.track.artwork
+                break
+            end
+        end
+    end
+
+    return active
+end
+
 function core_jellyfin_playback.play(
     track,
     context
@@ -658,6 +709,38 @@ function core_jellyfin_playback.play(
     return original_play(
         track,
         context
+    )
+end
+
+function core_jellyfin_playback.current()
+    return refreshed_active(
+        original_current(),
+        false
+    )
+end
+
+function core_jellyfin_playback.sync_position(
+    position
+)
+    return refreshed_active(
+        original_sync_position(
+            position
+        ),
+        true
+    )
+end
+
+function core_jellyfin_playback.next()
+    return refreshed_active(
+        original_next(),
+        true
+    )
+end
+
+function core_jellyfin_playback.previous()
+    return refreshed_active(
+        original_previous(),
+        true
     )
 end
 

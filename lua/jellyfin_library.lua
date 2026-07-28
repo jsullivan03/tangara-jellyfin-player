@@ -393,6 +393,7 @@ CollectionScreen =
                         entry_id =
                             track_copy
                                 .playlist_entry_id,
+                        queue_tracks = sorted,
                     }
 
                     self.media_rows[index]

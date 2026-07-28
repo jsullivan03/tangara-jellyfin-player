@@ -7,6 +7,7 @@ local jellyfin_playback =
     require("jellyfin_playback")
 local playback = require("playback")
 local power = require("power")
+local queue = require("queue")
 local premium =
     require("premium_now_playing_screen")
 local screen = require("screen")
@@ -16,6 +17,7 @@ local sync_library_view =
 local sync_operation_queue =
     require("sync_operation_queue")
 local sync_runtime = require("sync_runtime")
+local volume = require("volume")
 
 local function format_time(value)
     value =
@@ -73,6 +75,27 @@ local function charging_state()
         state == "full_charge"
 end
 
+local function set_sim_transport_mode(enabled)
+    local callback =
+        rawget(
+            _G,
+            "tangara_sim_set_transport_mode"
+        )
+
+    if type(callback) == "function" then
+        pcall(callback, enabled == true)
+    end
+end
+
+local function usable_artwork(value)
+    return type(value) == "string" and
+        value ~= "" and
+        value ~=
+            "//lua/img/cover_placeholder.png" and
+        value ~=
+            "//lua/img/background_placeholder.png"
+end
+
 local function artwork_value(
     active,
     name,
@@ -88,18 +111,60 @@ local function artwork_value(
         active.track and
         active.track.artwork
 
-    if type(item_artwork) == "table" and
-        type(item_artwork[name]) ==
-            "string" and
-        item_artwork[name] ~= "" then
-        return item_artwork[name]
+    local candidates
+
+    if name == "background" then
+        candidates = {
+            {item_artwork, "background"},
+            {track_artwork, "background"},
+            {item_artwork, "cover"},
+            {track_artwork, "cover"},
+            {item_artwork, "thumbnail"},
+            {track_artwork, "thumbnail"},
+            {track_artwork,
+                "album_thumbnail"},
+        }
+    else
+        candidates = {
+            {item_artwork, "cover"},
+            {track_artwork, "cover"},
+            {item_artwork, "thumbnail"},
+            {track_artwork, "thumbnail"},
+            {track_artwork,
+                "album_thumbnail"},
+            {track_artwork,
+                "playlist_thumbnail"},
+        }
     end
 
-    if type(track_artwork) == "table" and
-        type(track_artwork[name]) ==
-            "string" and
-        track_artwork[name] ~= "" then
-        return track_artwork[name]
+    for _, candidate in ipairs(
+        candidates
+    ) do
+        local artwork = candidate[1]
+        local key = candidate[2]
+        local value =
+            type(artwork) == "table" and
+            artwork[key] or nil
+
+        if usable_artwork(value) then
+            return value
+        end
+    end
+
+    -- A placeholder is still preferable to a missing source, but only after
+    -- checking every real per-track artwork alias above.
+    for _, artwork in ipairs({
+        item_artwork,
+        track_artwork,
+    }) do
+        if type(artwork) == "table" then
+            local value = artwork[name]
+
+            if type(value) == "string" and
+                value ~= "" then
+                return value
+            end
+        end
     end
 
     return fallback
@@ -382,6 +447,80 @@ local NowPlaying =
             self.menu_hitbox =
                 menu_hitbox
 
+            -- Encoder rotation normally changes LVGL focus. Keep two tiny,
+            -- transparent sentinels around the player hitbox so a physical
+            -- wheel tick can be converted into a seek step, then immediately
+            -- return focus to the player. The desktop simulator filters its
+            -- transport events before LVGL sees them, so the same controls do
+            -- not fire twice there.
+            local seek_back_focus =
+                self.root:Button {
+                    x = 0,
+                    y = 13,
+                    w = 1,
+                    h = 1,
+                    pad_all = 0,
+                    border_width = 0,
+                    outline_width = 0,
+                    shadow_width = 0,
+                    radius = 0,
+                    bg_opa = 0,
+                }
+
+            local seek_forward_focus =
+                self.root:Button {
+                    x = 159,
+                    y = 13,
+                    w = 1,
+                    h = 1,
+                    pad_all = 0,
+                    border_width = 0,
+                    outline_width = 0,
+                    shadow_width = 0,
+                    radius = 0,
+                    bg_opa = 0,
+                }
+
+            self.seek_back_focus =
+                seek_back_focus
+            self.seek_forward_focus =
+                seek_forward_focus
+
+            remove_from_group(
+                seek_back_focus
+            )
+            remove_from_group(
+                seek_forward_focus
+            )
+
+            seek_back_focus:onevent(
+                lvgl.EVENT.FOCUSED,
+                function()
+                    if self.transport_active and
+                        not self.installing_player_focus and
+                        not self.sheet_open and
+                        self.seek_by then
+                        self.seek_by(-1)
+                    end
+
+                    focus_object(menu_hitbox)
+                end
+            )
+
+            seek_forward_focus:onevent(
+                lvgl.EVENT.FOCUSED,
+                function()
+                    if self.transport_active and
+                        not self.installing_player_focus and
+                        not self.sheet_open and
+                        self.seek_by then
+                        self.seek_by(1)
+                    end
+
+                    focus_object(menu_hitbox)
+                end
+            )
+
             local overlay =
                 self.root:Object {
                     x = 0,
@@ -560,6 +699,49 @@ local NowPlaying =
                 active_sheet_button_count = 0
             end
 
+            local function install_player_focus(
+                group
+            )
+                group =
+                    group or
+                    lvgl.group.get_default()
+
+                if not group then
+                    return
+                end
+
+                self.installing_player_focus = true
+
+                remove_from_group(
+                    seek_back_focus
+                )
+                remove_from_group(
+                    menu_hitbox
+                )
+                remove_from_group(
+                    seek_forward_focus
+                )
+
+                add_to_group(
+                    group,
+                    seek_back_focus
+                )
+                add_to_group(
+                    group,
+                    menu_hitbox
+                )
+                add_to_group(
+                    group,
+                    seek_forward_focus
+                )
+
+                focus_object(menu_hitbox)
+                self.installing_player_focus = false
+            end
+
+            self.install_player_focus =
+                install_player_focus
+
             local function prepare_sheet_focus()
                 local group =
                     sheet_group or
@@ -591,7 +773,13 @@ local NowPlaying =
                     end
                 )
 
+                remove_from_group(
+                    seek_back_focus
+                )
                 remove_from_group(menu_hitbox)
+                remove_from_group(
+                    seek_forward_focus
+                )
                 remove_from_group(dimmer)
                 remove_sheet_buttons()
 
@@ -630,29 +818,22 @@ local NowPlaying =
 
                 remove_sheet_buttons()
                 remove_from_group(dimmer)
-                remove_from_group(menu_hitbox)
 
-                if group then
-                    add_to_group(
-                        group,
-                        menu_hitbox
+                if group and
+                    previous_sheet_wrap ~= nil then
+                    pcall(
+                        function()
+                            group:set_wrap(
+                                previous_sheet_wrap
+                            )
+                        end
                     )
-
-                    if previous_sheet_wrap ~= nil then
-                        pcall(
-                            function()
-                                group:set_wrap(
-                                    previous_sheet_wrap
-                                )
-                            end
-                        )
-                    end
                 end
 
                 sheet_group = nil
                 previous_sheet_wrap = nil
 
-                focus_object(menu_hitbox)
+                install_player_focus(group)
             end
 
             self.release_sheet_focus =
@@ -698,6 +879,9 @@ local NowPlaying =
                 self.sheet_page = "main"
 
                 restore_player_focus()
+                set_sim_transport_mode(
+                    self.transport_active
+                )
             end
 
             self.close_sheet =
@@ -783,6 +967,337 @@ local NowPlaying =
                 main_buttons,
                 favorite_button
             )
+
+            self.seek_generation = 0
+            self.seek_pending = false
+            self.seek_target = nil
+            self.transport_active = false
+
+            local function current_duration()
+                return
+                    tonumber(track.duration)
+                    or tonumber(
+                        active and
+                        active.item and
+                        active.item.duration
+                    )
+                    or 0
+            end
+
+            local function update_position_view(
+                position
+            )
+                position =
+                    math.max(
+                        0,
+                        tonumber(position) or 0
+                    )
+
+                local next_duration =
+                    current_duration()
+                local progress = 0
+
+                if next_duration > 0 then
+                    progress =
+                        math.max(
+                            0,
+                            math.min(
+                                1,
+                                position /
+                                    next_duration
+                            )
+                        )
+                end
+
+                self.view:update {
+                    progress = progress,
+                    elapsed =
+                        format_time(position),
+                    remaining =
+                        format_time(
+                            math.max(
+                                0,
+                                next_duration -
+                                    position
+                            )
+                        ),
+                }
+            end
+
+            self.refresh_active =
+                function(next_active)
+                    local previous_track_id =
+                        track and track.id
+
+                    active =
+                        next_active or
+                        jellyfin_playback
+                            .current()
+
+                    track =
+                        active and
+                        active.track or {}
+                    context =
+                        active and
+                        active.context or {}
+                    duration =
+                        current_duration()
+
+                    favorite =
+                        favorite_state(
+                            library,
+                            track.id
+                        )
+
+                    favorite_button:set {
+                        text =
+                            favorite and
+                            "Remove favorite" or
+                            "Add favorite",
+                    }
+
+                    self.seek_generation =
+                        self.seek_generation + 1
+                    self.seek_pending = false
+                    self.seek_target = nil
+
+                    self.view:update {
+                        background =
+                            artwork_value(
+                                active,
+                                "background",
+                                "//lua/img/background_placeholder.png"
+                            ),
+                        cover =
+                            artwork_value(
+                                active,
+                                "cover",
+                                "//lua/img/cover_placeholder.png"
+                            ),
+                        title =
+                            track.title or
+                            "Nothing playing",
+                        artist =
+                            track.artist or "",
+                        connected =
+                            server_connected(
+                                active
+                            ),
+                    }
+
+                    local position =
+                        playback.position:get() or 0
+
+                    if previous_track_id ~= nil and
+                        track.id ~= previous_track_id then
+                        position = 0
+                    end
+
+                    update_position_view(position)
+                end
+
+            self.seek_by =
+                function(step_count)
+                    if self.sheet_open or
+                        self.sheet_animating or
+                        not self.transport_active then
+                        return false
+                    end
+
+                    step_count =
+                        tonumber(step_count) or 0
+
+                    if step_count == 0 then
+                        return false
+                    end
+
+                    local next_duration =
+                        current_duration()
+
+                    if next_duration <= 0 then
+                        return false
+                    end
+
+                    local base =
+                        self.seek_pending and
+                        self.seek_target or
+                        playback.position:get() or 0
+
+                    self.seek_target =
+                        math.max(
+                            0,
+                            math.min(
+                                next_duration,
+                                base +
+                                    step_count * 5
+                            )
+                        )
+                    self.seek_pending = true
+                    self.seek_generation =
+                        self.seek_generation + 1
+
+                    local generation =
+                        self.seek_generation
+
+                    update_position_view(
+                        self.seek_target
+                    )
+
+                    lvgl.Timer {
+                        period = 300,
+                        repeat_count = 1,
+                        cb = function()
+                            if generation ~=
+                                    self.seek_generation or
+                                not self.seek_pending then
+                                return
+                            end
+
+                            local target =
+                                self.seek_target
+
+                            self.seek_pending = false
+                            self.seek_target = nil
+
+                            playback.position:set(
+                                math.floor(
+                                    target or 0
+                                )
+                            )
+                        end,
+                    }
+
+                    return true
+                end
+
+            self.previous_track =
+                function(count)
+                    if self.sheet_open or
+                        self.sheet_animating then
+                        return false
+                    end
+
+                    count = math.max(
+                        1,
+                        math.floor(
+                            tonumber(count) or 1
+                        )
+                    )
+
+                    for _ = 1, count do
+                        jellyfin_playback.previous()
+                    end
+
+                    return true
+                end
+
+            self.next_track =
+                function(count)
+                    if self.sheet_open or
+                        self.sheet_animating then
+                        return false
+                    end
+
+                    count = math.max(
+                        1,
+                        math.floor(
+                            tonumber(count) or 1
+                        )
+                    )
+
+                    for _ = 1, count do
+                        jellyfin_playback.next()
+                    end
+
+                    return true
+                end
+
+            self.transport =
+                function(action, amount)
+                    if action == "seek" then
+                        return self.seek_by(
+                            amount
+                        )
+                    elseif action ==
+                            "previous" then
+                        return self.previous_track(
+                            amount
+                        )
+                    elseif action == "next" then
+                        return self.next_track(
+                            amount
+                        )
+                    elseif action == "toggle" then
+                        if self.sheet_open or
+                            self.sheet_animating then
+                            return false
+                        end
+
+                        playback.playing:set(
+                            not playback.playing:get()
+                        )
+                        return true
+                    elseif action ==
+                            "volume_up" or
+                        action ==
+                            "volume_down" then
+                        if self.sheet_open or
+                            self.sheet_animating then
+                            return false
+                        end
+
+                        local direction =
+                            action ==
+                                "volume_up" and
+                            1 or -1
+                        local count =
+                            math.max(
+                                1,
+                                math.abs(
+                                    tonumber(amount) or
+                                    1
+                                )
+                            )
+                        local percentage =
+                            tonumber(
+                                volume.current_pct
+                                    :get()
+                            ) or 0
+
+                        volume.current_pct:set(
+                            math.max(
+                                0,
+                                math.min(
+                                    100,
+                                    percentage +
+                                        direction *
+                                        count * 5
+                                )
+                            )
+                        )
+
+                        return true
+                    end
+
+                    return false
+                end
+
+            self.transport_state =
+                function()
+                    return {
+                        active =
+                            self.transport_active ==
+                            true,
+                        seek_pending =
+                            self.seek_pending == true,
+                        seek_target =
+                            self.seek_target,
+                        queue_position =
+                            queue.position:get(),
+                        queue_size =
+                            queue.size:get(),
+                    }
+                end
 
             local playlist_back
 
@@ -1013,6 +1528,7 @@ local NowPlaying =
 
                     self.sheet_open = true
                     self.sheet_page = "main"
+                    set_sim_transport_mode(false)
 
                     playlist_title:set {
                         text = "Add to playlist",
@@ -1099,8 +1615,8 @@ local NowPlaying =
                         return
                     end
 
-                    playback.playing:set(
-                        not playback.playing:get()
+                    self.transport(
+                        "toggle"
                     )
                 end
             )
@@ -1118,58 +1634,30 @@ local NowPlaying =
             self.position_binding =
                 playback.position:bind(
                     function(position)
-                        local current =
-                            jellyfin_playback
-                                .current()
-
-                        local current_track =
-                            current and
-                            current.track or {}
-
-                        local current_duration =
-                            tonumber(
-                                current_track
-                                    .duration
-                            )
-                            or duration
-
-                        local progress = 0
-
-                        if current_duration >
-                                0 then
-                            progress =
-                                math.max(
-                                    0,
-                                    math.min(
-                                        1,
-                                        (
-                                            position
-                                            or 0
-                                        ) /
-                                        current_duration
-                                    )
-                                )
+                        if self.seek_pending then
+                            return
                         end
 
-                        self.view:update {
-                            progress =
-                                progress,
-                            elapsed =
-                                format_time(
+                        update_position_view(
+                            position
+                        )
+                    end
+                )
+
+            self.queue_binding =
+                queue.position:bind(
+                    function(position)
+                        local next_active =
+                            jellyfin_playback
+                                .sync_position(
                                     position
-                                ),
-                            remaining =
-                                format_time(
-                                    math.max(
-                                        0,
-                                        current_duration -
-                                        (
-                                            position
-                                            or 0
-                                        )
-                                    )
-                                ),
-                        }
+                                )
+
+                        if next_active then
+                            self.refresh_active(
+                                next_active
+                            )
+                        end
                     end
                 )
 
@@ -1221,15 +1709,34 @@ local NowPlaying =
         end,
 
         on_show = function(self)
+            self.transport_active = true
+
             jellyfin_navigation.set_back(
                 self.handle_back
             )
 
-            if self.menu_hitbox then
+            if self.install_player_focus then
+                self.install_player_focus()
+            elseif self.menu_hitbox then
                 lvgl.group.focus_obj(
                     self.menu_hitbox
                 )
             end
+
+            self.sim_transport_handler =
+                function(action, amount)
+                    return self.transport(
+                        action,
+                        amount
+                    )
+                end
+
+            _G.tangara_sim_transport_event =
+                self.sim_transport_handler
+
+            set_sim_transport_mode(
+                not self.sheet_open
+            )
 
             local hooks =
                 controls.hooks()
@@ -1264,9 +1771,39 @@ local NowPlaying =
                     .long_press =
                     self.toggle_sheet
             end
+
+            if input_method.left then
+                self.previous_left_click =
+                    input_method.left.click
+                input_method.left.click =
+                    self.previous_track
+            end
+
+            if input_method.right then
+                self.previous_right_click =
+                    input_method.right.click
+                input_method.right.click =
+                    self.next_track
+            end
         end,
 
         on_hide = function(self)
+            self.transport_active = false
+            self.seek_generation =
+                (self.seek_generation or 0) + 1
+            self.seek_pending = false
+            self.seek_target = nil
+
+            set_sim_transport_mode(false)
+
+            if _G.tangara_sim_transport_event ==
+                    self.sim_transport_handler then
+                _G.tangara_sim_transport_event =
+                    nil
+            end
+
+            self.sim_transport_handler = nil
+
             jellyfin_navigation.clear_back(
                 self.handle_back
             )
@@ -1275,29 +1812,41 @@ local NowPlaying =
                 self.release_sheet_focus()
             end
 
+            remove_from_group(
+                self.seek_back_focus
+            )
+            remove_from_group(
+                self.menu_hitbox
+            )
+            remove_from_group(
+                self.seek_forward_focus
+            )
+
             local input_method =
                 self.input_method
 
-            if not input_method then
-                return
-            end
+            if input_method then
+                if input_method.up then
+                    input_method.up
+                        .long_press =
+                        self.previous_up_long
+                end
 
-            if input_method.up and
-                input_method.up
-                    .long_press ==
-                    self.handle_back then
-                input_method.up
-                    .long_press =
-                    self.previous_up_long
-            end
+                if input_method.center then
+                    input_method.center
+                        .long_press =
+                        self.previous_center_long
+                end
 
-            if input_method.center and
-                input_method.center
-                    .long_press ==
-                    self.toggle_sheet then
-                input_method.center
-                    .long_press =
-                    self.previous_center_long
+                if input_method.left then
+                    input_method.left.click =
+                        self.previous_left_click
+                end
+
+                if input_method.right then
+                    input_method.right.click =
+                        self.previous_right_click
+                end
             end
 
             self.input_method = nil

@@ -49,12 +49,17 @@ function M.create(options)
             lvgl.SCROLLBAR_MODE.OFF,
     }
 
+    local current_background = options.background
+    local current_cover = options.cover
+    local current_title = options.title or ""
+    local current_artist = options.artist or ""
+
     local background = root:Image {
         x = 0,
         y = -16,
         src =
             lvgl.ImgData(
-                options.background
+                current_background
             ),
     }
 
@@ -82,7 +87,7 @@ function M.create(options)
         y = 16,
         src =
             lvgl.ImgData(
-                options.cover
+                current_cover
             ),
     }
 
@@ -94,6 +99,7 @@ function M.create(options)
                 y = 83,
                 w = 148,
                 h = 12,
+                label_y = 0,
                 text = "",
                 align = "center",
                 text_color = "#FFFFFF",
@@ -109,6 +115,7 @@ function M.create(options)
                 y = 95,
                 w = 148,
                 h = 12,
+                label_y = 0,
                 text = "",
                 align = "center",
                 text_color = "#B5B6C0",
@@ -538,10 +545,52 @@ function M.create(options)
         }
     end
 
+    function screen:media_state()
+        return {
+            background = current_background,
+            cover = current_cover,
+            title = current_title,
+            artist = current_artist,
+            cover_x = 47,
+            cover_y = 16,
+            title_x = 6,
+            title_y = 83,
+            artist_x = 6,
+            artist_y = 95,
+        }
+    end
+
     function screen:update(values)
         values = values or {}
 
+        local media_changed =
+            values.background ~= nil or
+            values.cover ~= nil or
+            values.title ~= nil or
+            values.artist ~= nil
+
+        if media_changed then
+            cover:set {
+                x = 47,
+                y = 16,
+            }
+            title_marquee.view:set {
+                x = 6,
+                y = 83,
+                w = 148,
+                h = 12,
+            }
+            artist_marquee.view:set {
+                x = 6,
+                y = 95,
+                w = 148,
+                h = 12,
+            }
+        end
+
         if values.background then
+            current_background =
+                values.background
             background:set {
                 src =
                     lvgl.ImgData(
@@ -551,6 +600,7 @@ function M.create(options)
         end
 
         if values.cover then
+            current_cover = values.cover
             cover:set {
                 src =
                     lvgl.ImgData(
@@ -560,15 +610,19 @@ function M.create(options)
         end
 
         if values.title ~= nil then
+            current_title = values.title
+            title_marquee:stop()
             title_marquee:set(
-                values.title
+                current_title
             )
             title_marquee:start()
         end
 
         if values.artist ~= nil then
+            current_artist = values.artist
+            artist_marquee:stop()
             artist_marquee:set(
-                values.artist
+                current_artist
             )
             artist_marquee:start()
         end

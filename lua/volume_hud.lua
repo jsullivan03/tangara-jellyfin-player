@@ -27,7 +27,7 @@ function M.geometry(percentage)
 
     return {
         percentage = percentage,
-        x = 150,
+        x = 3,
         y = 34,
         width = 7,
         height = 58,
@@ -51,10 +51,10 @@ function M.show(percentage)
     local geometry =
         M.geometry(percentage)
 
-    alerts.show(function()
+    alerts.show(function(parent)
         local capsule =
             lvgl.Object(
-                nil,
+                parent,
                 {
                     x = geometry.x,
                     y = geometry.y,
@@ -91,6 +91,8 @@ function M.show(percentage)
             scrollbar_mode =
                 lvgl.SCROLLBAR_MODE.OFF,
         }
+
+        return capsule
     end)
 
     return true

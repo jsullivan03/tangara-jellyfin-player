@@ -374,15 +374,41 @@ function M.install(lvgl)
     local queued_ids = {}
 
     local function select_queue_position(position)
-        local id = queued_ids[position]
+        local id = queued_ids[position + 1]
 
         if not id then
             return
         end
 
+        local selected_track
+
+        if type(id) == "number" then
+            selected_track =
+                database.track_by_id(id)
+        elseif type(id) == "string" then
+            for _, candidate in pairs(
+                fake_tracks
+            ) do
+                if candidate.filepath == id then
+                    selected_track = candidate
+                    break
+                end
+            end
+
+            selected_track =
+                selected_track or
+                {
+                    filepath = id,
+                    duration = 180,
+                    title = id:match(
+                        "([^/]+)$"
+                    ) or id,
+                }
+        end
+
         queue.position:set(position)
         playback.position:set(0)
-        playback.track:set(database.track_by_id(id))
+        playback.track:set(selected_track)
     end
 
     function queue.clear()
@@ -394,7 +420,10 @@ function M.install(lvgl)
     end
 
     function queue.add(value)
-        if type(value) == "number" then
+        local was_empty = #queued_ids == 0
+
+        if type(value) == "number" or
+            type(value) == "string" then
             table.insert(queued_ids, value)
         elseif type(value) == "table" and value.clone then
             local iterator = value:clone()
@@ -416,15 +445,15 @@ function M.install(lvgl)
 
         queue.size:set(#queued_ids)
 
-        if #queued_ids > 0 and queue.position:get() == 0 then
-            select_queue_position(1)
+        if was_empty and #queued_ids > 0 then
+            select_queue_position(0)
         end
     end
 
     function queue.next()
         local next_position = queue.position:get() + 1
 
-        if next_position <= #queued_ids then
+        if next_position < #queued_ids then
             select_queue_position(next_position)
         end
     end
@@ -432,8 +461,61 @@ function M.install(lvgl)
     function queue.previous()
         local previous_position = queue.position:get() - 1
 
-        if previous_position >= 1 then
+        if previous_position >= 0 then
             select_queue_position(previous_position)
+        end
+    end
+
+    function queue.open_playlist(filepath)
+        queue.clear()
+
+        local full_path = filepath
+
+        if filepath:sub(1, 1) == "/" then
+            local ok, device = pcall(
+                require,
+                "device"
+            )
+
+            if ok and device and
+                type(device.storage_root) ==
+                    "function" then
+                local root =
+                    device.storage_root()
+
+                if type(root) == "string" then
+                    full_path =
+                        root:gsub("/+$", "") ..
+                        filepath
+                end
+            end
+        end
+
+        local file =
+            assert(io.open(full_path, "rb"))
+
+        queued_ids = {}
+
+        for line in file:lines() do
+            line = line:gsub("\r$", "")
+
+            if line ~= "" and
+                line:sub(1, 1) ~= "#" then
+                table.insert(
+                    queued_ids,
+                    line
+                )
+            end
+        end
+
+        file:close()
+        queue.size:set(#queued_ids)
+
+        if #queued_ids > 0 then
+            select_queue_position(0)
+        else
+            queue.position:set(0)
+            playback.track:set(nil)
         end
     end
 
@@ -442,7 +524,7 @@ function M.install(lvgl)
             if track.filepath == filepath then
                 queued_ids = { id }
                 queue.size:set(1)
-                select_queue_position(1)
+                select_queue_position(0)
                 playback.position:set(position or 0)
                 return
             end
@@ -597,14 +679,49 @@ function M.install(lvgl)
     end
 
     local alerts = {}
+    local current_alert = nil
+    local alert_generation = 0
+
+    local function delete_current_alert()
+        if not current_alert then
+            return
+        end
+
+        pcall(function()
+            current_alert:delete()
+        end)
+        current_alert = nil
+    end
 
     function alerts.show(builder)
-        if builder then
-            builder()
+        delete_current_alert()
+        alert_generation = alert_generation + 1
+
+        if not builder or
+            not current_screen or
+            not current_screen.root then
+            return
         end
+
+        local generation = alert_generation
+        current_alert =
+            builder(current_screen.root)
+
+        lvgl.Timer {
+            period = 1000,
+            repeat_count = 1,
+            cb = function()
+                if generation ==
+                        alert_generation then
+                    delete_current_alert()
+                end
+            end,
+        }
     end
 
     function alerts.hide()
+        alert_generation = alert_generation + 1
+        delete_current_alert()
     end
 
     local time = {}
@@ -732,6 +849,7 @@ function M.install(lvgl)
     return {
         property = property,
         backstack = backstack,
+        alerts = alerts,
     }
 end
 

@@ -415,6 +415,13 @@ function M.create(parent, options)
                     return
                 end
 
+                -- Label coordinates can still describe the previous
+                -- string until LVGL completes a layout pass. Force that
+                -- pass before measuring every replacement. This keeps
+                -- both title and artist centering tied to their current
+                -- text instead of the preceding track.
+                controller.label:update_layout()
+
                 local coordinates =
                     controller.label
                         :get_coords()

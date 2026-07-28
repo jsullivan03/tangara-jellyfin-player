@@ -71,10 +71,10 @@ assert(
     "full-volume HUD is incorrect"
 )
 assert(
-    zero.x == 150 and
+    zero.x == 3 and
         zero.width == 7 and
         zero.height == 58,
-    "volume HUD is not a slim right-side capsule"
+    "volume HUD is not a slim left-side capsule"
 )
 
 controls.lock_switch:set(false)
@@ -87,6 +87,29 @@ controls.lock_switch:set(true)
 assert(
     volume_hud.show(50) == false,
     "locked volume HUD should remain hidden"
+)
+
+screen:update {
+    background = "background-next",
+    cover = "cover-next",
+    title = "Next Track",
+    artist = "Next Artist",
+}
+
+local media = screen:media_state()
+
+assert(
+    media.background == "background-next" and
+        media.cover == "cover-next" and
+        media.title == "Next Track" and
+        media.artist == "Next Artist" and
+        media.cover_x == 47 and
+        media.cover_y == 16 and
+        media.title_x == 6 and
+        media.title_y == 83 and
+        media.artist_x == 6 and
+        media.artist_y == 95,
+    "track replacement did not preserve the fixed Now Playing layout"
 )
 
 lvgl.Timer {

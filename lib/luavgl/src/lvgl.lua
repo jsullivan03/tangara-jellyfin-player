@@ -859,6 +859,12 @@ function obj:Anim(p)
 end
 
 ---
+--- Recalculate pending LVGL layouts before reading coordinates.
+--- @return nil
+function obj:update_layout()
+end
+
+---
 --- Get coords of object
 --- @return Coords coords
 function obj:get_coords()

@@ -84,10 +84,12 @@ class LvglInputDriver {
     static auto get(lua_State*, int idx) -> LuaTrigger&;
     static auto luaGc(lua_State*) -> int;
     static auto luaToString(lua_State*) -> int;
+    static auto luaIndex(lua_State*) -> int;
     static auto luaNewIndex(lua_State*) -> int;
 
     static constexpr struct luaL_Reg kFuncs[] = {{"__gc", luaGc},
                                                  {"__tostring", luaToString},
+                                                 {"__index", luaIndex},
                                                  {"__newindex", luaNewIndex},
                                                  {NULL, NULL}};
 
@@ -97,6 +99,7 @@ class LvglInputDriver {
     std::string device_;
     std::string trigger_;
     std::map<std::string, std::string> hooks_;
+    std::map<std::string, std::string> defaults_;
   };
   struct LuaOverride {
     lua_State* L;
@@ -110,6 +113,8 @@ class LvglInputDriver {
   std::map<OverrideSelector, LuaOverride> overrides_;
 
   auto setOverride(lua_State* L, const OverrideSelector&) -> void;
+  auto clearOverride(const OverrideSelector&) -> void;
+  auto pushOverride(lua_State* L, const OverrideSelector&) -> bool;
   auto applyOverride(const OverrideSelector&, LuaOverride&) -> void;
 
   bool is_locked_;

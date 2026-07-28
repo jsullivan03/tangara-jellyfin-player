@@ -640,6 +640,13 @@ static int luavgl_obj_indev_search(lua_State *L)
   return 1;
 }
 
+static int luavgl_obj_update_layout(lua_State *L)
+{
+  lv_obj_t *obj = luavgl_to_obj(L, 1);
+  lv_obj_update_layout(obj);
+  return 0;
+}
+
 static int luavgl_obj_get_coords(lua_State *L)
 {
   lv_area_t area;
@@ -784,6 +791,7 @@ static const luaL_Reg luavgl_obj_methods[] = {
     {"set_flex_align",           luavgl_obj_set_flex_align          },
     {"set_flex_grow",            luavgl_obj_set_flex_grow           },
     {"indev_search",             luavgl_obj_indev_search            },
+    {"update_layout",            luavgl_obj_update_layout           },
     {"get_coords",               luavgl_obj_get_coords              },
     {"get_pos",                  luavgl_obj_get_pos                 },
     {"focus",                    luavgl_obj_focus                   },

@@ -233,8 +233,10 @@ LvglInputDriver::LuaTrigger::LuaTrigger(LvglInputDriver& driver,
     auto cb = hook.get().callback();
     if (cb) {
       hooks_[hook.get().name()] = hook.get().callback()->name;
+      defaults_[hook.get().name()] = hook.get().callback()->name;
     } else {
       hooks_[hook.get().name()] = "";
+      defaults_[hook.get().name()] = "";
     }
   }
 }
@@ -264,27 +266,65 @@ auto LvglInputDriver::LuaTrigger::luaToString(lua_State* L) -> int {
   return 1;
 }
 
+auto LvglInputDriver::LuaTrigger::luaIndex(lua_State* L) -> int {
+  LuaTrigger& trigger = LuaTrigger::get(L, 1);
+
+  size_t len = 0;
+  const char* str = luaL_checklstring(L, 2, &len);
+  if (!str) {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  OverrideSelector selector{
+      .device_name = trigger.device_,
+      .trigger_name = trigger.trigger_,
+      .hook_name = std::string{str, len},
+  };
+
+  if (!trigger.hooks_.contains(selector.hook_name)) {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  if (trigger.driver_->pushOverride(L, selector)) {
+    return 1;
+  }
+
+  lua_pushnil(L);
+  return 1;
+}
+
 auto LvglInputDriver::LuaTrigger::luaNewIndex(lua_State* L) -> int {
   LuaTrigger& trigger = LuaTrigger::get(L, 1);
-  luaL_checktype(L, 3, LUA_TFUNCTION);
 
   size_t len = 0;
   const char* str = luaL_checklstring(L, 2, &len);
   if (!str) {
     return 0;
   }
+
   OverrideSelector selector{
       .device_name = trigger.device_,
       .trigger_name = trigger.trigger_,
       .hook_name = std::string{str, len},
   };
-  for (const auto& hook : trigger.hooks_) {
-    if (hook.first == selector.hook_name) {
-      trigger.driver_->setOverride(L, selector);
-      trigger.hooks_[hook.first] = kLuaOverrideText;
-      return 0;
-    }
+
+  if (!trigger.hooks_.contains(selector.hook_name)) {
+    return 0;
   }
+
+  if (lua_isnil(L, 3)) {
+    trigger.driver_->clearOverride(selector);
+    trigger.hooks_[selector.hook_name] =
+        trigger.defaults_[selector.hook_name];
+    return 0;
+  }
+
+  luaL_checktype(L, 3, LUA_TFUNCTION);
+  lua_pushvalue(L, 3);
+  trigger.driver_->setOverride(L, selector);
+  trigger.hooks_[selector.hook_name] = kLuaOverrideText;
   return 0;
 }
 
@@ -323,6 +363,43 @@ auto LvglInputDriver::pushHooks(lua_State* L) -> int {
   }
 
   return 1;
+}
+
+auto LvglInputDriver::pushOverride(
+    lua_State* L, const OverrideSelector& selector) -> bool {
+  auto found = overrides_.find(selector);
+  if (found == overrides_.end()) {
+    return false;
+  }
+
+  lua_rawgeti(L, LUA_REGISTRYINDEX, found->second.ref);
+  return true;
+}
+
+auto LvglInputDriver::clearOverride(
+    const OverrideSelector& selector) -> void {
+  auto found = overrides_.find(selector);
+  if (found != overrides_.end()) {
+    luaL_unref(found->second.L, LUA_REGISTRYINDEX, found->second.ref);
+    overrides_.erase(found);
+  }
+
+  for (auto& device : inputs_) {
+    if (device->name() != selector.device_name) {
+      continue;
+    }
+    for (auto& trigger : device->triggers()) {
+      if (trigger.get().name() != selector.trigger_name) {
+        continue;
+      }
+      for (auto& hook : trigger.get().hooks()) {
+        if (hook.get().name() == selector.hook_name) {
+          hook.get().override(std::nullopt);
+          return;
+        }
+      }
+    }
+  }
 }
 
 auto LvglInputDriver::setOverride(lua_State* L,

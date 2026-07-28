@@ -32,6 +32,9 @@ package.loaded["jellyfin_playback"] = {
             },
         }
     end,
+    sync_position = function()
+        return package.loaded["jellyfin_playback"].current()
+    end,
 }
 
 package.loaded["sync_config"] = {

@@ -317,6 +317,8 @@ AlbumScreen =
                                                     "local_album",
                                                 collection_id =
                                                     album.key,
+                                                queue_tracks =
+                                                    album.tracks,
                                             }
                                         )
                                     end,
@@ -760,6 +762,8 @@ TracksScreen =
                         "tracks"
                     )
 
+                self.sorted_tracks = sorted
+
                 if self.virtual_track_list then
                     self.virtual_track_list
                         :set_items(
@@ -790,6 +794,8 @@ TracksScreen =
                                             {
                                                 collection_kind =
                                                     "local_tracks",
+                                                queue_tracks =
+                                                    self.sorted_tracks,
                                             }
                                         )
                                     end,

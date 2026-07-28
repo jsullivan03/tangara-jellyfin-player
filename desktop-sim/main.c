@@ -19,8 +19,33 @@
 #include "src/drivers/sdl/lv_sdl_window.h"
 
 static SDL_atomic_t back_requested;
+static SDL_atomic_t transport_mode;
+static SDL_atomic_t pending_seek_ticks;
+static SDL_atomic_t pending_previous;
+static SDL_atomic_t pending_next;
+static SDL_atomic_t pending_toggle;
+static SDL_atomic_t pending_volume_up;
+static SDL_atomic_t pending_volume_down;
 
-static int SDLCALL watch_sdl_event(void *userdata, SDL_Event *event)
+static int lua_set_transport_mode(lua_State *L)
+{
+    bool enabled = lua_toboolean(L, 1) != 0;
+
+    SDL_AtomicSet(&transport_mode, enabled ? 1 : 0);
+
+    if (!enabled) {
+        SDL_AtomicSet(&pending_seek_ticks, 0);
+        SDL_AtomicSet(&pending_previous, 0);
+        SDL_AtomicSet(&pending_next, 0);
+        SDL_AtomicSet(&pending_toggle, 0);
+        SDL_AtomicSet(&pending_volume_up, 0);
+        SDL_AtomicSet(&pending_volume_down, 0);
+    }
+
+    return 0;
+}
+
+static int SDLCALL filter_sdl_event(void *userdata, SDL_Event *event)
 {
     (void)userdata;
 
@@ -30,6 +55,58 @@ static int SDLCALL watch_sdl_event(void *userdata, SDL_Event *event)
         event->key.keysym.sym == SDLK_ESCAPE
     ) {
         SDL_AtomicSet(&back_requested, 1);
+    }
+
+    if (!SDL_AtomicGet(&transport_mode)) {
+        return 1;
+    }
+
+    if (event->type == SDL_MOUSEWHEEL) {
+        int wheel_y = event->wheel.y;
+
+        if (event->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+            wheel_y = -wheel_y;
+        }
+
+        SDL_AtomicAdd(
+            &pending_seek_ticks,
+            -wheel_y
+        );
+        return 0;
+    }
+
+    if (event->type == SDL_KEYDOWN && event->key.repeat == 0) {
+        switch (event->key.keysym.sym) {
+            case SDLK_LEFT:
+                SDL_AtomicAdd(&pending_previous, 1);
+                return 0;
+            case SDLK_RIGHT:
+                SDL_AtomicAdd(&pending_next, 1);
+                return 0;
+            case SDLK_SPACE:
+                SDL_AtomicAdd(&pending_toggle, 1);
+                return 0;
+            case SDLK_EQUALS:
+            case SDLK_KP_PLUS:
+                SDL_AtomicAdd(&pending_volume_up, 1);
+                return 0;
+            case SDLK_MINUS:
+            case SDLK_KP_MINUS:
+                SDL_AtomicAdd(&pending_volume_down, 1);
+                return 0;
+            default:
+                break;
+        }
+    }
+
+    if (event->type == SDL_TEXTINPUT) {
+        if (
+            event->text.text[0] == '=' ||
+            event->text.text[0] == '+' ||
+            event->text.text[0] == '-'
+        ) {
+            return 0;
+        }
     }
 
     return 1;
@@ -82,6 +159,69 @@ static void call_lua_back(lua_State *L)
     }
 }
 
+static void call_lua_transport(
+    lua_State *L,
+    const char *action,
+    int amount
+)
+{
+    lua_getglobal(L, "tangara_sim_transport_event");
+
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+
+    lua_pushstring(L, action);
+    lua_pushinteger(L, amount);
+
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+        const char *message = lua_tostring(L, -1);
+
+        fprintf(
+            stderr,
+            "Simulator transport handler failed:\n%s\n",
+            message != NULL ? message : "Unknown Lua error"
+        );
+
+        lua_pop(L, 1);
+    }
+}
+
+static void service_transport(lua_State *L)
+{
+    int seek_ticks =
+        SDL_AtomicSet(&pending_seek_ticks, 0);
+    int previous =
+        SDL_AtomicSet(&pending_previous, 0);
+    int next = SDL_AtomicSet(&pending_next, 0);
+    int toggle =
+        SDL_AtomicSet(&pending_toggle, 0);
+    int volume_up =
+        SDL_AtomicSet(&pending_volume_up, 0);
+    int volume_down =
+        SDL_AtomicSet(&pending_volume_down, 0);
+
+    if (seek_ticks != 0) {
+        call_lua_transport(L, "seek", seek_ticks);
+    }
+    if (previous > 0) {
+        call_lua_transport(L, "previous", previous);
+    }
+    if (next > 0) {
+        call_lua_transport(L, "next", next);
+    }
+    if (toggle > 0) {
+        call_lua_transport(L, "toggle", toggle);
+    }
+    if (volume_up > 0) {
+        call_lua_transport(L, "volume_up", volume_up);
+    }
+    if (volume_down > 0) {
+        call_lua_transport(L, "volume_down", volume_down);
+    }
+}
+
 int main(int argc, char **argv)
 {
     const char *script =
@@ -121,6 +261,9 @@ int main(int argc, char **argv)
 
     luaL_openlibs(L);
 
+    lua_pushcfunction(L, lua_set_transport_mode);
+    lua_setglobal(L, "tangara_sim_set_transport_mode");
+
     luaL_requiref(L, "lvgl", luaopen_lvgl, 1);
     lua_pop(L, 1);
 
@@ -136,11 +279,9 @@ int main(int argc, char **argv)
     luaL_requiref(L, "sim_metrics", luaopen_sim_metrics, 1);
     lua_pop(L, 1);
 
-    SDL_AddEventWatch(watch_sdl_event, NULL);
+    SDL_SetEventFilter(filter_sdl_event, NULL);
 
     if (run_lua_file(L, script) != 0) {
-        SDL_DelEventWatch(watch_sdl_event, NULL);
-
         /*
          * Lua/LVGL objects can still reference each other after a failed
          * chunk unwinds. The process is about to terminate, so let the OS
@@ -152,6 +293,7 @@ int main(int argc, char **argv)
 
     while (true) {
         firmware_backstack_service();
+        service_transport(L);
         uint32_t delay_ms = lv_timer_handler();
 
         if (SDL_AtomicCAS(&back_requested, 1, 0)) {
@@ -167,7 +309,7 @@ int main(int argc, char **argv)
         usleep(delay_ms * 1000);
     }
 
-    SDL_DelEventWatch(watch_sdl_event, NULL);
+    SDL_SetEventFilter(NULL, NULL);
     firmware_backstack_shutdown();
     lua_close(L);
     return 0;
