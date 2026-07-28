@@ -207,6 +207,61 @@ local function add_sheet_button(
     return button
 end
 
+local function remove_from_group(object)
+    if not object then
+        return
+    end
+
+    pcall(
+        function()
+            lvgl.group.remove_obj(object)
+        end
+    )
+end
+
+local function add_to_group(group, object)
+    if not group or not object then
+        return
+    end
+
+    local added = pcall(
+        function()
+            lvgl.group.add_obj(
+                group,
+                object
+            )
+        end
+    )
+
+    if not added then
+        pcall(
+            function()
+                group:add_obj(object)
+            end
+        )
+    end
+end
+
+local function focus_object(object)
+    if not object then
+        return
+    end
+
+    local focused = pcall(
+        function()
+            lvgl.group.focus_obj(object)
+        end
+    )
+
+    if not focused then
+        pcall(
+            function()
+                object:focus()
+            end
+        )
+    end
+end
+
 local function animate_y(
     object,
     start_y,
@@ -285,6 +340,9 @@ local NowPlaying =
                         track.artist or "",
                     progress = 0,
                     elapsed = "0:00",
+                    paused =
+                        playback.playing:get() ~=
+                        true,
                     remaining =
                         format_time(
                             duration
@@ -480,6 +538,139 @@ local NowPlaying =
                 )
 
             local favorite_button
+            local main_buttons = {}
+            local playlist_buttons = {}
+            local sheet_group = nil
+            local previous_sheet_wrap = nil
+            local active_sheet_button_count = 0
+
+            local function remove_sheet_buttons()
+                for _, button in ipairs(
+                    main_buttons
+                ) do
+                    remove_from_group(button)
+                end
+
+                for _, button in ipairs(
+                    playlist_buttons
+                ) do
+                    remove_from_group(button)
+                end
+
+                active_sheet_button_count = 0
+            end
+
+            local function prepare_sheet_focus()
+                local group =
+                    sheet_group or
+                    lvgl.group.get_default()
+
+                if not group then
+                    return nil
+                end
+
+                if not sheet_group then
+                    sheet_group = group
+
+                    local ok, wrap = pcall(
+                        function()
+                            return group:get_wrap()
+                        end
+                    )
+
+                    if ok then
+                        previous_sheet_wrap = wrap
+                    else
+                        previous_sheet_wrap = true
+                    end
+                end
+
+                pcall(
+                    function()
+                        group:set_wrap(false)
+                    end
+                )
+
+                remove_from_group(menu_hitbox)
+                remove_from_group(dimmer)
+                remove_sheet_buttons()
+
+                return group
+            end
+
+            local function activate_sheet_buttons(
+                buttons,
+                initial_button
+            )
+                local group = prepare_sheet_focus()
+
+                if not group then
+                    return
+                end
+
+                for _, button in ipairs(
+                    buttons
+                ) do
+                    add_to_group(group, button)
+                end
+
+                active_sheet_button_count =
+                    #buttons
+
+                focus_object(
+                    initial_button or
+                    buttons[1]
+                )
+            end
+
+            local function restore_player_focus()
+                local group =
+                    sheet_group or
+                    lvgl.group.get_default()
+
+                remove_sheet_buttons()
+                remove_from_group(dimmer)
+                remove_from_group(menu_hitbox)
+
+                if group then
+                    add_to_group(
+                        group,
+                        menu_hitbox
+                    )
+
+                    if previous_sheet_wrap ~= nil then
+                        pcall(
+                            function()
+                                group:set_wrap(
+                                    previous_sheet_wrap
+                                )
+                            end
+                        )
+                    end
+                end
+
+                sheet_group = nil
+                previous_sheet_wrap = nil
+
+                focus_object(menu_hitbox)
+            end
+
+            self.release_sheet_focus =
+                restore_player_focus
+
+            self.sheet_focus_state =
+                function()
+                    return {
+                        page = self.sheet_page,
+                        main_count = #main_buttons,
+                        playlist_count =
+                            #playlist_buttons,
+                        active_count =
+                            active_sheet_button_count,
+                        wrap_disabled =
+                            sheet_group ~= nil,
+                    }
+                end
 
             local function finish_close()
                 overlay:add_flag(
@@ -506,7 +697,7 @@ local NowPlaying =
                 self.sheet_animating = false
                 self.sheet_page = "main"
 
-                menu_hitbox:focus()
+                restore_player_focus()
             end
 
             self.close_sheet =
@@ -517,6 +708,7 @@ local NowPlaying =
                     end
 
                     self.sheet_animating = true
+                    prepare_sheet_focus()
 
                     local current_sheet =
                         self.sheet_page ==
@@ -587,6 +779,12 @@ local NowPlaying =
                         "Add favorite",
                     queue_favorite
                 )
+            table.insert(
+                main_buttons,
+                favorite_button
+            )
+
+            local playlist_back
 
             local function show_playlists()
                 if self.sheet_animating then
@@ -594,6 +792,7 @@ local NowPlaying =
                 end
 
                 self.sheet_animating = true
+                prepare_sheet_focus()
 
                 animate_y(
                     main_sheet,
@@ -617,16 +816,27 @@ local NowPlaying =
                         animate_y(
                             playlist_sheet,
                             128,
-                            playlist_target_y
+                            playlist_target_y,
+                            function()
+                                activate_sheet_buttons(
+                                    playlist_buttons,
+                                    playlist_back
+                                )
+                            end
                         )
                     end
                 )
             end
 
-            add_sheet_button(
-                main_list,
-                "Add to playlist",
-                show_playlists
+            local add_playlist_button =
+                add_sheet_button(
+                    main_list,
+                    "Add to playlist",
+                    show_playlists
+                )
+            table.insert(
+                main_buttons,
+                add_playlist_button
             )
 
             if context.collection_kind ==
@@ -677,9 +887,11 @@ local NowPlaying =
                             close_soon()
                         end
                     )
+                table.insert(
+                    main_buttons,
+                    remove_button
+                )
             end
-
-            local playlist_back
 
             playlist_back =
                 add_sheet_button(
@@ -691,6 +903,7 @@ local NowPlaying =
                         end
 
                         self.sheet_animating = true
+                        prepare_sheet_focus()
 
                         animate_y(
                             playlist_sheet,
@@ -717,14 +930,20 @@ local NowPlaying =
                                     128,
                                     main_target_y,
                                     function()
-                                        favorite_button
-                                            :focus()
+                                        activate_sheet_buttons(
+                                            main_buttons,
+                                            favorite_button
+                                        )
                                     end
                                 )
                             end
                         )
                     end
                 )
+            table.insert(
+                playlist_buttons,
+                playlist_back
+            )
 
             if library then
                 for _, playlist in ipairs(
@@ -733,11 +952,12 @@ local NowPlaying =
                     local playlist_copy =
                         playlist
 
-                    add_sheet_button(
-                        playlist_list,
-                        playlist_copy.name or
-                            "Playlist",
-                        function()
+                    local playlist_button =
+                        add_sheet_button(
+                            playlist_list,
+                            playlist_copy.name or
+                                "Playlist",
+                            function()
                             local playlist_id =
                                 playlist_copy
                                     .local_id or
@@ -771,11 +991,18 @@ local NowPlaying =
                                     ),
                             }
 
-                            close_soon()
-                        end
+                                close_soon()
+                            end
+                        )
+                    table.insert(
+                        playlist_buttons,
+                        playlist_button
                     )
                 end
             end
+
+            remove_from_group(dimmer)
+            remove_sheet_buttons()
 
             self.open_sheet =
                 function()
@@ -804,6 +1031,7 @@ local NowPlaying =
                     )
 
                     self.sheet_animating = true
+                    prepare_sheet_focus()
 
                     animate_y(
                         main_sheet,
@@ -812,7 +1040,10 @@ local NowPlaying =
                         function()
                             self.sheet_animating =
                                 false
-                            favorite_button:focus()
+                            activate_sheet_buttons(
+                                main_buttons,
+                                favorite_button
+                            )
                         end
                     )
                 end
@@ -873,6 +1104,16 @@ local NowPlaying =
                     )
                 end
             )
+
+            self.playing_binding =
+                playback.playing:bind(
+                    function(playing)
+                        self.view:update {
+                            paused =
+                                playing ~= true,
+                        }
+                    end
+                )
 
             self.position_binding =
                 playback.position:bind(
@@ -1029,6 +1270,10 @@ local NowPlaying =
             jellyfin_navigation.clear_back(
                 self.handle_back
             )
+
+            if self.release_sheet_focus then
+                self.release_sheet_focus()
+            end
 
             local input_method =
                 self.input_method

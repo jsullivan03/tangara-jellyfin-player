@@ -28,34 +28,10 @@ local lock_time = time.ticks()
 
 -- Set up property bindings that are used across every screen.
 GLOBAL_BINDINGS = {
-  -- Show an alert with the current volume whenever the volume changes
+  -- Show a compact side volume HUD while the display is awake. The lock
+  -- switch is Tangara's pocket mode, so volume changes remain silent there.
   vol.current_pct:bind(function(pct)
-    require("alerts").show(function()
-      local container = lvgl.Object(nil, {
-        w = lvgl.PCT(80),
-        h = lvgl.SIZE_CONTENT,
-        flex = {
-          flex_direction = "column",
-          justify_content = "center",
-          align_items = "center",
-          align_content = "center",
-        },
-        radius = 8,
-        pad_all = 2,
-      })
-      theme.set_subject(container, "pop_up")
-      container:Label {
-        text = string.format("Volume %i%%", pct),
-        text_font = font.fusion_10
-      }
-      container:Bar {
-        w = lvgl.PCT(100),
-        h = 8,
-        range = { min = 0, max = 100 },
-        value = pct,
-      }
-      container:center()
-    end)
+    require("volume_hud").show(pct)
   end),
   -- When the device has been locked for a while, default to showing the now
   -- playing screen after unlocking.

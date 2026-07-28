@@ -4,6 +4,33 @@ local jellyfin_marquee =
 
 local M = {}
 
+local function animate_y(
+    object,
+    start_y,
+    end_y
+)
+    object:set {
+        y = start_y,
+    }
+
+    object:Anim {
+        run = true,
+        start_value = start_y,
+        end_value = end_y,
+        duration = 150,
+        path = "linear",
+        exec_cb =
+            function(
+                animated_object,
+                position
+            )
+                animated_object:set {
+                    y = position,
+                }
+            end,
+    }
+end
+
 function M.create(options)
     options = options or {}
 
@@ -126,6 +153,46 @@ function M.create(options)
             border_width = 0,
             bg_color = "#F4F4F7",
         }
+
+    local pause_icon = root:Object {
+        x = 76,
+        y = 116,
+        w = 8,
+        h = 10,
+        pad_all = 0,
+        border_width = 0,
+        radius = 0,
+        bg_opa = 0,
+        scrollbar_mode =
+            lvgl.SCROLLBAR_MODE.OFF,
+    }
+
+    pause_icon:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+    pause_icon:add_flag(
+        lvgl.FLAG.HIDDEN
+    )
+
+    pause_icon:Object {
+        x = 0,
+        y = 1,
+        w = 2,
+        h = 8,
+        radius = 1,
+        border_width = 0,
+        bg_color = "#F4F4F7",
+    }
+
+    pause_icon:Object {
+        x = 5,
+        y = 1,
+        w = 2,
+        h = 8,
+        radius = 1,
+        border_width = 0,
+        bg_color = "#F4F4F7",
+    }
 
     local status_bar = root:Object {
         x = 0,
@@ -350,6 +417,127 @@ function M.create(options)
         root = root,
     }
 
+    local paused = nil
+    local layout_ready = false
+    local target_time_y = 111
+    local target_progress_y = 124
+    local pause_icon_generation = 0
+    local pause_icon_pending = false
+
+    local function hide_pause_icon()
+        pause_icon:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+    end
+
+    local function show_pause_icon()
+        pause_icon:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+    end
+
+    local function schedule_pause_icon()
+        pause_icon_generation =
+            pause_icon_generation + 1
+
+        local generation =
+            pause_icon_generation
+
+        pause_icon_pending = true
+        hide_pause_icon()
+
+        lvgl.Timer {
+            period = 105,
+            repeat_count = 1,
+            cb = function()
+                if paused == true and
+                    generation ==
+                        pause_icon_generation then
+                    pause_icon_pending = false
+                    show_pause_icon()
+                end
+            end,
+        }
+    end
+
+    local function set_paused(
+        next_paused,
+        animated
+    )
+        next_paused = next_paused == true
+
+        if paused == next_paused then
+            return
+        end
+
+        local start_time_y =
+            paused and 116 or 111
+        local start_progress_y =
+            paused and 128 or 124
+
+        paused = next_paused
+        target_time_y =
+            paused and 116 or 111
+        target_progress_y =
+            paused and 128 or 124
+
+        pause_icon_generation =
+            pause_icon_generation + 1
+        pause_icon_pending = false
+        hide_pause_icon()
+
+        if animated then
+            animate_y(
+                elapsed,
+                start_time_y,
+                target_time_y
+            )
+            animate_y(
+                remaining,
+                start_time_y,
+                target_time_y
+            )
+            animate_y(
+                progress,
+                start_progress_y,
+                target_progress_y
+            )
+        else
+            elapsed:set {
+                y = target_time_y,
+            }
+            remaining:set {
+                y = target_time_y,
+            }
+            progress:set {
+                y = target_progress_y,
+            }
+        end
+
+        if paused then
+            if animated then
+                schedule_pause_icon()
+            else
+                show_pause_icon()
+            end
+        end
+    end
+
+    function screen:layout_state()
+        return {
+            paused = paused == true,
+            elapsed_y = target_time_y,
+            remaining_y = target_time_y,
+            progress_y = target_progress_y,
+            pause_icon_visible =
+                paused == true and
+                pause_icon_pending ~= true,
+            pause_icon_pending =
+                pause_icon_pending == true,
+            pause_icon_delay_ms = 105,
+        }
+    end
+
     function screen:update(values)
         values = values or {}
 
@@ -383,6 +571,13 @@ function M.create(options)
                 values.artist
             )
             artist_marquee:start()
+        end
+
+        if values.paused ~= nil then
+            set_paused(
+                values.paused,
+                layout_ready
+            )
         end
 
         if values.progress ~= nil then
@@ -456,6 +651,12 @@ function M.create(options)
     end
 
     screen:update(options)
+
+    if paused == nil then
+        set_paused(false, false)
+    end
+
+    layout_ready = true
     update_battery()
 
     return screen
