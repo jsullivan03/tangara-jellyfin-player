@@ -1,3 +1,6 @@
+local jellyfin_scroll_indicator =
+    require("jellyfin_scroll_indicator")
+
 local M = {}
 
 local DEFAULT_POOL_SIZE = 7
@@ -201,6 +204,36 @@ function M.create(
         return #self.pool
     end
 
+    function controller:scroll_thumb_height(
+        item_count
+    )
+        local indicator =
+            self.scroll_indicator
+
+        if not indicator then
+            return 0
+        end
+
+        return
+            indicator:thumb_height_for(
+                item_count or #self.items
+            )
+    end
+
+    function controller:update_scroll_indicator()
+        local indicator =
+            self.scroll_indicator
+
+        if not indicator then
+            return
+        end
+
+        indicator:update(
+            #self.items,
+            self.selected_index
+        )
+    end
+
     function controller:window_for(index)
         local count = #self.items
         local pool_count = #self.pool
@@ -305,6 +338,7 @@ function M.create(
             )
 
         self.selected_index = index
+        self:update_scroll_indicator()
 
         local next_start =
             self:window_for(index)
@@ -453,6 +487,7 @@ function M.create(
 
         self.selected_index =
             logical_index
+        self:update_scroll_indicator()
 
         local selected =
             self.items[logical_index]
@@ -564,6 +599,7 @@ function M.create(
                 self.selected_index
             )
         )
+        self:update_scroll_indicator()
     end
 
     local pool_count =
@@ -587,7 +623,6 @@ function M.create(
             pool_count,
             controller.anchor + 1
         )
-
     screen.media_rows = {}
 
     for slot = 1, pool_count do
@@ -667,6 +702,14 @@ function M.create(
         )
     end
 
+    controller.scroll_indicator =
+        jellyfin_scroll_indicator.create(
+            screen.list,
+            options.scroll_indicator
+        )
+    screen.virtual_scroll_indicator =
+        controller.scroll_indicator
+
     screen.selection_object_for_id =
         function(id)
             local index =
@@ -678,6 +721,7 @@ function M.create(
 
             controller.selected_index =
                 index
+            controller:update_scroll_indicator()
 
             local slot =
                 controller:slot_for(index)

@@ -208,6 +208,61 @@ assert(
         tostring(virtual.selected_index)
 )
 
+local scroll_indicator =
+    assert(
+        virtual.scroll_indicator,
+        "virtual Tracks list did not create a scroll indicator"
+    )
+
+assert(
+    tracks_screen.virtual_scroll_indicator ==
+        scroll_indicator,
+    "Tracks screen did not expose the virtual scroll indicator"
+)
+assert(
+    scroll_indicator.width == 2,
+    "virtual scroll indicator should be two pixels wide"
+)
+assert(
+    virtual:scroll_thumb_height(20) >
+        virtual:scroll_thumb_height(100) and
+    virtual:scroll_thumb_height(100) >
+        virtual:scroll_thumb_height(5000),
+    "scroll thumb height should decrease as the logical list grows"
+)
+assert(
+    scroll_indicator.thumb_height ==
+        virtual:scroll_thumb_height(100),
+    "initial scroll thumb height does not match the 100-track list"
+)
+assert(
+    scroll_indicator.thumb_y == 0,
+    "initial scroll thumb should begin at the top"
+)
+assert(
+    scroll_indicator.hidden == false,
+    "100-track scroll indicator should be visible"
+)
+
+assert(
+    scroll_indicator.track == nil,
+    "scroll indicator should not create a background track"
+)
+assert(
+    scroll_indicator.thumb_color == "#FFFFFF" and
+        scroll_indicator.thumb_opacity == 255,
+    "scroll indicator thumb should be solid white"
+)
+
+local indicator_thumb_coordinates =
+    scroll_indicator.thumb:get_coords()
+
+assert(
+    indicator_thumb_coordinates.x2 -
+        indicator_thumb_coordinates.x1 + 1 == 2,
+    "scroll indicator thumb is not two pixels wide"
+)
+
 local initial_metrics =
     metrics.snapshot()
 
@@ -270,7 +325,13 @@ assert(
         virtual.forward_slot,
     "continued downward navigation should settle on the lower focus-band slot"
 )
+assert(
+    scroll_indicator.thumb_y > 0,
+    "scroll indicator did not move after navigating to track 25"
+)
 
+local downward_indicator_y =
+    scroll_indicator.thumb_y
 local downward_window_start =
     virtual.window_start
 
@@ -291,6 +352,11 @@ assert(
     virtual:selected_model().virtual_slot ==
         virtual.forward_slot - 1,
     "the first upward reversal should move the highlight up one physical row"
+)
+assert(
+    scroll_indicator.thumb_y <=
+        downward_indicator_y,
+    "scroll indicator moved in the wrong direction while navigating upward"
 )
 
 group:focus_next()
@@ -477,6 +543,10 @@ assert(
     "applying a new sort should reset the virtual window to 1, got " ..
         tostring(virtual.window_start)
 )
+assert(
+    scroll_indicator.thumb_y == 0,
+    "sorting should reset the scroll indicator to the top"
+)
 local sorted_first_id =
     assert(
         virtual.items[1].id,
@@ -548,6 +618,61 @@ assert(
         :get_focused() ==
         virtual:selected_model().object,
     "post-sort child return did not focus the selected virtual row"
+)
+
+local full_list_thumb_height =
+    scroll_indicator.thumb_height
+local original_items = virtual.items
+local original_selected_index =
+    virtual.selected_index
+local short_tracks = {}
+
+for index = 1, 12 do
+    short_tracks[index] =
+        original_items[index]
+end
+
+virtual.items = short_tracks
+virtual.selected_index = 1
+virtual:update_scroll_indicator()
+
+assert(
+    scroll_indicator.thumb_height >
+        full_list_thumb_height,
+    "scroll thumb did not grow when the logical list became shorter"
+)
+assert(
+    scroll_indicator.thumb_y == 0,
+    "shorter list should position the thumb at the top"
+)
+assert(
+    scroll_indicator.hidden == false,
+    "12-track scroll indicator should remain visible"
+)
+
+virtual.items = {
+    short_tracks[1],
+    short_tracks[2],
+    short_tracks[3],
+}
+virtual.selected_index = 1
+virtual:update_scroll_indicator()
+
+assert(
+    scroll_indicator.hidden == true,
+    "scroll indicator should hide when all logical items fit"
+)
+
+virtual.items = original_items
+virtual.selected_index =
+    original_selected_index
+virtual:update_scroll_indicator()
+
+assert(
+    scroll_indicator.hidden == false and
+        scroll_indicator.thumb_height ==
+            full_list_thumb_height,
+    "scroll indicator did not restore after the size checks"
 )
 
 os.execute("rm -rf " .. root)

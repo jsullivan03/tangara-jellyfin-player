@@ -7,6 +7,8 @@ local jellyfin_navigation =
     require("jellyfin_navigation")
 local jellyfin_status_bar =
     require("jellyfin_status_bar")
+local jellyfin_scroll_indicator =
+    require("jellyfin_scroll_indicator")
 
 local M = {}
 
@@ -1620,6 +1622,57 @@ function M.focus_first_row(self)
 
 
     schedule_initial_scroll(self)
+end
+
+function M.attach_scroll_indicator(
+    self,
+    models,
+    options
+)
+    models = models or {}
+
+    local indicator =
+        jellyfin_scroll_indicator.create(
+            self and self.list,
+            options
+        )
+
+    if not indicator then
+        return nil
+    end
+
+    indicator.models = models
+    indicator.item_count = #models
+
+    for index, model in ipairs(models) do
+        local row_index = index
+
+        if model then
+            local previous_on_focus =
+                model.on_focus
+
+            model.on_focus = function()
+                if type(previous_on_focus) ==
+                        "function" then
+                    previous_on_focus()
+                end
+
+                indicator:update(
+                    indicator.item_count,
+                    row_index
+                )
+            end
+        end
+    end
+
+    indicator:update(
+        indicator.item_count,
+        1
+    )
+
+    self.scroll_indicator = indicator
+
+    return indicator
 end
 
 function M.add_count_row(

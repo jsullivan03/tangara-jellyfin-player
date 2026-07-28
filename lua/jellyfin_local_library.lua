@@ -564,9 +564,25 @@ ArtistsScreen =
                 set_first_media_row(
                     self
                 )
+
+                if self.scroll_indicator then
+                    self.scroll_indicator:update(
+                        #self.media_rows,
+                        1
+                    )
+                end
             end
 
             self.apply_sort()
+
+            jellyfin_list_ui
+                .attach_scroll_indicator(
+                    self,
+                    self.media_rows,
+                    {
+                        visible_items = 4,
+                    }
+                )
         end,
 
         on_show =

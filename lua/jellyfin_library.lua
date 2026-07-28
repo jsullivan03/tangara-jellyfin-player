@@ -517,6 +517,10 @@ LibraryScreen =
             self.first_row =
                 favorites_row.object
 
+            local playlist_rows = {
+                favorites_row,
+            }
+
             for _, playlist in ipairs(
                 library.playlists or {}
             ) do
@@ -527,29 +531,46 @@ LibraryScreen =
                     playlist_copy.local_id or
                     playlist_copy.id
 
-                jellyfin_list_ui
-                    .add_playlist_row(
-                        self,
-                        playlist_copy,
-                        artwork_path(
+                local row =
+                    jellyfin_list_ui
+                        .add_playlist_row(
+                            self,
                             playlist_copy,
-                            "//lua/img/playlist_placeholder.png"
-                        ),
-                        function()
-                            backstack.push(
-                                CollectionScreen:new {
-                                    title =
-                                        playlist_copy.name or
-                                        "Playlist",
-                                    collection_kind =
-                                        "playlist",
-                                    collection_id =
-                                        playlist_id,
-                                }
-                            )
-                        end
-                    )
+                            artwork_path(
+                                playlist_copy,
+                                "//lua/img/playlist_placeholder.png"
+                            ),
+                            function()
+                                backstack.push(
+                                    CollectionScreen:new {
+                                        title =
+                                            playlist_copy.name or
+                                            "Playlist",
+                                        collection_kind =
+                                            "playlist",
+                                        collection_id =
+                                            playlist_id,
+                                    }
+                                )
+                            end
+                        )
+
+                table.insert(
+                    playlist_rows,
+                    row
+                )
             end
+
+            self.playlist_rows = playlist_rows
+
+            jellyfin_list_ui
+                .attach_scroll_indicator(
+                    self,
+                    playlist_rows,
+                    {
+                        visible_items = 3,
+                    }
+                )
         end,
 
         on_show =

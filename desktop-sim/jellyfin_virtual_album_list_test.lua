@@ -223,6 +223,34 @@ assert(
     "initial virtual album index should be 1"
 )
 
+local scroll_indicator =
+    assert(
+        virtual.scroll_indicator,
+        "virtual Albums list did not create a scroll indicator"
+    )
+
+assert(
+    albums_screen.virtual_scroll_indicator ==
+        scroll_indicator,
+    "Albums screen did not expose the virtual scroll indicator"
+)
+assert(
+    scroll_indicator.width == 2 and
+        scroll_indicator.hidden == false,
+    "Albums scroll indicator should be a visible two-pixel bar"
+)
+assert(
+    scroll_indicator.track == nil and
+        scroll_indicator.thumb_color == "#FFFFFF" and
+        scroll_indicator.thumb_opacity == 255,
+    "Albums scroll indicator should be a solid white thumb with no track"
+)
+assert(
+    scroll_indicator.thumb_height ==
+        virtual:scroll_thumb_height(100),
+    "Albums scroll thumb height does not match its logical list size"
+)
+
 local initial_metrics =
     metrics.snapshot()
 
@@ -268,6 +296,10 @@ assert(
     albums_screen.selected_item_id ==
         index_25_id,
     "24 forward moves selected the wrong album"
+)
+assert(
+    scroll_indicator.thumb_y > 0,
+    "Albums scroll indicator did not move with navigation"
 )
 
 local selected_model =
@@ -353,6 +385,10 @@ assert(
 assert(
     virtual.window_start == 1,
     "sorting should reset the album window to 1"
+)
+assert(
+    scroll_indicator.thumb_y == 0,
+    "sorting should reset the Albums scroll indicator"
 )
 
 local sorted_first_id =
