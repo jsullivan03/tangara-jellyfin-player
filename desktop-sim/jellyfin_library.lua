@@ -178,6 +178,17 @@ local function playlist_command_ok(command)
         )
 end
 
+local function playlist_file_exists(path)
+    local file = io.open(path, "rb")
+
+    if not file then
+        return false
+    end
+
+    file:close()
+    return true
+end
+
 local playlist_artwork_root =
     root .. "/sim-playlist-artwork"
 
@@ -211,6 +222,15 @@ local function cache_collection_artwork(
         "/" ..
         stem ..
         ".png"
+
+    if playlist_file_exists(destination) then
+        collection.artwork = {
+            cover =
+                "/" .. destination,
+        }
+
+        return true
+    end
 
     local temporary =
         destination .. ".part"
@@ -509,7 +529,7 @@ local function download_artwork(
     destination
 )
     if file_exists(destination) then
-        return true
+        return true, false
     end
 
     local temporary =
@@ -520,7 +540,10 @@ local function download_artwork(
         "/devices/" ..
         encode_path_segment(device_id) ..
         "/items/" ..
-        encode_path_segment(track.id) ..
+        encode_path_segment(
+            track.id or
+            track.jellyfin_id
+        ) ..
         "/artwork/" ..
         variant
 
@@ -540,14 +563,55 @@ local function download_artwork(
         shell_quote(destination)
 
     if command_succeeded(command) then
-        return true
+        return true, true
     end
 
     os.remove(temporary)
-    return false
+    return false, false
+end
+
+local cached_artwork_by_track = {}
+
+local function apply_cached_artwork(
+    track,
+    cached
+)
+    track.artwork = track.artwork or {}
+
+    if cached.cover then
+        track.artwork.cover = cached.cover
+    end
+
+    if cached.background then
+        track.artwork.background =
+            cached.background
+    end
 end
 
 local function cache_track_artwork(track)
+    if type(track) ~= "table" then
+        return false
+    end
+
+    local track_id =
+        track.id or
+        track.jellyfin_id
+
+    if type(track_id) ~= "string" or
+        track_id == "" then
+        return false
+    end
+
+    local cached =
+        cached_artwork_by_track[track_id]
+
+    if cached then
+        apply_cached_artwork(
+            track,
+            cached
+        )
+        return true
+    end
     local current_manifest =
         manifest_cache.load()
 
@@ -560,9 +624,9 @@ local function cache_track_artwork(track)
     for _, candidate in ipairs(
         current_manifest.items or {}
     ) do
-        if candidate.id == track.id or
+        if candidate.id == track_id or
             candidate.jellyfin_id ==
-                track.id then
+                track_id then
             item = candidate
             break
         end
@@ -581,7 +645,7 @@ local function cache_track_artwork(track)
     )
 
     local stem =
-        track.id:gsub(
+        track_id:gsub(
             "[^A-Za-z0-9._-]",
             "_"
         )
@@ -598,14 +662,16 @@ local function cache_track_artwork(track)
         stem ..
         "-background.png"
 
-    local cover_ready =
+    local cover_ready,
+        cover_downloaded =
         download_artwork(
             track,
             "cover",
             cover_path
         )
 
-    local background_ready =
+    local background_ready,
+        background_downloaded =
         download_artwork(
             track,
             "background",
@@ -615,20 +681,30 @@ local function cache_track_artwork(track)
     item.artwork =
         item.artwork or {}
 
-    track.artwork =
-        track.artwork or {}
+    local manifest_changed = false
+    local resolved = {}
 
     if cover_ready then
         local value = "/" .. cover_path
-        item.artwork.cover = value
-        track.artwork.cover = value
+
+        if item.artwork.cover ~= value then
+            item.artwork.cover = value
+            manifest_changed = true
+        end
+
+        resolved.cover = value
     end
 
     if background_ready then
         local value =
             "/" .. background_path
-        item.artwork.background = value
-        track.artwork.background = value
+
+        if item.artwork.background ~= value then
+            item.artwork.background = value
+            manifest_changed = true
+        end
+
+        resolved.background = value
     end
 
     if not cover_ready and
@@ -641,26 +717,39 @@ local function cache_track_artwork(track)
         return false
     end
 
-    local saved, save_error =
-        manifest_cache.save(
-            json_encode.encode(
-                current_manifest
+    apply_cached_artwork(
+        track,
+        resolved
+    )
+
+    if manifest_changed then
+        local saved, save_error =
+            manifest_cache.save(
+                json_encode.encode(
+                    current_manifest
+                )
             )
-        )
 
-    if not saved then
-        print(
-            "Artwork cache save failed: " ..
-            tostring(save_error)
-        )
+        if not saved then
+            print(
+                "Artwork cache save failed: " ..
+                tostring(save_error)
+            )
 
-        return false
+            return false
+        end
     end
 
-    print(
-        "Artwork cached for: " ..
-        tostring(track.title)
-    )
+    cached_artwork_by_track[track_id] =
+        resolved
+
+    if cover_downloaded or
+        background_downloaded then
+        print(
+            "Artwork cached for: " ..
+            tostring(track.title)
+        )
+    end
 
     return true
 end

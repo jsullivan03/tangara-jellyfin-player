@@ -9,6 +9,8 @@ local jellyfin_playback =
     require("jellyfin_playback")
 local jellyfin_sort =
     require("jellyfin_sort")
+local jellyfin_track_action_sheet =
+    require("jellyfin_track_action_sheet")
 local jellyfin_virtual_list =
     require("jellyfin_virtual_list")
 local jellyfin_virtual_track_list =
@@ -272,6 +274,9 @@ AlbumScreen =
                 self.title or "Album"
             )
 
+            jellyfin_track_action_sheet
+                .attach(self)
+
             local library =
                 load_library(self)
 
@@ -299,6 +304,14 @@ AlbumScreen =
                 album.tracks or {}
             ) do
                 local track_copy = track
+                local context = {
+                    collection_kind =
+                        "local_album",
+                    collection_id =
+                        album.key,
+                    queue_tracks =
+                        album.tracks,
+                }
 
                 local row =
                     jellyfin_list_ui
@@ -312,15 +325,17 @@ AlbumScreen =
                                     function()
                                         play_track(
                                             track_copy,
-                                            {
-                                                collection_kind =
-                                                    "local_album",
-                                                collection_id =
-                                                    album.key,
-                                                queue_tracks =
-                                                    album.tracks,
-                                            }
+                                            context
                                         )
+                                    end,
+                                on_long_press =
+                                    function()
+                                        self.track_action_sheet
+                                            :open(
+                                                track_copy,
+                                                context,
+                                                track_copy
+                                            )
                                     end,
                             }
                         )
@@ -340,6 +355,12 @@ AlbumScreen =
                 set_first_media_row(
                     self
                 )
+
+                jellyfin_list_ui
+                    .attach_scroll_indicator(
+                        self,
+                        self.media_rows
+                    )
             end
         end,
 
@@ -464,9 +485,22 @@ ArtistScreen =
                 set_first_media_row(
                     self
                 )
+
+                if self.scroll_indicator then
+                    self.scroll_indicator:update(
+                        #self.media_rows,
+                        1
+                    )
+                end
             end
 
             self.apply_sort()
+
+            jellyfin_list_ui
+                .attach_scroll_indicator(
+                    self,
+                    self.media_rows
+                )
         end,
 
         on_show =
@@ -580,10 +614,7 @@ ArtistsScreen =
             jellyfin_list_ui
                 .attach_scroll_indicator(
                     self,
-                    self.media_rows,
-                    {
-                        visible_items = 4,
-                    }
+                    self.media_rows
                 )
         end,
 
@@ -734,6 +765,9 @@ TracksScreen =
                 }
             )
 
+            jellyfin_track_action_sheet
+                .attach(self)
+
             local library =
                 load_library(self)
 
@@ -798,6 +832,22 @@ TracksScreen =
                                                     self.sorted_tracks,
                                             }
                                         )
+                                    end,
+                                on_long_press =
+                                    function(track)
+                                        local context = {
+                                            collection_kind =
+                                                "local_tracks",
+                                            queue_tracks =
+                                                self.sorted_tracks,
+                                        }
+
+                                        self.track_action_sheet
+                                            :open(
+                                                track,
+                                                context,
+                                                track
+                                            )
                                     end,
                             }
                         )

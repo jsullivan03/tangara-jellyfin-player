@@ -1561,6 +1561,12 @@ end
 
 function M.restore_controls(self)
     self.ui_active = false
+
+    if self.track_action_sheet and
+        self.track_action_sheet.is_open then
+        self.track_action_sheet:close(true)
+    end
+
     self.suppress_selection_tracking = true
     pending_initial_scrolls[self] = nil
 
@@ -1651,6 +1657,90 @@ function M.focus_first_row(self)
     schedule_initial_scroll(self)
 end
 
+local function object_height(object)
+    if not object then
+        return nil
+    end
+
+    local ok, coordinates =
+        pcall(
+            function()
+                return object:get_coords()
+            end
+        )
+
+    if not ok or
+        type(coordinates) ~= "table" then
+        return nil
+    end
+
+    local height =
+        tonumber(coordinates.y2) and
+        tonumber(coordinates.y1) and
+        coordinates.y2 -
+            coordinates.y1 + 1 or
+        nil
+
+    if not height or height <= 0 then
+        return nil
+    end
+
+    return height, coordinates
+end
+
+local function inferred_visible_items(
+    self,
+    models
+)
+    local list_height =
+        self and self.list and
+        object_height(self.list)
+    local row_height = nil
+    local first_coordinates = nil
+
+    if models[1] then
+        row_height,
+            first_coordinates =
+            object_height(
+                models[1].object
+            )
+    end
+
+    if not list_height or
+        not row_height then
+        return nil
+    end
+
+    local spacing = 1
+
+    if models[2] then
+        local _, second_coordinates =
+            object_height(
+                models[2].object
+            )
+
+        if first_coordinates and
+            second_coordinates then
+            spacing =
+                math.max(
+                    0,
+                    second_coordinates.y1 -
+                        first_coordinates.y2 -
+                        1
+                )
+        end
+    end
+
+    return
+        math.max(
+            1,
+            math.floor(
+                (list_height + spacing) /
+                (row_height + spacing)
+            )
+        )
+end
+
 function M.attach_scroll_indicator(
     self,
     models,
@@ -1658,10 +1748,30 @@ function M.attach_scroll_indicator(
 )
     models = models or {}
 
+    if options == false then
+        return nil
+    end
+
+    local indicator_options = {}
+
+    if type(options) == "table" then
+        for key, value in pairs(options) do
+            indicator_options[key] = value
+        end
+    end
+
+    if indicator_options.visible_items == nil then
+        indicator_options.visible_items =
+            inferred_visible_items(
+                self,
+                models
+            )
+    end
+
     local indicator =
         jellyfin_scroll_indicator.create(
             self and self.list,
-            options
+            indicator_options
         )
 
     if not indicator then

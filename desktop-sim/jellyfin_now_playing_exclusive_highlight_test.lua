@@ -23,7 +23,7 @@ package.loaded["jellyfin_playback"] = {
         return {
             track = {
                 id = "track-1",
-                title = "Focus Test",
+                title = "Exclusive Highlight",
                 artist = "Test Artist",
                 artist_key = "id:artist-1",
                 duration = 180,
@@ -34,7 +34,9 @@ package.loaded["jellyfin_playback"] = {
         }
     end,
     sync_position = function()
-        return package.loaded["jellyfin_playback"].current()
+        return package.loaded[
+            "jellyfin_playback"
+        ].current()
     end,
 }
 
@@ -90,40 +92,26 @@ lvgl.Timer {
     cb = function()
         local ok, failure = pcall(
             function()
-                local state =
-                    page.sheet_focus_state()
-
-                assert(
-                    state.page == "main" and
-                        state.main_count == 3 and
-                        state.active_count == 3 and
-                        state.wrap_disabled == true,
-                    "Now Playing main sheet did not restrict focus to its three visible options"
-                )
-
-                assert(
-                    state.main_actions[1] ==
-                            "artist" and
-                        state.main_actions[2] ==
-                            "favorite" and
-                        state.main_actions[3] ==
-                            "add_to_playlist",
-                    "Now Playing main sheet actions were not built in the expected order"
-                )
-
                 local group =
-                    assert(lvgl.group.get_default())
-
+                    assert(
+                        lvgl.group.get_default()
+                    )
                 local first =
                     assert(group:get_focused())
 
-                group:focus_next()
-                local second =
-                    assert(group:get_focused())
-
                 assert(
-                    second ~= first,
-                    "main sheet did not move to its second option"
+                    page.sheet_focus_state()
+                        .highlighted_action ==
+                        "artist",
+                    "first Now Playing action was not the sole visual selection"
+                )
+
+                group:focus_next()
+                assert(
+                    page.sheet_focus_state()
+                        .highlighted_action ==
+                        "favorite",
+                    "Now Playing highlight did not follow the second focused action"
                 )
 
                 group:focus_next()
@@ -131,37 +119,37 @@ lvgl.Timer {
                     assert(group:get_focused())
 
                 assert(
-                    third ~= second and
-                        third ~= first,
-                    "main sheet did not move to its third option"
+                    page.sheet_focus_state()
+                        .highlighted_action ==
+                        "add_to_playlist",
+                    "Now Playing highlight did not follow the final focused action"
                 )
 
-                group:focus_next()
-                group:focus_next()
-
-                assert(
-                    group:get_focused() == third,
-                    "main sheet wrapped or focused an invisible option below its last visible option"
+                -- Reproduce the visual failure mode: an old row retains a
+                -- focused state while another row is the real group focus.
+                first:add_state(
+                    lvgl.STATE.FOCUSED |
+                    lvgl.STATE.FOCUS_KEY
                 )
+                lvgl.group.focus_obj(third)
 
-                group:focus_prev()
                 assert(
-                    group:get_focused() == second,
-                    "main sheet did not move back to its second option"
+                    first:get_state() &
+                            lvgl.STATE.FOCUSED ==
+                        0,
+                    "exclusive highlight refresh left a stale row focused"
                 )
-
-                group:focus_prev()
                 assert(
-                    group:get_focused() == first,
-                    "main sheet did not move back to its first option"
+                    third:get_state() &
+                            lvgl.STATE.FOCUSED ~=
+                        0,
+                    "exclusive highlight refresh cleared the real focused row"
                 )
-
-                group:focus_prev()
-                group:focus_prev()
-
                 assert(
-                    group:get_focused() == first,
-                    "main sheet wrapped or focused an invisible option above its first visible option"
+                    page.sheet_focus_state()
+                        .highlighted_action ==
+                        "add_to_playlist",
+                    "exclusive highlight refresh changed the selected action"
                 )
             end
         )
@@ -175,7 +163,7 @@ lvgl.Timer {
         end
 
         print(
-            "Now Playing dynamic sheet includes Go to artist and limits focus to visible options"
+            "Now Playing clears stale row focus and keeps exactly one highlighted action"
         )
         os.exit(0)
     end,

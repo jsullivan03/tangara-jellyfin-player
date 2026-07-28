@@ -5,6 +5,8 @@ local jellyfin_navigation =
     require("jellyfin_navigation")
 local jellyfin_playback =
     require("jellyfin_playback")
+local jellyfin_track_actions =
+    require("jellyfin_track_actions")
 local playback = require("playback")
 local power = require("power")
 local queue = require("queue")
@@ -203,30 +205,11 @@ local function server_connected(active)
     return status.connected == true
 end
 
-local function favorite_state(
-    library,
-    item_id
-)
-    if not library or
-        not library.favorites then
-        return false
-    end
-
-    for _, track in ipairs(
-        library.favorites.items or {}
-    ) do
-        if track.id == item_id then
-            return true
-        end
-    end
-
-    return false
-end
-
 local function add_sheet_button(
     list,
     label,
-    callback
+    callback,
+    on_focus
 )
     local button =
         list:add_btn(nil, label)
@@ -247,25 +230,14 @@ local function add_sheet_button(
         text_font = font.fusion_10,
     }
 
-    button:onevent(
-        lvgl.EVENT.FOCUSED,
-        function()
-            button:set {
-                bg_opa = 0,
-                text_color = "#72AFFF",
-            }
-        end
-    )
-
-    button:onevent(
-        lvgl.EVENT.DEFOCUSED,
-        function()
-            button:set {
-                bg_opa = 0,
-                text_color = "#FFFFFF",
-            }
-        end
-    )
+    if type(on_focus) == "function" then
+        button:onevent(
+            lvgl.EVENT.FOCUSED,
+            function()
+                on_focus(button)
+            end
+        )
+    end
 
     button:onClicked(callback)
 
@@ -557,17 +529,8 @@ local NowPlaying =
                     bg_opa = 95,
                 }
 
-            local option_count = 2
-
-            if context.collection_kind ==
-                "playlist" then
-                option_count = 3
-            end
-
-            local main_height =
-                option_count * 15 + 4
-            local main_target_y =
-                128 - main_height
+            local main_height = 34
+            local main_target_y = 94
 
             local main_sheet =
                 overlay:Object {
@@ -607,7 +570,7 @@ local NowPlaying =
                 radius = 0,
                 bg_opa = 0,
                 scrollbar_mode =
-                    lvgl.SCROLLBAR_MODE.OFF,
+                    lvgl.SCROLLBAR_MODE.AUTO,
             }
 
             local playlist_height = 76
@@ -671,17 +634,76 @@ local NowPlaying =
                 sync_library_view.current()
 
             local favorite =
-                favorite_state(
-                    library,
-                    track.id
-                )
+                jellyfin_track_actions
+                    .favorite_state(
+                        library,
+                        track.id
+                    )
 
             local favorite_button
+            local remove_button
             local main_buttons = {}
+            local main_action_ids = {}
+            local main_actions_by_id = {}
+            local main_initial_button
+            local rebuild_main_actions
             local playlist_buttons = {}
             local sheet_group = nil
             local previous_sheet_wrap = nil
             local active_sheet_button_count = 0
+            local highlighted_sheet_button = nil
+
+            local function refresh_sheet_highlight(
+                focused_button
+            )
+                highlighted_sheet_button =
+                    focused_button
+
+                local stale_focus_state =
+                    lvgl.STATE.FOCUSED |
+                    lvgl.STATE.FOCUS_KEY
+
+                local function update(button)
+                    if not button then
+                        return
+                    end
+
+                    if button ~= focused_button then
+                        pcall(
+                            function()
+                                button:clear_state(
+                                    stale_focus_state
+                                )
+                            end
+                        )
+                    end
+
+                    pcall(
+                        function()
+                            button:set {
+                                bg_opa = 0,
+                                text_color =
+                                    button ==
+                                            focused_button and
+                                        "#72AFFF" or
+                                        "#FFFFFF",
+                            }
+                        end
+                    )
+                end
+
+                for _, button in ipairs(
+                    main_buttons
+                ) do
+                    update(button)
+                end
+
+                for _, button in ipairs(
+                    playlist_buttons
+                ) do
+                    update(button)
+                end
+            end
 
             local function remove_sheet_buttons()
                 for _, button in ipairs(
@@ -697,6 +719,7 @@ local NowPlaying =
                 end
 
                 active_sheet_button_count = 0
+                refresh_sheet_highlight(nil)
             end
 
             local function install_player_focus(
@@ -839,6 +862,21 @@ local NowPlaying =
             self.release_sheet_focus =
                 restore_player_focus
 
+            self.activate_sheet_action =
+                function(action_id)
+                    local callback =
+                        main_actions_by_id[
+                            action_id
+                        ]
+
+                    if type(callback) ~= "function" then
+                        return false
+                    end
+
+                    callback()
+                    return true
+                end
+
             self.sheet_focus_state =
                 function()
                     return {
@@ -850,6 +888,23 @@ local NowPlaying =
                             active_sheet_button_count,
                         wrap_disabled =
                             sheet_group ~= nil,
+                        main_actions =
+                            main_action_ids,
+                        highlighted_action =
+                            (function()
+                                for index, button in ipairs(
+                                    main_buttons
+                                ) do
+                                    if button ==
+                                            highlighted_sheet_button then
+                                        return main_action_ids[
+                                            index
+                                        ]
+                                    end
+                                end
+
+                                return nil
+                            end)(),
                     }
                 end
 
@@ -924,6 +979,40 @@ local NowPlaying =
                 }
             end
 
+            local function open_artist(
+                artist
+            )
+                artist =
+                    artist or
+                    jellyfin_track_actions
+                        .artist_target(
+                            track,
+                            active and
+                            active.item
+                        )
+
+                if not artist then
+                    return
+                end
+
+                finish_close()
+
+                local local_library =
+                    require(
+                        "jellyfin_local_library"
+                    )
+
+                backstack.push(
+                    local_library.Artist:new {
+                        title =
+                            artist.name or
+                            "Artist",
+                        artist_key =
+                            artist.key,
+                    }
+                )
+            end
+
             local function queue_favorite()
                 local operation,
                     operation_error =
@@ -934,39 +1023,73 @@ local NowPlaying =
                         )
 
                 if not operation then
-                    favorite_button:set {
-                        text =
-                            operation_error or
-                            "Unable to queue change",
-                    }
+                    if favorite_button then
+                        favorite_button:set {
+                            text =
+                                operation_error or
+                                "Unable to queue change",
+                        }
+                    end
 
                     return
                 end
 
                 favorite = not favorite
 
-                favorite_button:set {
-                    text =
-                        favorite and
-                        "Remove favorite" or
-                        "Add favorite",
-                }
+                if favorite_button then
+                    favorite_button:set {
+                        text =
+                            favorite and
+                            "Remove favorite" or
+                            "Add favorite",
+                    }
+                end
 
                 close_soon()
             end
 
-            favorite_button =
-                add_sheet_button(
-                    main_list,
-                    favorite and
-                        "Remove favorite" or
-                        "Add favorite",
-                    queue_favorite
-                )
-            table.insert(
-                main_buttons,
-                favorite_button
-            )
+            local function remove_from_playlist()
+                local entry_id =
+                    context.entry_id
+
+                if type(entry_id) ~= "string" or
+                    entry_id == "" or
+                    entry_id:match(
+                        "^local%-entry:"
+                    ) then
+                    if remove_button then
+                        remove_button:set {
+                            text =
+                                "Waiting for sync",
+                        }
+                    end
+
+                    return
+                end
+
+                local operation,
+                    operation_error =
+                    sync_operation_queue
+                        .enqueue_remove_playlist_item(
+                            context
+                                .collection_id,
+                            entry_id
+                        )
+
+                if not operation then
+                    if remove_button then
+                        remove_button:set {
+                            text =
+                                operation_error or
+                                "Unable to remove",
+                        }
+                    end
+
+                    return
+                end
+
+                close_soon()
+            end
 
             self.seek_generation = 0
             self.seek_pending = false
@@ -1015,11 +1138,7 @@ local NowPlaying =
                         format_time(position),
                     remaining =
                         format_time(
-                            math.max(
-                                0,
-                                next_duration -
-                                    position
-                            )
+                            next_duration
                         ),
                 }
             end
@@ -1044,17 +1163,22 @@ local NowPlaying =
                         current_duration()
 
                     favorite =
-                        favorite_state(
-                            library,
-                            track.id
-                        )
+                        jellyfin_track_actions
+                            .favorite_state(
+                                library,
+                                track.id
+                            )
 
-                    favorite_button:set {
-                        text =
-                            favorite and
-                            "Remove favorite" or
-                            "Add favorite",
-                    }
+                    if rebuild_main_actions then
+                        rebuild_main_actions()
+                    elseif favorite_button then
+                        favorite_button:set {
+                            text =
+                                favorite and
+                                "Remove favorite" or
+                                "Add favorite",
+                        }
+                    end
 
                     self.seek_generation =
                         self.seek_generation + 1
@@ -1343,70 +1467,111 @@ local NowPlaying =
                 )
             end
 
-            local add_playlist_button =
-                add_sheet_button(
-                    main_list,
-                    "Add to playlist",
-                    show_playlists
-                )
-            table.insert(
-                main_buttons,
-                add_playlist_button
-            )
+            rebuild_main_actions =
+                function()
+                    for _, button in ipairs(
+                        main_buttons
+                    ) do
+                        remove_from_group(button)
+                    end
 
-            if context.collection_kind ==
-                "playlist" then
-                local remove_button
+                    if self.sheet_page == "main" then
+                        active_sheet_button_count = 0
+                    end
 
-                remove_button =
-                    add_sheet_button(
-                        main_list,
-                        "Remove from playlist",
-                        function()
-                            local entry_id =
-                                context.entry_id
+                    main_list:clean()
 
-                            if type(entry_id) ~=
-                                    "string" or
-                                entry_id == "" or
-                                entry_id:match(
-                                    "^local%-entry:"
-                                ) then
-                                remove_button:set {
-                                    text =
-                                        "Waiting for sync",
-                                }
+                    main_buttons = {}
+                    main_action_ids = {}
+                    main_actions_by_id = {}
+                    main_initial_button = nil
+                    favorite_button = nil
+                    remove_button = nil
 
-                                return
-                            end
+                    local actions =
+                        jellyfin_track_actions.main {
+                            track = track,
+                            item =
+                                active and
+                                active.item,
+                            context = context,
+                            favorite = favorite,
+                            handlers = {
+                                open_artist =
+                                    open_artist,
+                                toggle_favorite =
+                                    queue_favorite,
+                                show_playlists =
+                                    show_playlists,
+                                remove_from_playlist =
+                                    remove_from_playlist,
+                            },
+                        }
 
-                            local operation,
-                                operation_error =
-                                sync_operation_queue
-                                    .enqueue_remove_playlist_item(
-                                        context
-                                            .collection_id,
-                                        entry_id
-                                    )
+                    for _, action in ipairs(
+                        actions
+                    ) do
+                        local button =
+                            add_sheet_button(
+                                main_list,
+                                action.label,
+                                action.activate,
+                                refresh_sheet_highlight
+                            )
 
-                            if not operation then
-                                remove_button:set {
-                                    text =
-                                        operation_error or
-                                        "Unable to remove",
-                                }
+                        table.insert(
+                            main_buttons,
+                            button
+                        )
+                        table.insert(
+                            main_action_ids,
+                            action.id
+                        )
+                        main_actions_by_id[
+                            action.id
+                        ] = action.activate
 
-                                return
-                            end
-
-                            close_soon()
+                        if not main_initial_button then
+                            main_initial_button =
+                                button
                         end
-                    )
-                table.insert(
-                    main_buttons,
-                    remove_button
-                )
-            end
+
+                        if action.id == "favorite" then
+                            favorite_button =
+                                button
+                        elseif action.id ==
+                                "remove_from_playlist" then
+                            remove_button =
+                                button
+                        end
+                    end
+
+                    local content_height =
+                        #main_buttons * 15
+
+                    main_height =
+                        math.min(
+                            109,
+                            content_height + 4
+                        )
+                    main_target_y =
+                        128 - main_height
+
+                    main_sheet:set {
+                        h = main_height,
+                    }
+                    main_list:set {
+                        h = main_height - 4,
+                    }
+
+                    if self.sheet_open and
+                        self.sheet_page == "main" and
+                        not self.sheet_animating then
+                        main_sheet:set {
+                            y = main_target_y,
+                        }
+                    end
+                end
 
             playlist_back =
                 add_sheet_button(
@@ -1447,13 +1612,14 @@ local NowPlaying =
                                     function()
                                         activate_sheet_buttons(
                                             main_buttons,
-                                            favorite_button
+                                            main_initial_button
                                         )
                                     end
                                 )
                             end
                         )
-                    end
+                    end,
+                    refresh_sheet_highlight
                 )
             table.insert(
                 playlist_buttons,
@@ -1507,7 +1673,8 @@ local NowPlaying =
                             }
 
                                 close_soon()
-                            end
+                            end,
+                            refresh_sheet_highlight
                         )
                     table.insert(
                         playlist_buttons,
@@ -1525,6 +1692,8 @@ local NowPlaying =
                         self.sheet_animating then
                         return
                     end
+
+                    rebuild_main_actions()
 
                     self.sheet_open = true
                     self.sheet_page = "main"
@@ -1558,7 +1727,7 @@ local NowPlaying =
                                 false
                             activate_sheet_buttons(
                                 main_buttons,
-                                favorite_button
+                                main_initial_button
                             )
                         end
                     )

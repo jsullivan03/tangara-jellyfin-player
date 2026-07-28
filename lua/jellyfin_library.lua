@@ -9,8 +9,8 @@ local jellyfin_local_index =
     require("jellyfin_local_index")
 local jellyfin_sort =
     require("jellyfin_sort")
-local jellyfin_track_menu =
-    require("jellyfin_track_menu")
+local jellyfin_track_action_sheet =
+    require("jellyfin_track_action_sheet")
 local screen = require("screen")
 local sync_library_view =
     require("sync_library_view")
@@ -257,6 +257,9 @@ CollectionScreen =
                 self.title or "Playlist"
             )
 
+            jellyfin_track_action_sheet
+                .attach(self)
+
             local library,
                 library_error =
                 sync_library_view.current()
@@ -425,22 +428,12 @@ CollectionScreen =
                                     end,
                                 on_long_press =
                                     function()
-                                        backstack.push(
-                                            jellyfin_track_menu
-                                                :new {
-                                                    track =
-                                                        track_copy,
-                                                    collection_kind =
-                                                        context
-                                                            .collection_kind,
-                                                    collection_id =
-                                                        context
-                                                            .collection_id,
-                                                    entry_id =
-                                                        context
-                                                            .entry_id,
-                                                }
-                                        )
+                                        self.track_action_sheet
+                                            :open(
+                                                track_copy,
+                                                context,
+                                                track_copy
+                                            )
                                     end,
                             }
                         )
@@ -456,10 +449,7 @@ CollectionScreen =
             jellyfin_list_ui
                 .attach_scroll_indicator(
                     self,
-                    self.media_rows,
-                    {
-                        visible_items = 3,
-                    }
+                    self.media_rows
                 )
         end,
 
@@ -506,6 +496,8 @@ LibraryScreen =
             end
 
             favorites.artwork = nil
+            favorites.key =
+                "special:favorites"
 
             local favorites_row =
                 jellyfin_list_ui
@@ -576,10 +568,7 @@ LibraryScreen =
             jellyfin_list_ui
                 .attach_scroll_indicator(
                     self,
-                    playlist_rows,
-                    {
-                        visible_items = 3,
-                    }
+                    playlist_rows
                 )
         end,
 

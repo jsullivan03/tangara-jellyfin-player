@@ -1,5 +1,7 @@
 local lvgl = require("lvgl")
 local backstack = require("backstack")
+local jellyfin_track_actions =
+    require("jellyfin_track_actions")
 local styles = require("styles")
 local sync_library_view =
     require("sync_library_view")
@@ -69,21 +71,6 @@ local function add_button(
     button:onClicked(callback)
 
     return button
-end
-
-local function favorite_state(
-    library,
-    item_id
-)
-    for _, track in ipairs(
-        library.favorites.items or {}
-    ) do
-        if track.id == item_id then
-            return true
-        end
-    end
-
-    return false
 end
 
 local function queue_result(
@@ -235,10 +222,11 @@ TrackMenu =
             end
 
             local favorite =
-                favorite_state(
-                    library,
-                    self.track.id
-                )
+                jellyfin_track_actions
+                    .favorite_state(
+                        library,
+                        self.track.id
+                    )
 
             add_button(
                 list,

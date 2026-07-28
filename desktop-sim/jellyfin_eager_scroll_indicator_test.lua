@@ -24,6 +24,10 @@ local case_name =
 local valid_cases = {
     ["artists-long"] = true,
     ["artists-short"] = true,
+    ["artist-releases-long"] = true,
+    ["artist-releases-short"] = true,
+    ["album-tracks-long"] = true,
+    ["album-tracks-short"] = true,
     ["playlists-long"] = true,
     ["playlists-short"] = true,
     ["playlist-tracks-long"] = true,
@@ -130,6 +134,42 @@ for index = 1, 6 do
         track_count = 1,
         releases = {album},
     }
+end
+
+if case_name == "artist-releases-long" or
+    case_name == "artist-releases-short" then
+    local release_count =
+        case_name == "artist-releases-short" and
+            3 or
+            5
+
+    artists[1].releases = {}
+
+    for index = 1, release_count do
+        artists[1].releases[index] =
+            albums[index]
+    end
+
+    artists[1].release_count =
+        release_count
+end
+
+if case_name == "album-tracks-long" or
+    case_name == "album-tracks-short" then
+    local track_count =
+        case_name == "album-tracks-short" and
+            3 or
+            5
+
+    albums[1].tracks = {}
+
+    for index = 1, track_count do
+        albums[1].tracks[index] =
+            tracks[index]
+    end
+
+    albums[1].track_count =
+        track_count
 end
 
 local artist_count =
@@ -323,30 +363,83 @@ local function verify_short_screen(
 end
 
 if case_name == "artists-long" or
-    case_name == "artists-short" then
+    case_name == "artists-short" or
+    case_name == "artist-releases-long" or
+    case_name == "artist-releases-short" or
+    case_name == "album-tracks-long" or
+    case_name == "album-tracks-short" then
     local local_module =
         dofile("lua/jellyfin_local_library.lua")
 
     package.loaded["jellyfin_local_library"] =
         local_module
 
-    local artists_screen =
-        local_module.Artists:new()
+    if case_name == "artist-releases-long" or
+        case_name == "artist-releases-short" then
+        local artist_screen =
+            local_module.Artist:new {
+                title = artists[1].name,
+                artist_key = artists[1].key,
+            }
 
-    if case_name == "artists-long" then
-        verify_long_screen(
-            artists_screen,
-            "Artists",
-            4,
-            6
-        )
+        if case_name ==
+                "artist-releases-long" then
+            verify_long_screen(
+                artist_screen,
+                "Artist releases",
+                3,
+                5
+            )
+        else
+            verify_short_screen(
+                artist_screen,
+                "Artist releases",
+                3,
+                3
+            )
+        end
+    elseif case_name == "album-tracks-long" or
+        case_name == "album-tracks-short" then
+        local album_screen =
+            local_module.Album:new {
+                title = albums[1].name,
+                album_key = albums[1].key,
+            }
+
+        if case_name == "album-tracks-long" then
+            verify_long_screen(
+                album_screen,
+                "Album tracks",
+                3,
+                5
+            )
+        else
+            verify_short_screen(
+                album_screen,
+                "Album tracks",
+                3,
+                3
+            )
+        end
     else
-        verify_short_screen(
-            artists_screen,
-            "Artists",
-            4,
-            4
-        )
+        local artists_screen =
+            local_module.Artists:new()
+
+        if case_name == "artists-long" then
+            verify_long_screen(
+                artists_screen,
+                "Artists",
+                4,
+                6
+            )
+        else
+            verify_short_screen(
+                artists_screen,
+                "Artists",
+                4,
+                4
+            )
+        end
     end
 else
     local playlist_module =

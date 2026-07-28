@@ -276,6 +276,14 @@ def media_size(item):
 def track_payload(item, position=None):
     user_data = item.get("UserData") or {}
     runtime_ticks = item.get("RunTimeTicks") or 0
+    artist_items = item.get("ArtistItems") or []
+    artist_id = ""
+
+    if artist_items and isinstance(
+        artist_items[0],
+        dict,
+    ):
+        artist_id = artist_items[0].get("Id") or ""
 
     try:
         duration_seconds = (
@@ -293,6 +301,7 @@ def track_payload(item, position=None):
                 (item.get("Artists") or [""])[0]
             )
         ),
+        "artist_id": artist_id,
         "album": item.get("Album") or "",
         "album_id": item.get("AlbumId"),
         "duration": duration_seconds,
