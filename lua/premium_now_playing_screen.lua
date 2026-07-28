@@ -89,9 +89,26 @@ function M.create(options)
             }
         )
 
+    local elapsed = root:Label {
+        x = 8,
+        y = 111,
+        w = 35,
+        text = "0:00",
+        text_color = "#B7B8C1",
+    }
+
+    local remaining = root:Label {
+        x = 117,
+        y = 111,
+        w = 35,
+        text = "0:00",
+        text_color = "#B7B8C1",
+        text_align = 3,
+    }
+
     local progress = root:Object {
         x = 8,
-        y = 107,
+        y = 124,
         w = 144,
         h = 3,
         radius = 2,
@@ -109,23 +126,6 @@ function M.create(options)
             border_width = 0,
             bg_color = "#F4F4F7",
         }
-
-    local elapsed = root:Label {
-        x = 8,
-        y = 113,
-        w = 35,
-        text = "0:00",
-        text_color = "#B7B8C1",
-    }
-
-    local remaining = root:Label {
-        x = 117,
-        y = 113,
-        w = 35,
-        text = "0:00",
-        text_color = "#B7B8C1",
-        text_align = 3,
-    }
 
     local status_bar = root:Object {
         x = 0,
