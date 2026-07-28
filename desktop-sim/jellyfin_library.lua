@@ -44,6 +44,8 @@ local root =
 
 os.execute("mkdir -p " .. root)
 
+_G.tangara_sim_enable_encoder_handler = true
+
 local simulator =
     require("mocks").install(lvgl)
 

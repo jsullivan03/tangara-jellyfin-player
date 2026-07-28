@@ -16,6 +16,12 @@
 --- @field hooks function Returns a table containing the inputs and actions associated with the current control scheme.
 local controls = {}
 
+--- Install a callback that receives raw encoder differences. Passing nil
+--- restores normal LVGL focus navigation. Returns true when supported.
+--- @param callback? fun(diff: integer)
+--- @return boolean
+function controls.set_encoder_handler(callback) end
+
 --- @return table
 function controls.schemes() end
 

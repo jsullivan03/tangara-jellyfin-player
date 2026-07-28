@@ -212,6 +212,43 @@ page:on_show()
 
 local initial_media =
     page.view:media_state()
+local initial_text =
+    page.view:media_text_layout_state()
+
+local function expected_text_x(state)
+    if state.text_width >
+            state.view_width then
+        return 0
+    end
+
+    return math.max(
+        0,
+        math.floor(
+            (
+                state.view_width -
+                state.text_width
+            ) / 2
+        )
+    )
+end
+
+assert(
+    initial_text.title.measured and
+        initial_text.artist.measured and
+        math.abs(
+            initial_text.title.relative_x -
+            expected_text_x(
+                initial_text.title
+            )
+        ) <= 1 and
+        math.abs(
+            initial_text.artist.relative_x -
+            expected_text_x(
+                initial_text.artist
+            )
+        ) <= 1,
+    "initial Now Playing title or artist was not centered by on_show"
+)
 
 assert(
     initial_media.cover ==

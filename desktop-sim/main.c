@@ -20,12 +20,27 @@
 
 static SDL_atomic_t back_requested;
 static SDL_atomic_t transport_mode;
+static SDL_atomic_t encoder_mode;
+static SDL_atomic_t pending_encoder_ticks;
 static SDL_atomic_t pending_seek_ticks;
 static SDL_atomic_t pending_previous;
 static SDL_atomic_t pending_next;
 static SDL_atomic_t pending_toggle;
 static SDL_atomic_t pending_volume_up;
 static SDL_atomic_t pending_volume_down;
+
+static int lua_set_encoder_mode(lua_State *L)
+{
+    bool enabled = lua_toboolean(L, 1) != 0;
+
+    SDL_AtomicSet(&encoder_mode, enabled ? 1 : 0);
+
+    if (!enabled) {
+        SDL_AtomicSet(&pending_encoder_ticks, 0);
+    }
+
+    return 0;
+}
 
 static int lua_set_transport_mode(lua_State *L)
 {
@@ -58,6 +73,41 @@ static int SDLCALL filter_sdl_event(void *userdata, SDL_Event *event)
     }
 
     if (!SDL_AtomicGet(&transport_mode)) {
+        if (SDL_AtomicGet(&encoder_mode)) {
+            if (event->type == SDL_MOUSEWHEEL) {
+                int wheel_y = event->wheel.y;
+
+                if (event->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+                    wheel_y = -wheel_y;
+                }
+
+                SDL_AtomicAdd(
+                    &pending_encoder_ticks,
+                    -wheel_y
+                );
+                return 0;
+            }
+
+            if (event->type == SDL_KEYDOWN &&
+                event->key.repeat == 0) {
+                if (event->key.keysym.sym == SDLK_UP) {
+                    SDL_AtomicAdd(
+                        &pending_encoder_ticks,
+                        -1
+                    );
+                    return 0;
+                }
+
+                if (event->key.keysym.sym == SDLK_DOWN) {
+                    SDL_AtomicAdd(
+                        &pending_encoder_ticks,
+                        1
+                    );
+                    return 0;
+                }
+            }
+        }
+
         return 1;
     }
 
@@ -156,6 +206,52 @@ static void call_lua_back(lua_State *L)
         );
 
         lua_pop(L, 1);
+    }
+}
+
+static void call_lua_encoder(
+    lua_State *L,
+    int amount
+)
+{
+    lua_getglobal(
+        L,
+        "tangara_sim_encoder_event"
+    );
+
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+
+    lua_pushinteger(L, amount);
+
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+        const char *message =
+            lua_tostring(L, -1);
+
+        fprintf(
+            stderr,
+            "Simulator encoder handler failed:\n%s\n",
+            message != NULL ?
+                message :
+                "Unknown Lua error"
+        );
+
+        lua_pop(L, 1);
+    }
+}
+
+static void service_encoder(lua_State *L)
+{
+    int ticks =
+        SDL_AtomicSet(
+            &pending_encoder_ticks,
+            0
+        );
+
+    if (ticks != 0) {
+        call_lua_encoder(L, ticks);
     }
 }
 
@@ -264,6 +360,9 @@ int main(int argc, char **argv)
     lua_pushcfunction(L, lua_set_transport_mode);
     lua_setglobal(L, "tangara_sim_set_transport_mode");
 
+    lua_pushcfunction(L, lua_set_encoder_mode);
+    lua_setglobal(L, "tangara_sim_set_encoder_mode");
+
     luaL_requiref(L, "lvgl", luaopen_lvgl, 1);
     lua_pop(L, 1);
 
@@ -293,6 +392,7 @@ int main(int argc, char **argv)
 
     while (true) {
         firmware_backstack_service();
+        service_encoder(L);
         service_transport(L);
         uint32_t delay_ms = lv_timer_handler();
 

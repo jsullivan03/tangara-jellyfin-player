@@ -24,6 +24,12 @@ local COLORS = {
     modal_border = "#555862",
 }
 
+local function media_row_parent(self)
+    return
+        self.virtual_row_parent or
+        self.list
+end
+
 local pending_initial_scrolls =
     setmetatable(
         {},
@@ -328,7 +334,7 @@ local function focus_object(
 
     pcall(
         function()
-            object:scroll_to_view(false)
+            object:scroll_to_view_recursive(false)
         end
     )
 end
@@ -1296,6 +1302,11 @@ function M.add_sort_control(
             return
         end
 
+        if self.virtual_list_controller then
+            self.virtual_list_controller
+                :suspend_continuous_input()
+        end
+
         overlay:clear_flag(
             lvgl.FLAG.HIDDEN
         )
@@ -1393,6 +1404,12 @@ function M.add_sort_control(
 
         if should_apply then
             options.on_apply()
+        end
+
+        if self.ui_active and
+            self.virtual_list_controller then
+            self.virtual_list_controller
+                :resume_continuous_input()
         end
     end
 
@@ -1511,6 +1528,11 @@ function M.install_controls(self)
 
     self.controls_installed_once = true
 
+    if self.virtual_list_controller then
+        self.virtual_list_controller
+            :install_continuous_input()
+    end
+
     jellyfin_navigation.set_back(
         self.go_back
     )
@@ -1541,6 +1563,11 @@ function M.restore_controls(self)
     self.ui_active = false
     self.suppress_selection_tracking = true
     pending_initial_scrolls[self] = nil
+
+    if self.virtual_list_controller then
+        self.virtual_list_controller
+            :restore_continuous_input()
+    end
 
     if self.sort_menu_open and
         self.close_sort_menu then
@@ -1770,7 +1797,7 @@ function M.add_album_row(
     callback
 )
     local row =
-        self.list:Button {
+        media_row_parent(self):Button {
             w = lvgl.PCT(100),
             h = 32,
             pad_all = 0,
@@ -2029,7 +2056,7 @@ function M.add_track_row(
         artwork_source ~= ""
 
     local row =
-        self.list:Button {
+        media_row_parent(self):Button {
             w = lvgl.PCT(100),
             h = 32,
             pad_all = 0,

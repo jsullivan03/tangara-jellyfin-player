@@ -151,6 +151,16 @@ static int luavgl_group_focus_prev(lua_State *L)
   return 0;
 }
 
+static int luavgl_group_swap_obj(lua_State *L)
+{
+  (void)luavgl_check_group(L, 1);
+  lv_obj_t *obj1 = luavgl_to_obj(L, 2);
+  lv_obj_t *obj2 = luavgl_to_obj(L, 3);
+
+  lv_group_swap_obj(obj1, obj2);
+  return 0;
+}
+
 static int luavgl_group_focus_freeze(lua_State *L)
 {
   luavgl_group_t *g = luavgl_check_group(L, 1);
@@ -316,6 +326,7 @@ static const luaL_Reg group_methods[] = {
     {"remove_obj",    luavgl_group_remove_obj   },
     {"focus_next",    luavgl_group_focus_next   },
     {"focus_prev",    luavgl_group_focus_prev   },
+    {"swap_obj",      luavgl_group_swap_obj     },
     {"focus_freeze",  luavgl_group_focus_freeze },
     {"send_data",     luavgl_group_send_data    },
     {"set_focus_cb",  luavgl_group_set_focus_cb },

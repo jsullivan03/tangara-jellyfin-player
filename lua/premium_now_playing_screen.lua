@@ -560,6 +560,50 @@ function M.create(options)
         }
     end
 
+    local function text_layout_state(
+        marquee
+    )
+        local view =
+            marquee.view:get_coords()
+        local label =
+            marquee.label:get_coords()
+
+        return {
+            measured =
+                marquee.measured == true,
+            view_width =
+                view.x2 - view.x1 + 1,
+            text_width =
+                label.x2 - label.x1 + 1,
+            relative_x =
+                label.x1 - view.x1,
+        }
+    end
+
+    function screen:media_text_layout_state()
+        return {
+            title =
+                text_layout_state(
+                    title_marquee
+                ),
+            artist =
+                text_layout_state(
+                    artist_marquee
+                ),
+        }
+    end
+
+    function screen:refresh_media_layout()
+        -- create_ui runs before this root becomes the active firmware screen.
+        -- Initial text measured there can use detached-tree coordinates, while
+        -- later next/previous updates are already attached and center normally.
+        -- Recalculate synchronously from on_show so the first visible frame is
+        -- positioned from the active 160x128 layout.
+        root:update_layout()
+        title_marquee:refresh(true)
+        artist_marquee:refresh(true)
+    end
+
     function screen:update(values)
         values = values or {}
 

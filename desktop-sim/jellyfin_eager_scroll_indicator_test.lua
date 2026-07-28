@@ -26,6 +26,8 @@ local valid_cases = {
     ["artists-short"] = true,
     ["playlists-long"] = true,
     ["playlists-short"] = true,
+    ["playlist-tracks-long"] = true,
+    ["playlist-tracks-short"] = true,
 }
 
 assert(
@@ -170,6 +172,24 @@ for index = 1, 5 do
                 "//lua/img/playlist_placeholder.png",
         },
     }
+end
+
+if case_name == "playlist-tracks-long" then
+    all_playlists[1].items = {
+        tracks[1],
+        tracks[2],
+        tracks[3],
+        tracks[4],
+        tracks[5],
+    }
+    all_playlists[1].track_count = 5
+elseif case_name == "playlist-tracks-short" then
+    all_playlists[1].items = {
+        tracks[1],
+        tracks[2],
+        tracks[3],
+    }
+    all_playlists[1].track_count = 3
 end
 
 local playlist_count =
@@ -335,23 +355,50 @@ else
     package.loaded["jellyfin_library"] =
         playlist_module
 
-    local playlists_screen =
-        playlist_module:new()
+    if case_name == "playlists-long" or
+        case_name == "playlists-short" then
+        local playlists_screen =
+            playlist_module:new()
 
-    if case_name == "playlists-long" then
-        verify_long_screen(
-            playlists_screen,
-            "Playlists",
-            3,
-            6
-        )
+        if case_name == "playlists-long" then
+            verify_long_screen(
+                playlists_screen,
+                "Playlists",
+                3,
+                6
+            )
+        else
+            verify_short_screen(
+                playlists_screen,
+                "Playlists",
+                3,
+                3
+            )
+        end
     else
-        verify_short_screen(
-            playlists_screen,
-            "Playlists",
-            3,
-            3
-        )
+        local collection_screen =
+            playlist_module.Collection:new {
+                title = "Playlist 01",
+                collection_kind = "playlist",
+                collection_id = "playlist-01",
+            }
+
+        if case_name ==
+                "playlist-tracks-long" then
+            verify_long_screen(
+                collection_screen,
+                "Playlist tracks",
+                3,
+                5
+            )
+        else
+            verify_short_screen(
+                collection_screen,
+                "Playlist tracks",
+                3,
+                3
+            )
+        end
     end
 end
 

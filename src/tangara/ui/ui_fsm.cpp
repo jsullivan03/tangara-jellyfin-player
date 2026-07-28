@@ -766,6 +766,10 @@ void Lua::entry() {
             {"haptics_mode", &sInput->hapticsMode()},
             {"lock_switch", &sLockSwitch},
             {"hooks", [&](lua_State* L) { return sInput->pushHooks(L); }},
+            {"set_encoder_handler",
+             [&](lua_State* L) {
+               return sInput->setEncoderHandler(L);
+             }},
         });
 
     if (sDeviceFactory->touch_wheel()) {

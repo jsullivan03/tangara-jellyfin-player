@@ -199,6 +199,23 @@ auto LvglInputDriver::read(lv_indev_data_t* data) -> void {
   for (auto&& device : inputs_) {
     device->read(data, events);
   }
+
+  if (encoder_handler_ref_ != LUA_NOREF &&
+      data->enc_diff != 0) {
+    const int diff = data->enc_diff;
+    data->enc_diff = 0;
+
+    lua_rawgeti(encoder_handler_state_,
+                LUA_REGISTRYINDEX,
+                encoder_handler_ref_);
+    lua_pushinteger(encoder_handler_state_, diff);
+    lua::CallProtected(
+        encoder_handler_state_,
+        1,
+        0
+    );
+  }
+
   for (auto event : events) {
     for (auto&& device : feedbacks_) {
       device->feedback(lv_indev_get_group(device_), event);
@@ -326,6 +343,38 @@ auto LvglInputDriver::LuaTrigger::luaNewIndex(lua_State* L) -> int {
   trigger.driver_->setOverride(L, selector);
   trigger.hooks_[selector.hook_name] = kLuaOverrideText;
   return 0;
+}
+
+auto LvglInputDriver::clearEncoderHandler() -> void {
+  if (encoder_handler_ref_ == LUA_NOREF ||
+      !encoder_handler_state_) {
+    encoder_handler_ref_ = LUA_NOREF;
+    encoder_handler_state_ = nullptr;
+    return;
+  }
+
+  luaL_unref(encoder_handler_state_,
+             LUA_REGISTRYINDEX,
+             encoder_handler_ref_);
+  encoder_handler_ref_ = LUA_NOREF;
+  encoder_handler_state_ = nullptr;
+}
+
+auto LvglInputDriver::setEncoderHandler(
+    lua_State* L
+) -> int {
+  clearEncoderHandler();
+
+  if (!lua_isnoneornil(L, 1)) {
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+    lua_pushvalue(L, 1);
+    encoder_handler_ref_ =
+        luaL_ref(L, LUA_REGISTRYINDEX);
+    encoder_handler_state_ = L;
+  }
+
+  lua_pushboolean(L, 1);
+  return 1;
 }
 
 auto LvglInputDriver::pushHooks(lua_State* L) -> int {

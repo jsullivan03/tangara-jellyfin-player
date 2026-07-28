@@ -170,6 +170,7 @@ function M.create(parent, options)
         current_x = 0,
         destroyed = false,
         pending_task = nil,
+        text = nil,
     }
 
     controller.view =
@@ -389,7 +390,68 @@ function M.create(parent, options)
         )
     end
 
-    local function measure()
+    local function finish_measurement(
+        generation,
+        settle_position
+    )
+        if controller.destroyed or
+            controller.generation ~=
+                generation then
+            return
+        end
+
+        -- Label coordinates can still describe the previous string until
+        -- LVGL completes a layout pass. Force that pass before measuring.
+        controller.label:update_layout()
+
+        local coordinates =
+            controller.label:get_coords()
+
+        local text_width =
+            coordinates.x2 -
+            coordinates.x1 + 1
+
+        controller.overflow =
+            math.max(
+                0,
+                text_width -
+                controller.width
+            )
+
+        if controller.overflow <= 0 and
+            controller.alignment ==
+                "center" then
+            controller.short_x =
+                math.max(
+                    0,
+                    math.floor(
+                        (
+                            controller.width -
+                            text_width
+                        ) / 2
+                    )
+                )
+        else
+            controller.short_x = 0
+        end
+
+        controller.measured = true
+        reset_position()
+
+        -- Synchronous refreshes run immediately before the first visible
+        -- frame. Settle the newly centered x position as well as the text
+        -- width; otherwise the last refreshed label can render once at x=0.
+        if settle_position then
+            controller.label:update_layout()
+        end
+
+        if controller.active and
+            controller.overflow > 0 then
+            begin_cycle()
+        end
+    end
+
+    local function measure(immediate)
         controller.generation =
             controller.generation + 1
 
@@ -401,66 +463,29 @@ function M.create(parent, options)
         controller.short_x = 0
         controller.current_x = 0
 
+        -- Keep replacement text visible while LVGL settles its width.
+        -- Hiding it during measurement made recycled list rows blink.
         controller.label:set {
             x = 0,
-            text_opa = 0,
+            text_opa = 255,
         }
+
+        if immediate then
+            finish_measurement(
+                generation,
+                true
+            )
+            return
+        end
 
         schedule(
             controller,
             35,
             generation,
             function()
-                if controller.destroyed then
-                    return
-                end
-
-                -- Label coordinates can still describe the previous
-                -- string until LVGL completes a layout pass. Force that
-                -- pass before measuring every replacement. This keeps
-                -- both title and artist centering tied to their current
-                -- text instead of the preceding track.
-                controller.label:update_layout()
-
-                local coordinates =
-                    controller.label
-                        :get_coords()
-
-                local text_width =
-                    coordinates.x2 -
-                    coordinates.x1 + 1
-
-                controller.overflow =
-                    math.max(
-                        0,
-                        text_width -
-                        controller.width
-                    )
-
-                if controller.overflow <= 0 and
-                    controller.alignment ==
-                        "center" then
-                    controller.short_x =
-                        math.max(
-                            0,
-                            math.floor(
-                                (
-                                    controller.width -
-                                    text_width
-                                ) / 2
-                            )
-                        )
-                else
-                    controller.short_x = 0
-                end
-
-                controller.measured = true
-                reset_position()
-
-                if controller.active and
-                    controller.overflow > 0 then
-                    begin_cycle()
-                end
+                finish_measurement(
+                    generation
+                )
             end
         )
     end
@@ -470,17 +495,37 @@ function M.create(parent, options)
             return
         end
 
+        local next_text =
+            tostring(value or "")
+
+        if controller.text ==
+                next_text then
+            return
+        end
+
+        controller.text = next_text
         controller.generation =
             controller.generation + 1
         cancel_schedule(controller)
 
         controller.label:set {
-            text = value or "",
+            text = next_text,
             x = 0,
-            text_opa = 0,
+            text_opa = 255,
         }
 
         measure()
+    end
+
+    function controller:refresh(
+        immediate
+    )
+        if controller.destroyed then
+            return
+        end
+
+        cancel_schedule(controller)
+        measure(immediate == true)
     end
 
     function controller:set_width(width)
@@ -488,7 +533,7 @@ function M.create(parent, options)
             return
         end
 
-        controller.width =
+        local next_width =
             math.max(
                 1,
                 math.floor(
@@ -496,6 +541,12 @@ function M.create(parent, options)
                 )
             )
 
+        if controller.width ==
+                next_width then
+            return
+        end
+
+        controller.width = next_width
         controller.view:set {
             w = controller.width,
         }

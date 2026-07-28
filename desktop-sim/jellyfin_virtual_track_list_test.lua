@@ -188,6 +188,33 @@ assert(
     #tracks_screen.media_rows == 7,
     "Tracks screen exposed an unexpected media-row count"
 )
+assert(
+    virtual.canvas ==
+        tracks_screen.virtual_row_canvas,
+    "Tracks screen did not expose the virtual row canvas"
+)
+assert(
+    virtual.canvas:get_parent() ==
+        tracks_screen.list,
+    "virtual row canvas is not attached to the Tracks list"
+)
+for _, model in ipairs(virtual.pool) do
+    assert(
+        model.object:get_parent() ==
+            virtual.canvas,
+        "a reusable Tracks row is not parented to the virtual canvas"
+    )
+end
+local initial_row_one_coordinates =
+    virtual.pool[1].object:get_coords()
+local initial_row_two_coordinates =
+    virtual.pool[2].object:get_coords()
+assert(
+    initial_row_two_coordinates.y1 -
+        initial_row_one_coordinates.y1 ==
+        virtual.row_stride,
+    "virtual Tracks rows are not independently positioned at the row stride"
+)
 local initial_id =
     assert(
         virtual.items[1].id,
@@ -288,7 +315,41 @@ assert(
 local group =
     assert(tracks_screen.focus_group)
 
-for _ = 1, 24 do
+local first_recycle_focus_object =
+    virtual.pool[6].object
+
+for _ = 1, 5 do
+    group:focus_next()
+    backstack.flush(2)
+end
+
+assert(
+    virtual.selected_index == 6,
+    "five forward moves should select logical index 6"
+)
+assert(
+    virtual.window_start == 2,
+    "logical index 6 should rotate the virtual window once"
+)
+assert(
+    group:get_focused() ==
+        first_recycle_focus_object and
+    virtual:selected_model().object ==
+        first_recycle_focus_object,
+    "recycling changed the focused row object instead of preserving it"
+)
+assert(
+    virtual:selected_model().virtual_slot ==
+        virtual.forward_slot,
+    "the preserved focused row did not settle at the lower focus-band slot"
+)
+assert(
+    virtual.pool[1].virtual_index == 2 and
+        virtual.pool[7].virtual_index == 8,
+    "the first forward recycle did not rotate only the offscreen row"
+)
+
+for _ = 1, 19 do
     group:focus_next()
     backstack.flush(2)
 end

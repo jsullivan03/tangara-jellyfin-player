@@ -77,6 +77,24 @@ local replacements = {
 
 local index = 0
 
+local stable_generation = title.generation
+title:set(replacements[1].title)
+local replacement_generation = title.generation
+title:set(replacements[1].title)
+assert(
+    title.generation == replacement_generation and
+        replacement_generation > stable_generation,
+    "setting identical marquee text should not restart measurement"
+)
+title:set("")
+
+local stable_width_generation = artist.generation
+artist:set_width(148)
+assert(
+    artist.generation == stable_width_generation,
+    "setting an unchanged marquee width should not restart measurement"
+)
+
 local function assert_centered_or_left(controller, text, role)
     local view = controller.view:get_coords()
     local label = controller.label:get_coords()

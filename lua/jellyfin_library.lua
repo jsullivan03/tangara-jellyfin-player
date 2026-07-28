@@ -452,6 +452,15 @@ CollectionScreen =
             end
 
             self.apply_sort()
+
+            jellyfin_list_ui
+                .attach_scroll_indicator(
+                    self,
+                    self.media_rows,
+                    {
+                        visible_items = 3,
+                    }
+                )
         end,
 
         on_show =

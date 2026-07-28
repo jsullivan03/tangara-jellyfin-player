@@ -4,12 +4,32 @@
 typedef struct luavgl_timer_s {
   lua_State *L;
   int ref; /* ref to callback */
+  lv_timer_t **owner; /* Lua userdata slot that owns the native timer */
 } luavgl_timer_t;
+
+static lv_timer_t **luavgl_check_timer_slot(lua_State *L, int index)
+{
+  return (lv_timer_t **)luaL_checkudata(L, index, "lv_timer");
+}
 
 static lv_timer_t *luavgl_check_timer(lua_State *L, int index)
 {
-  lv_timer_t *v = *(lv_timer_t **)luaL_checkudata(L, index, "lv_timer");
-  return v;
+  return *luavgl_check_timer_slot(L, index);
+}
+
+static void luavgl_timer_release_callback(lua_State *L, luavgl_timer_t *data)
+{
+  if (data != NULL && data->ref != LUA_NOREF) {
+    luaL_unref(L, LUA_REGISTRYINDEX, data->ref);
+    data->ref = LUA_NOREF;
+  }
+}
+
+static void luavgl_timer_remove_registry_entry(lua_State *L, lv_timer_t *t)
+{
+  lua_pushlightuserdata(L, t);
+  lua_pushnil(L);
+  lua_rawset(L, LUA_REGISTRYINDEX);
 }
 
 static void luavgl_timer_cb(lv_timer_t *t)
@@ -29,6 +49,25 @@ static void luavgl_timer_cb(lv_timer_t *t)
 
   luavgl_pcall_int(L, 1, 0);
   lua_settop(L, top);
+
+  /*
+   * LVGL auto-deletes a timer after a callback reduces repeat_count to 0.
+   * Detach the Lua userdata before LVGL frees the native timer so a later
+   * allocation cannot reuse the same address and leave __gc with a stale
+   * pointer.
+   */
+  if (t->repeat_count == 0 && t->auto_delete) {
+    luavgl_timer_release_callback(L, data);
+    luavgl_timer_remove_registry_entry(L, t);
+
+    if (data->owner != NULL) {
+      *data->owner = NULL;
+      data->owner = NULL;
+    }
+
+    t->user_data = NULL;
+    free(data);
+  }
 }
 
 static void luavgl_timer_set_cb(void *_t, lua_State *L)
@@ -92,10 +131,14 @@ static int luavgl_timer_create(lua_State *L)
   }
   data->ref = LUA_NOREF;
   data->L = L;
+  data->owner = NULL;
 
   lv_timer_t *t = lv_timer_create(luavgl_timer_cb, 0, data);
 
-  *(void **)lua_newuserdata(L, sizeof(void *)) = t;
+  lv_timer_t **slot =
+      (lv_timer_t **)lua_newuserdata(L, sizeof(lv_timer_t *));
+  *slot = t;
+  data->owner = slot;
   luaL_getmetatable(L, "lv_timer");
   lua_setmetatable(L, -2);
 
@@ -163,22 +206,20 @@ static int luavgl_timer_pause(lua_State *L)
 /* remove timer from obj,  */
 static int luavgl_timer_delete(lua_State *L)
 {
-  lv_timer_t *t = luavgl_check_timer(L, 1);
+  lv_timer_t **slot = luavgl_check_timer_slot(L, 1);
+  lv_timer_t *t = *slot;
+
+  /* delete() and __gc are intentionally idempotent. */
   if (t == NULL) {
-    return luaL_argerror(L, 1, "timer is null");
+    return 0;
   }
 
   luavgl_timer_t *data = t->user_data;
-  if (data->ref) {
-    luaL_unref(L, LUA_REGISTRYINDEX, data->ref);
-    data->ref = LUA_NOREF;
-  }
+  luavgl_timer_release_callback(L, data);
+  luavgl_timer_remove_registry_entry(L, t);
 
-  lua_pushlightuserdata(L, t);
-  lua_pushnil(L);
-  lua_rawset(L, LUA_REGISTRYINDEX);
-
-  /* we can only release memory in gc, since we need t->use_data */
+  /* We can only release native memory in __gc because the userdata still
+   * owns t->user_data after an explicit delete(). */
   lv_timer_pause(t);
 
   LV_LOG_INFO("delete timer:%p", t);
@@ -187,11 +228,25 @@ static int luavgl_timer_delete(lua_State *L)
 
 static int luavgl_timer_gc(lua_State *L)
 {
-  /* stop timer if not stopped. */
-  luavgl_timer_delete(L);
+  lv_timer_t **slot = luavgl_check_timer_slot(L, 1);
+  lv_timer_t *t = *slot;
 
-  lv_timer_t *t = luavgl_check_timer(L, 1);
-  free(t->user_data);
+  if (t == NULL) {
+    return 0;
+  }
+
+  luavgl_timer_t *data = t->user_data;
+
+  luavgl_timer_release_callback(L, data);
+  luavgl_timer_remove_registry_entry(L, t);
+
+  /* Clear the Lua-side owner before deleting the native timer. */
+  *slot = NULL;
+  if (data != NULL) {
+    data->owner = NULL;
+  }
+  t->user_data = NULL;
+  free(data);
   lv_timer_del(t);
 
   LV_LOG_INFO("gc timer:%p", t);

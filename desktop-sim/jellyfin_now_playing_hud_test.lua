@@ -25,6 +25,55 @@ local screen = premium.create {
     paused = false,
 }
 
+screen:refresh_media_layout()
+
+local initial_text =
+    screen:media_text_layout_state()
+
+local function assert_centered(
+    state,
+    role
+)
+    local expected_x = 0
+
+    if state.text_width <=
+            state.view_width then
+        expected_x =
+            math.max(
+                0,
+                math.floor(
+                    (
+                        state.view_width -
+                        state.text_width
+                    ) / 2
+                )
+            )
+    end
+
+    assert(
+        state.measured and
+            math.abs(
+                state.relative_x -
+                expected_x
+            ) <= 1,
+        string.format(
+            "initial %s was not centered synchronously: x=%d expected=%d",
+            role,
+            state.relative_x,
+            expected_x
+        )
+    )
+end
+
+assert_centered(
+    initial_text.title,
+    "title"
+)
+assert_centered(
+    initial_text.artist,
+    "artist"
+)
+
 local playing = screen:layout_state()
 
 assert(
@@ -156,7 +205,7 @@ lvgl.Timer {
         end
 
         print(
-            "Now Playing delayed pause icon and side volume HUD passed"
+            "Now Playing initial text centering, delayed pause icon, and side volume HUD passed"
         )
         os.exit(0)
     end,

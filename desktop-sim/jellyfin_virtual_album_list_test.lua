@@ -206,6 +206,23 @@ assert(
     #albums_screen.media_rows == 7,
     "Albums screen exposed an unexpected media-row count"
 )
+assert(
+    virtual.canvas ==
+        albums_screen.virtual_row_canvas,
+    "Albums screen did not expose the virtual row canvas"
+)
+assert(
+    virtual.canvas:get_parent() ==
+        albums_screen.list,
+    "virtual row canvas is not attached to the Albums list"
+)
+for _, model in ipairs(virtual.pool) do
+    assert(
+        model.object:get_parent() ==
+            virtual.canvas,
+        "a reusable Albums row is not parented to the virtual canvas"
+    )
+end
 
 local initial_id =
     assert(

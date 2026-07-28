@@ -579,6 +579,34 @@ function M.install(lvgl)
         return control_hooks
     end
 
+    function controls.set_encoder_handler(callback)
+        if callback ~= nil and
+            type(callback) ~= "function" then
+            error(
+                "encoder handler must be a function or nil"
+            )
+        end
+
+        local supported =
+            _G.tangara_sim_enable_encoder_handler ==
+                true and
+            type(
+                _G.tangara_sim_set_encoder_mode
+            ) == "function"
+
+        if not supported then
+            _G.tangara_sim_encoder_event = nil
+            return false
+        end
+
+        _G.tangara_sim_encoder_event = callback
+        _G.tangara_sim_set_encoder_mode(
+            callback ~= nil
+        )
+
+        return true
+    end
+
     local playing_screen_settings = {
         long_text_scheme = property("scroll"),
     }

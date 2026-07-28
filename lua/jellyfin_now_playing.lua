@@ -1711,6 +1711,11 @@ local NowPlaying =
         on_show = function(self)
             self.transport_active = true
 
+            if self.view and
+                self.view.refresh_media_layout then
+                self.view:refresh_media_layout()
+            end
+
             jellyfin_navigation.set_back(
                 self.handle_back
             )

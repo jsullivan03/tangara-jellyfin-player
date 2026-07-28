@@ -47,6 +47,7 @@ class LvglInputDriver {
   auto lock(bool l) -> void;
 
   auto pushHooks(lua_State* L) -> int;
+  auto setEncoderHandler(lua_State* L) -> int;
 
  private:
   drivers::NvsStorage& nvs_;
@@ -116,6 +117,11 @@ class LvglInputDriver {
   auto clearOverride(const OverrideSelector&) -> void;
   auto pushOverride(lua_State* L, const OverrideSelector&) -> bool;
   auto applyOverride(const OverrideSelector&, LuaOverride&) -> void;
+
+  lua_State* encoder_handler_state_{nullptr};
+  int encoder_handler_ref_{LUA_NOREF};
+
+  auto clearEncoderHandler() -> void;
 
   bool is_locked_;
 };
