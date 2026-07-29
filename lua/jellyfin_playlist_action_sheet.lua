@@ -6,6 +6,8 @@ local jellyfin_text_entry =
     require("jellyfin_text_entry")
 local sync_operation_queue =
     require("sync_operation_queue")
+local palette =
+    require("jellyfin_theme").current()
 
 local M = {}
 
@@ -73,7 +75,7 @@ local function add_button(
         shadow_width = 0,
         radius = 0,
         bg_opa = 0,
-        text_color = "#FFFFFF",
+        text_color = palette.foreground,
         text_font = font.fusion_10,
     }
 
@@ -179,8 +181,8 @@ local function controller_for(owner)
                     bg_opa = 0,
                     text_color =
                         button == focused and
-                        "#72AFFF" or
-                        "#FFFFFF",
+                        palette.focus or
+                        palette.foreground,
                 }
             end)
         end
@@ -311,7 +313,7 @@ local function controller_for(owner)
                 outline_width = 0,
                 shadow_width = 0,
                 radius = 0,
-                bg_color = "#000000",
+                bg_color = palette.overlay,
                 bg_opa = 95,
             }
 
@@ -325,9 +327,9 @@ local function controller_for(owner)
                 h = 34,
                 pad_all = 0,
                 border_width = 1,
-                border_color = "#555862",
+                border_color = palette.divider,
                 radius = 8,
-                bg_color = "#11131A",
+                bg_color = palette.surface,
                 bg_opa = 248,
                 scrollbar_mode =
                     lvgl.SCROLLBAR_MODE.OFF,

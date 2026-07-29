@@ -1,4 +1,6 @@
 local lvgl = require("lvgl")
+local jellyfin_theme =
+    require("jellyfin_theme")
 
 local M = {}
 
@@ -202,7 +204,9 @@ function M.create(parent, options)
             text = "",
             text_color =
                 options.text_color or
-                "#FFFFFF",
+                jellyfin_theme.color(
+                    "foreground"
+                ),
             text_font =
                 options.text_font or
                 font.fusion_10,

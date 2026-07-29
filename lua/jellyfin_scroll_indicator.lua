@@ -1,4 +1,6 @@
 local lvgl = require("lvgl")
+local jellyfin_theme =
+    require("jellyfin_theme")
 
 local M = {}
 
@@ -9,7 +11,6 @@ local DEFAULTS = {
     height = 96,
     minimum_thumb_height = 6,
     visible_items = 3,
-    thumb_color = "#FFFFFF",
     thumb_opacity = 255,
 }
 
@@ -89,7 +90,9 @@ function M.create(
             ),
         thumb_color =
             options.thumb_color or
-            DEFAULTS.thumb_color,
+            jellyfin_theme.color(
+                "accent"
+            ),
         thumb_opacity =
             tonumber(
                 options.thumb_opacity

@@ -5,6 +5,8 @@ package.path =
 
 local lvgl = require("lvgl")
 local backstack = require("firmware_backstack")
+local jellyfin_theme =
+    require("jellyfin_theme")
 
 lvgl.ImgData = function(path)
     return path
@@ -279,10 +281,11 @@ local function assert_thumb_only(
     )
     assert(
         indicator.width == 2 and
-            indicator.thumb_color == "#FFFFFF" and
+            indicator.thumb_color ==
+                jellyfin_theme.color("accent") and
             indicator.thumb_opacity == 255,
         label ..
-            " indicator is not a solid two-pixel white thumb"
+            " indicator is not a solid two-pixel accent thumb"
     )
 end
 
@@ -290,7 +293,8 @@ local function verify_long_screen(
     screen,
     label,
     visible_items,
-    item_count
+    item_count,
+    initial_index
 )
     backstack.reset(screen)
     backstack.flush(12)
@@ -301,7 +305,8 @@ local function verify_long_screen(
     assert_thumb_only(indicator, label)
     assert(
         indicator.visible_items == visible_items,
-        label .. " visible-row count is wrong"
+        label .. " visible-row count is wrong: " ..
+            tostring(indicator.visible_items)
     )
     assert(
         indicator.item_count == item_count,
@@ -311,14 +316,28 @@ local function verify_long_screen(
         indicator.hidden == false,
         label .. " should show an indicator"
     )
-    assert(
-        indicator.thumb_y == 0,
-        label .. " indicator should start at the top"
-    )
+    if (initial_index or 1) == 1 then
+        assert(
+            indicator.thumb_y == 0,
+            label ..
+                " indicator should start at the top"
+        )
+    else
+        assert(
+            indicator.thumb_y > 0,
+            label ..
+                " indicator should reflect the hidden leading row"
+        )
+    end
 
     local group =
         screen.focus_group or
         lvgl.group.get_default()
+
+    lvgl.group.focus_obj(
+        indicator.models[1].object
+    )
+    backstack.flush(2)
 
     for _ = 1, item_count - 1 do
         group:focus_next()
@@ -349,7 +368,8 @@ local function verify_short_screen(
     assert_thumb_only(indicator, label)
     assert(
         indicator.visible_items == visible_items,
-        label .. " visible-row count is wrong"
+        label .. " visible-row count is wrong: " ..
+            tostring(indicator.visible_items)
     )
     assert(
         indicator.item_count == item_count,
@@ -457,15 +477,16 @@ else
             verify_long_screen(
                 playlists_screen,
                 "Playlists",
-                3,
-                6
+                4,
+                7,
+                2
             )
         else
             verify_short_screen(
                 playlists_screen,
                 "Playlists",
-                3,
-                3
+                4,
+                4
             )
         end
     else

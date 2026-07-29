@@ -975,12 +975,7 @@ RootScreen =
         create_ui = function(self)
             jellyfin_list_ui.create_root(
                 self,
-                "Local Library",
-                {
-                    on_back =
-                        function()
-                        end,
-                }
+                "Local"
             )
 
             self.list:set {

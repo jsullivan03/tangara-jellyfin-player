@@ -4,6 +4,8 @@ package.path =
     package.path
 
 local lvgl = require("lvgl")
+local jellyfin_theme =
+    require("jellyfin_theme")
 local metrics = require("sim_metrics")
 local backstack = require("firmware_backstack")
 
@@ -258,9 +260,10 @@ assert(
 )
 assert(
     scroll_indicator.track == nil and
-        scroll_indicator.thumb_color == "#FFFFFF" and
+        scroll_indicator.thumb_color ==
+            jellyfin_theme.color("accent") and
         scroll_indicator.thumb_opacity == 255,
-    "Albums scroll indicator should be a solid white thumb with no track"
+    "Albums scroll indicator should be an accent thumb with no track"
 )
 assert(
     scroll_indicator.thumb_height ==

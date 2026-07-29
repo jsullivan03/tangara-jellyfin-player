@@ -2,8 +2,11 @@ local lvgl = require("lvgl")
 local power = require("power")
 local sync_config = require("sync_config")
 local sync_runtime = require("sync_runtime")
+local jellyfin_theme =
+    require("jellyfin_theme")
 
 local M = {}
+local palette = jellyfin_theme.current()
 
 local function simulator_mode()
     local ok, value =
@@ -81,7 +84,7 @@ function M.create(parent)
         pad_all = 0,
         border_width = 0,
         radius = 0,
-        bg_color = "#05060A",
+        bg_color = palette.status_background,
         bg_opa = 255,
         scrollbar_mode =
             lvgl.SCROLLBAR_MODE.OFF,
@@ -112,13 +115,14 @@ function M.create(parent)
     local connection_ring =
         connection_container:Object {
             x = 5,
-            y = 3,
-            w = 7,
-            h = 7,
+            y = 2,
+            w = 8,
+            h = 8,
             pad_all = 0,
             border_width = 1,
-            border_color = "#8A8C93",
-            radius = 4,
+            border_color =
+                palette.status_muted,
+            radius = 5,
             bg_opa = 0,
         }
 
@@ -131,7 +135,8 @@ function M.create(parent)
             pad_all = 0,
             border_width = 0,
             radius = 2,
-            bg_color = "#8FB9A8",
+            bg_color =
+                palette.status_good,
             bg_opa = 0,
         }
 
@@ -141,7 +146,7 @@ function M.create(parent)
         w = 48,
         text = "--:--",
         text_align = 2,
-        text_color = "#D4D5DA",
+        text_color = palette.foreground,
         text_font = font.fusion_10,
     }
 
@@ -170,7 +175,7 @@ function M.create(parent)
             h = 8,
             pad_all = 0,
             border_width = 1,
-            border_color = "#D4D5DA",
+            border_color = palette.foreground,
             radius = 2,
             bg_opa = 0,
         }
@@ -189,7 +194,8 @@ function M.create(parent)
                 pad_all = 0,
                 border_width = 0,
                 radius = 0,
-                bg_color = "#4E5058",
+                bg_color =
+                    palette.status_muted,
                 bg_opa = 190,
             }
     end
@@ -203,7 +209,7 @@ function M.create(parent)
             pad_all = 0,
             border_width = 0,
             radius = 1,
-            bg_color = "#D4D5DA",
+            bg_color = palette.foreground,
             bg_opa = 255,
         }
 
@@ -235,14 +241,14 @@ function M.create(parent)
         end
 
         local active_color =
-            "#D4D5DA"
+            palette.foreground
 
         if is_charging then
             active_color =
-                "#74C991"
+                palette.status_good
         elseif percentage <= 10 then
             active_color =
-                "#E06666"
+                palette.status_bad
         end
 
         battery_body:set {
@@ -263,7 +269,7 @@ function M.create(parent)
                     index <=
                         active_segments and
                     active_color or
-                    "#4E5058",
+                    palette.status_muted,
                 bg_opa =
                     index <=
                         active_segments and
@@ -280,8 +286,8 @@ function M.create(parent)
         connection_ring:set {
             border_color =
                 connected and
-                "#8FB9A8" or
-                "#8A8C93",
+                palette.status_good or
+                palette.status_muted,
         }
 
         connection_dot:set {

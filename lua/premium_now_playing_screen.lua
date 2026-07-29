@@ -1,6 +1,8 @@
 local lvgl = require("lvgl")
 local jellyfin_marquee =
     require("jellyfin_marquee")
+local palette =
+    require("jellyfin_theme").current()
 
 local M = {}
 
@@ -52,7 +54,7 @@ function M.create(options)
         pad_all = 0,
         border_width = 0,
         radius = 0,
-        bg_color = "#020307",
+        bg_color = palette.background,
         scrollbar_mode =
             lvgl.SCROLLBAR_MODE.OFF,
     }
@@ -80,7 +82,7 @@ function M.create(options)
             pad_all = 0,
             border_width = 0,
             radius = 0,
-            bg_color = "#000000",
+            bg_color = palette.overlay,
             bg_opa = BACKGROUND_DIMMER_OPA,
             scrollbar_mode =
                 lvgl.SCROLLBAR_MODE.OFF,
@@ -116,7 +118,7 @@ function M.create(options)
                 label_y = 0,
                 text = "",
                 align = "center",
-                text_color = "#FFFFFF",
+                text_color = palette.foreground,
                 autostart = true,
             }
         )
@@ -132,7 +134,7 @@ function M.create(options)
                 label_y = 0,
                 text = "",
                 align = "center",
-                text_color = "#B5B6C0",
+                text_color = palette.muted_text,
                 autostart = true,
             }
         )
@@ -142,7 +144,7 @@ function M.create(options)
         y = 111,
         w = 35,
         text = "0:00",
-        text_color = "#B7B8C1",
+        text_color = palette.muted_text,
     }
 
     local remaining = root:Label {
@@ -150,7 +152,7 @@ function M.create(options)
         y = 111,
         w = 35,
         text = "0:00",
-        text_color = "#B7B8C1",
+        text_color = palette.muted_text,
         text_align = 3,
     }
 
@@ -161,7 +163,7 @@ function M.create(options)
         h = 3,
         radius = 2,
         border_width = 0,
-        bg_color = "#555762",
+        bg_color = palette.divider,
     }
 
     local progress_fill =
@@ -172,7 +174,7 @@ function M.create(options)
             h = 3,
             radius = 2,
             border_width = 0,
-            bg_color = "#F4F4F7",
+            bg_color = palette.foreground,
         }
 
     local pause_icon = root:Object {
@@ -202,7 +204,7 @@ function M.create(options)
         h = 8,
         radius = 1,
         border_width = 0,
-        bg_color = "#F4F4F7",
+        bg_color = palette.foreground,
     }
 
     pause_icon:Object {
@@ -212,7 +214,7 @@ function M.create(options)
         h = 8,
         radius = 1,
         border_width = 0,
-        bg_color = "#F4F4F7",
+        bg_color = palette.foreground,
     }
 
     local status_bar = root:Object {
@@ -223,7 +225,7 @@ function M.create(options)
         pad_all = 0,
         border_width = 0,
         radius = 0,
-        bg_color = "#05060A",
+        bg_color = palette.status_background,
         bg_opa = 135,
         scrollbar_mode =
             lvgl.SCROLLBAR_MODE.OFF,
@@ -254,13 +256,14 @@ function M.create(options)
     local connection_ring =
         connection_container:Object {
             x = 5,
-            y = 3,
-            w = 7,
-            h = 7,
+            y = 2,
+            w = 8,
+            h = 8,
             pad_all = 0,
             border_width = 1,
-            border_color = "#8A8C93",
-            radius = 4,
+            border_color =
+                palette.status_muted,
+            radius = 5,
             bg_opa = 0,
         }
 
@@ -273,7 +276,8 @@ function M.create(options)
             pad_all = 0,
             border_width = 0,
             radius = 2,
-            bg_color = "#8FB9A8",
+            bg_color =
+                palette.status_good,
             bg_opa = 0,
         }
 
@@ -283,7 +287,7 @@ function M.create(options)
         w = 48,
         text = "--:--",
         text_align = 2,
-        text_color = "#D4D5DA",
+        text_color = palette.foreground,
         text_font = font.fusion_10,
     }
 
@@ -312,7 +316,7 @@ function M.create(options)
             h = 8,
             pad_all = 0,
             border_width = 1,
-            border_color = "#D4D5DA",
+            border_color = palette.foreground,
             radius = 2,
             bg_opa = 0,
         }
@@ -331,7 +335,8 @@ function M.create(options)
                 pad_all = 0,
                 border_width = 0,
                 radius = 0,
-                bg_color = "#4E5058",
+                bg_color =
+                    palette.status_muted,
                 bg_opa = 190,
             }
     end
@@ -345,7 +350,7 @@ function M.create(options)
             pad_all = 0,
             border_width = 0,
             radius = 1,
-            bg_color = "#D4D5DA",
+            bg_color = palette.foreground,
             bg_opa = 255,
         }
 
@@ -377,14 +382,14 @@ function M.create(options)
         end
 
         local active_color =
-            "#D4D5DA"
+            palette.foreground
 
         if battery_charging then
             active_color =
-                "#74C991"
+                palette.status_good
         elseif percentage <= 10 then
             active_color =
-                "#E06666"
+                palette.status_bad
         end
 
         battery_body:set {
@@ -405,7 +410,7 @@ function M.create(options)
                     index <=
                         active_segments and
                     active_color or
-                    "#4E5058",
+                    palette.status_muted,
                 bg_opa =
                     index <=
                         active_segments and
@@ -750,8 +755,8 @@ function M.create(options)
             connection_ring:set {
                 border_color =
                     values.connected and
-                    "#8FB9A8" or
-                    "#8A8C93",
+                    palette.status_good or
+                    palette.status_muted,
             }
 
             connection_dot:set {

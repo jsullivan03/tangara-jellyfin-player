@@ -8,6 +8,8 @@ local screen = require("screen")
 local M = {}
 
 local COLORS = jellyfin_list_ui.colors
+local palette =
+    require("jellyfin_theme").current()
 
 local function remove_from_group(object)
     pcall(function()
@@ -174,7 +176,7 @@ local TextEntryScreen =
                     pad_all = 0,
                     border_width = 0,
                     radius = 3,
-                    bg_color = "#11131A",
+                    bg_color = palette.surface,
                     bg_opa = 255,
                     scrollbar_mode =
                         lvgl.SCROLLBAR_MODE.OFF,
@@ -252,13 +254,13 @@ local TextEntryScreen =
                 add_carousel_label(
                     18,
                     20,
-                    "#555862"
+                    palette.divider
                 )
             self.previous_token_label =
                 add_carousel_label(
                     43,
                     20,
-                    "#858894"
+                    palette.muted_text
                 )
             self.current_token_label =
                 add_carousel_label(
@@ -270,13 +272,13 @@ local TextEntryScreen =
                 add_carousel_label(
                     93,
                     20,
-                    "#858894"
+                    palette.muted_text
                 )
             self.next_two_token_label =
                 add_carousel_label(
                     118,
                     20,
-                    "#555862"
+                    palette.divider
                 )
 
             local action_bar =

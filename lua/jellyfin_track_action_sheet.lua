@@ -10,6 +10,8 @@ local sync_library_view =
     require("sync_library_view")
 local sync_operation_queue =
     require("sync_operation_queue")
+local palette =
+    require("jellyfin_theme").current()
 
 local M = {}
 
@@ -125,7 +127,7 @@ local function add_sheet_button(
         shadow_width = 0,
         radius = 0,
         bg_opa = 0,
-        text_color = "#FFFFFF",
+        text_color = palette.foreground,
         text_font = font.fusion_10,
     }
 
@@ -212,8 +214,8 @@ local function controller_for(owner)
                         text_color =
                             button ==
                                 focused_button and
-                                "#72AFFF" or
-                                "#FFFFFF",
+                                palette.focus or
+                                palette.foreground,
                     }
                 end
             )
@@ -371,7 +373,7 @@ local function controller_for(owner)
             shadow_width = 0,
             radius = 0,
             bg_opa = 0,
-            text_color = "#11131A",
+            text_color = palette.surface,
         }
         spacer:clear_flag(lvgl.FLAG.CLICKABLE)
         remove_from_group(spacer)
@@ -490,7 +492,7 @@ local function controller_for(owner)
                 outline_width = 0,
                 shadow_width = 0,
                 radius = 0,
-                bg_color = "#000000",
+                bg_color = palette.overlay,
                 bg_opa = 95,
             }
 
@@ -502,9 +504,9 @@ local function controller_for(owner)
                 h = 34,
                 pad_all = 0,
                 border_width = 1,
-                border_color = "#555862",
+                border_color = palette.divider,
                 radius = 8,
-                bg_color = "#11131A",
+                bg_color = palette.surface,
                 bg_opa = 248,
                 scrollbar_mode =
                     lvgl.SCROLLBAR_MODE.OFF,
@@ -543,9 +545,9 @@ local function controller_for(owner)
                 h = PLAYLIST_HEIGHT,
                 pad_all = 0,
                 border_width = 1,
-                border_color = "#555862",
+                border_color = palette.divider,
                 radius = 8,
-                bg_color = "#11131A",
+                bg_color = palette.surface,
                 bg_opa = 248,
                 scrollbar_mode =
                     lvgl.SCROLLBAR_MODE.OFF,
@@ -565,7 +567,7 @@ local function controller_for(owner)
                 w = 148,
                 text = "",
                 text_align = 2,
-                text_color = "#D7D8DE",
+                text_color = palette.muted_text,
                 text_font = font.fusion_10,
             }
 
@@ -1004,6 +1006,7 @@ local function controller_for(owner)
                     :clear_flag(
                         lvgl.FLAG.HIDDEN
                     )
+                position_playlist_chooser()
 
                 controller.page = "playlists"
                 controller.animating = false
@@ -1018,7 +1021,6 @@ local function controller_for(owner)
                             controller.playlist_initial_button or
                                 controller.playlist_buttons[1]
                         )
-                        position_playlist_chooser()
                     end
                 )
             end

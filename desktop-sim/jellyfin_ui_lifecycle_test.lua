@@ -356,13 +356,22 @@ simulator.backstack.push(
     playlist_root
 )
 
+local first_artwork = nil
+
+for _, row in ipairs(
+    playlist_root.rows
+) do
+    if row.artwork then
+        first_artwork = row.artwork
+        break
+    end
+end
+
 assert(
-    playlist_root.rows[1].artwork and
+    first_artwork and
     (
-        playlist_root.rows[1]
-            .artwork.image or
-        playlist_root.rows[1]
-            .artwork.star
+        first_artwork.image or
+        first_artwork.star
     )
 )
 

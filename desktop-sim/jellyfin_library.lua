@@ -971,5 +971,5 @@ package.loaded[
 simulator.backstack.pop()
 
 simulator.backstack.push(
-    local_library.Root:new()
+    require("jellyfin_home").Home:new()
 )

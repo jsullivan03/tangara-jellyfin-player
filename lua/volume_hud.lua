@@ -1,6 +1,8 @@
 local alerts = require("alerts")
 local controls = require("controls")
 local lvgl = require("lvgl")
+local palette =
+    require("jellyfin_theme").current()
 
 local M = {}
 
@@ -63,7 +65,7 @@ function M.show(percentage)
                     pad_all = 0,
                     border_width = 0,
                     radius = 4,
-                    bg_color = "#11131A",
+                    bg_color = palette.surface,
                     bg_opa = 180,
                     scrollbar_mode =
                         lvgl.SCROLLBAR_MODE.OFF,
@@ -85,7 +87,7 @@ function M.show(percentage)
             pad_all = 0,
             border_width = 0,
             radius = 2,
-            bg_color = "#FFFFFF",
+            bg_color = palette.accent,
             bg_opa =
                 geometry.fill_opacity,
             scrollbar_mode =

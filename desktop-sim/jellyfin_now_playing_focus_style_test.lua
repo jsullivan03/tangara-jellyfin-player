@@ -69,12 +69,12 @@ assert(
             true
         ) and
         source:find(
-            '"#72AFFF" or',
+            "palette.focus or",
             1,
             true
         ) and
         source:find(
-            '"#FFFFFF"',
+            "palette.foreground",
             1,
             true
         ),

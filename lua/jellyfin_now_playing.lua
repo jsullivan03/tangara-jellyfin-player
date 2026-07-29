@@ -22,6 +22,8 @@ local sync_operation_queue =
     require("sync_operation_queue")
 local sync_runtime = require("sync_runtime")
 local volume = require("volume")
+local palette =
+    require("jellyfin_theme").current()
 
 local function format_time(value)
     value =
@@ -228,7 +230,7 @@ local function add_sheet_button(
         shadow_width = 0,
         radius = 0,
         bg_opa = 0,
-        text_color = "#FFFFFF",
+        text_color = palette.foreground,
         text_font = font.fusion_10,
     }
 
@@ -527,7 +529,7 @@ local NowPlaying =
                     outline_width = 0,
                     shadow_width = 0,
                     radius = 0,
-                    bg_color = "#000000",
+                    bg_color = palette.overlay,
                     bg_opa = 95,
                 }
 
@@ -542,9 +544,9 @@ local NowPlaying =
                     h = main_height,
                     pad_all = 0,
                     border_width = 1,
-                    border_color = "#555862",
+                    border_color = palette.divider,
                     radius = 8,
-                    bg_color = "#11131A",
+                    bg_color = palette.surface,
                     bg_opa = 248,
                     scrollbar_mode =
                         lvgl.SCROLLBAR_MODE.OFF,
@@ -587,9 +589,9 @@ local NowPlaying =
                     h = playlist_height,
                     pad_all = 0,
                     border_width = 1,
-                    border_color = "#555862",
+                    border_color = palette.divider,
                     radius = 8,
-                    bg_color = "#11131A",
+                    bg_color = palette.surface,
                     bg_opa = 248,
                     scrollbar_mode =
                         lvgl.SCROLLBAR_MODE.OFF,
@@ -609,7 +611,7 @@ local NowPlaying =
                     w = 148,
                     text = "",
                     text_align = 2,
-                    text_color = "#D7D8DE",
+                    text_color = palette.muted_text,
                     text_font = font.fusion_10,
                 }
 
@@ -705,8 +707,8 @@ local NowPlaying =
                                 text_color =
                                     button ==
                                             focused_button and
-                                        "#72AFFF" or
-                                        "#FFFFFF",
+                                        palette.focus or
+                                        palette.foreground,
                             }
                         end
                     )
@@ -881,7 +883,7 @@ local NowPlaying =
                     shadow_width = 0,
                     radius = 0,
                     bg_opa = 0,
-                    text_color = "#11131A",
+                    text_color = palette.surface,
                 }
                 spacer:clear_flag(
                     lvgl.FLAG.CLICKABLE
@@ -1628,6 +1630,7 @@ local NowPlaying =
                             :clear_flag(
                                 lvgl.FLAG.HIDDEN
                             )
+                        position_playlist_chooser()
 
                         self.sheet_page =
                             "playlists"
@@ -1644,7 +1647,6 @@ local NowPlaying =
                                     playlist_initial_button or
                                         playlist_buttons[1]
                                 )
-                                position_playlist_chooser()
                             end
                         )
                     end

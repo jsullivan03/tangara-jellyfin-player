@@ -9,19 +9,33 @@ local jellyfin_status_bar =
     require("jellyfin_status_bar")
 local jellyfin_scroll_indicator =
     require("jellyfin_scroll_indicator")
+local jellyfin_theme =
+    require("jellyfin_theme")
 local M = {}
 
-local COLORS = {
-    background = "#07080C",
-    selected = "#34363F",
-    primary = "#FFFFFF",
-    secondary = "#AEB0B8",
-    badge = "#3B536A",
-    badge_text = "#E2EDF6",
-    art_background = "#161820",
-    modal = "#11131A",
-    modal_border = "#555862",
+local palette = jellyfin_theme.current()
+local COLOR_KEYS = {
+    background = "background",
+    selected = "selected_surface",
+    primary = "foreground",
+    secondary = "muted_text",
+    badge = "badge",
+    badge_text = "badge_text",
+    art_background = "art_background",
+    modal = "modal",
+    modal_border = "modal_border",
 }
+local COLORS =
+    setmetatable(
+        {},
+        {
+            __index = function(_, key)
+                return palette[
+                    COLOR_KEYS[key] or key
+                ]
+            end,
+        }
+    )
 
 local function media_row_parent(self)
     return
@@ -803,7 +817,8 @@ local function create_artwork(
 
     if source == "__playlist_blue__" then
         model.frame:set {
-            bg_color = "#173A5E",
+            bg_color =
+                palette.placeholder_cover,
             bg_opa = 255,
         }
 
@@ -816,11 +831,11 @@ local function create_artwork(
 
     if source == "__favorites_star__" then
         model.frame:set {
-            bg_color = "#000000",
+            bg_color = palette.overlay,
             bg_opa = 255,
         }
 
-        local star_color = "#DCEAF3"
+        local star_color = palette.foreground
 
         local segments = {
             {13, 5, 2, 1, 128},
@@ -977,7 +992,7 @@ function M.create_root(
                 pad_all = 0,
                 border_width = 0,
                 radius = 0,
-                bg_color = "#000000",
+                bg_color = palette.overlay,
                 bg_opa =
                     tonumber(
                         options
@@ -1375,7 +1390,7 @@ function M.add_sort_control(
             outline_width = 0,
             shadow_width = 0,
             radius = 0,
-            bg_color = "#000000",
+            bg_color = palette.overlay,
             bg_opa = 105,
         }
 
