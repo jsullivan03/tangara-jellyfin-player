@@ -114,19 +114,23 @@ lvgl.Timer {
                     page.sheet_focus_state()
 
                 assert(
-                    state.main_count == 4 and
-                        state.active_count == 4,
+                    state.main_count == 6 and
+                        state.active_count == 6,
                     "Now Playing did not rebuild its sheet for the updated playlist context"
                 )
 
                 assert(
                     state.main_actions[1] ==
-                            "artist" and
+                            "queue" and
                         state.main_actions[2] ==
-                            "favorite" and
+                            "shuffle" and
                         state.main_actions[3] ==
-                            "add_to_playlist" and
+                            "artist" and
                         state.main_actions[4] ==
+                            "favorite" and
+                        state.main_actions[5] ==
+                            "add_to_playlist" and
+                        state.main_actions[6] ==
                             "remove_from_playlist",
                     "Now Playing rebuilt the playlist actions in the wrong order"
                 )

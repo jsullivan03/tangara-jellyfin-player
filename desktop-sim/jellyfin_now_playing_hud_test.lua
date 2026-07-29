@@ -73,6 +73,13 @@ assert_centered(
     initial_text.artist,
     "artist"
 )
+assert(
+    initial_text.title.view_height >= 18 and
+        initial_text.artist.view_height >= 18 and
+        initial_text.title.bottom_room >= 0 and
+        initial_text.artist.bottom_room >= 0,
+    "Now Playing marquee viewports clipped title or artist descenders"
+)
 
 local playing = screen:layout_state()
 
@@ -153,12 +160,31 @@ assert(
         media.title == "Next Track" and
         media.artist == "Next Artist" and
         media.cover_x == 47 and
-        media.cover_y == 16 and
+        media.cover_y == 19 and
+        media.cover_zoom == 280 and
         media.title_x == 6 and
-        media.title_y == 83 and
+        media.title_y == 90 and
         media.artist_x == 6 and
-        media.artist_y == 95,
+        media.artist_y == 100 and
+        media.background_x == 0 and
+        media.background_y == 0 and
+        media.background_dimmer_opa ==
+            118,
     "track replacement did not preserve the fixed Now Playing layout"
+)
+
+screen:update {
+    title = "ザ・ワード II (The Word II)",
+    artist = "Sekito Shigeo (関戸剛)",
+}
+
+media = screen:media_state()
+assert(
+    media.title ==
+        "ザ・ワード II (The Word II)" and
+        media.artist ==
+            "Sekito Shigeo (関戸剛)",
+    "Now Playing changed non-Latin metadata instead of preserving the original text"
 )
 
 lvgl.Timer {

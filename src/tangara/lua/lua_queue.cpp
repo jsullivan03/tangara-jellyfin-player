@@ -92,6 +92,20 @@ static auto queue_save_to_playlist(lua_State* state) -> int {
   return 1;
 }
 
+static auto queue_playback_order(lua_State* state) -> int {
+  Bridge* instance = Bridge::Get(state);
+  const auto order = instance->services().track_queue().playbackOrder();
+
+  lua_createtable(state, static_cast<int>(order.size()), 0);
+  for (size_t index = 0; index < order.size(); index++) {
+    // Lua collection indexes are one-based.
+    lua_pushinteger(state, static_cast<lua_Integer>(order[index] + 1));
+    lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+  }
+
+  return 1;
+}
+
 static auto queue_play_from(lua_State* state) -> int {
   Bridge* instance = Bridge::Get(state);
   audio::TrackQueue& queue = instance->services().track_queue();
@@ -109,6 +123,7 @@ static const struct luaL_Reg kQueueFuncs[] = {
     {"add", queue_add},
     {"clear", queue_clear},
     {"open_playlist", queue_open_playlist},
+    {"playback_order", queue_playback_order},
     {"save_to_playlist", queue_save_to_playlist},
     {"play_from", queue_play_from},
     {NULL, NULL}};

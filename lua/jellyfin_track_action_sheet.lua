@@ -4,6 +4,8 @@ local jellyfin_navigation =
     require("jellyfin_navigation")
 local jellyfin_track_actions =
     require("jellyfin_track_actions")
+local jellyfin_text_entry =
+    require("jellyfin_text_entry")
 local sync_library_view =
     require("sync_library_view")
 local sync_operation_queue =
@@ -155,6 +157,9 @@ local function controller_for(owner)
         main_action_ids = {},
         main_actions_by_id = {},
         playlist_buttons = {},
+        playlist_create_button = nil,
+        playlist_initial_button = nil,
+        playlist_initial_scroll_y = 0,
         highlighted_button = nil,
         active_button_count = 0,
         group = nil,
@@ -173,6 +178,13 @@ local function controller_for(owner)
     )
         controller.highlighted_button =
             focused_button
+
+        if focused_button then
+            pcall(function()
+                focused_button
+                    :scroll_to_view_recursive(false)
+            end)
+        end
 
         local stale_focus_state =
             lvgl.STATE.FOCUSED |
@@ -330,6 +342,74 @@ local function controller_for(owner)
         )
     end
 
+    local function add_playlist_scroll_spacer(
+        list,
+        button_count
+    )
+        -- Keep one row of upward scroll available even when there is only a
+        -- single real playlist. That lets Create playlist live just above the
+        -- initial viewport instead of being permanently visible.
+        local viewport_height = 68
+        local required_content_height =
+            viewport_height + BUTTON_HEIGHT
+        local spacer_height =
+            required_content_height -
+            (button_count * BUTTON_HEIGHT)
+
+        if spacer_height <= 0 then
+            return nil
+        end
+
+        local spacer = list:add_btn(nil, "")
+
+        spacer:set {
+            w = lvgl.PCT(100),
+            h = spacer_height,
+            pad_all = 0,
+            border_width = 0,
+            outline_width = 0,
+            shadow_width = 0,
+            radius = 0,
+            bg_opa = 0,
+            text_color = "#11131A",
+        }
+        spacer:clear_flag(lvgl.FLAG.CLICKABLE)
+        remove_from_group(spacer)
+
+        return spacer
+    end
+
+    local function position_playlist_chooser()
+        local scroll_y = 0
+
+        if #controller.playlist_buttons > 1 then
+            scroll_y = BUTTON_HEIGHT
+        end
+
+        controller.playlist_initial_scroll_y =
+            scroll_y
+
+        local function apply_scroll()
+            pcall(function()
+                controller.playlist_list:scroll_to {
+                    x = 0,
+                    y = scroll_y,
+                    anim = false,
+                }
+            end)
+        end
+
+        -- Apply once immediately and once after LVGL has recalculated the
+        -- list content height. The second pass is what makes the offset
+        -- reliable on both the simulator and hardware.
+        apply_scroll()
+        lvgl.Timer {
+            period = 1,
+            repeat_count = 1,
+            cb = apply_scroll,
+        }
+    end
+
     local function restore_focus()
         local group =
             controller.group or
@@ -483,20 +563,24 @@ local function controller_for(owner)
                 x = 6,
                 y = 5,
                 w = 148,
-                text = "Add to playlist",
+                text = "",
                 text_align = 2,
                 text_color = "#D7D8DE",
                 text_font = font.fusion_10,
             }
+
+        playlist_title:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
 
         local playlist_list =
             lvgl.List(
                 playlist_sheet,
                 {
                     x = 4,
-                    y = 17,
+                    y = 4,
                     w = 152,
-                    h = 55,
+                    h = 68,
                 }
             )
 
@@ -520,6 +604,7 @@ local function controller_for(owner)
             playlist_title
         controller.playlist_list =
             playlist_list
+        controller.playlist_header_visible = false
         controller.main_height = 34
         controller.main_target_y = 94
         controller.playlist_target_y =
@@ -752,19 +837,77 @@ local function controller_for(owner)
 
         controller.playlist_list:clean()
         controller.playlist_buttons = {}
+        controller.playlist_labels = {}
+        controller.playlist_activators = {}
+        controller.playlist_create_button = nil
+        controller.playlist_initial_button = nil
+        controller.playlist_initial_scroll_y = 0
 
-        local back_button =
+        local function register_playlist_button(
+            label,
+            button,
+            activate
+        )
+            table.insert(
+                controller.playlist_buttons,
+                button
+            )
+            table.insert(
+                controller.playlist_labels,
+                label
+            )
+            table.insert(
+                controller.playlist_activators,
+                activate
+            )
+        end
+
+        local create_action = function()
+            local track_id =
+                controller.track and
+                controller.track.id
+
+            controller:close(true)
+
+            backstack.push(
+                jellyfin_text_entry.new {
+                    title = "New playlist",
+                    on_submit =
+                        function(name)
+                            local local_id,
+                                operation_or_error =
+                                sync_operation_queue
+                                    .enqueue_create_playlist(
+                                        name,
+                                        {track_id}
+                                    )
+
+                            if not local_id then
+                                return false,
+                                    operation_or_error
+                            end
+
+                            return true
+                        end,
+                }
+            )
+        end
+
+        local create_button =
             add_sheet_button(
                 controller.playlist_list,
-                "Back",
-                show_main,
+                "Create playlist",
+                create_action,
                 refresh_highlight
             )
 
-        table.insert(
-            controller.playlist_buttons,
-            back_button
+        register_playlist_button(
+            "Create playlist",
+            create_button,
+            create_action
         )
+        controller.playlist_create_button =
+            create_button
 
         for _, playlist in ipairs(
             library and
@@ -772,53 +915,66 @@ local function controller_for(owner)
         ) do
             local playlist_copy = playlist
 
+            local playlist_action = function()
+                local playlist_id =
+                    playlist_copy.local_id or
+                    playlist_copy.id
+
+                local operation,
+                    operation_error =
+                    sync_operation_queue
+                        .enqueue_add_playlist_item(
+                            playlist_id,
+                            controller.track.id
+                        )
+
+                if not operation then
+                    controller.playlist_list:add_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+                    controller.playlist_title:set {
+                        text =
+                            operation_error or
+                            "Unable to queue add",
+                    }
+                    controller.playlist_title:clear_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+                    controller.playlist_header_visible = true
+                    return
+                end
+
+                close_soon()
+            end
+
+            local label =
+                playlist_copy.name or
+                "Playlist"
             local button =
                 add_sheet_button(
                     controller.playlist_list,
-                    playlist_copy.name or
-                        "Playlist",
-                    function()
-                        local playlist_id =
-                            playlist_copy.local_id or
-                            playlist_copy.id
-
-                        local operation,
-                            operation_error =
-                            sync_operation_queue
-                                .enqueue_add_playlist_item(
-                                    playlist_id,
-                                    controller.track.id
-                                )
-
-                        if not operation then
-                            controller.playlist_title
-                                :set {
-                                    text =
-                                        operation_error or
-                                        "Unable to queue add",
-                                }
-                            return
-                        end
-
-                        controller.playlist_title:set {
-                            text =
-                                "Added to " ..
-                                (
-                                    playlist_copy.name or
-                                    "playlist"
-                                ),
-                        }
-
-                        close_soon()
-                    end,
+                    label,
+                    playlist_action,
                     refresh_highlight
                 )
 
-            table.insert(
-                controller.playlist_buttons,
-                button
+            register_playlist_button(
+                label,
+                button,
+                playlist_action
             )
+
         end
+
+        controller.playlist_initial_button =
+            controller.playlist_buttons[2] or
+            controller.playlist_buttons[1]
+
+        controller.playlist_scroll_spacer =
+            add_playlist_scroll_spacer(
+                controller.playlist_list,
+                #controller.playlist_buttons
+            )
     end
 
     local function show_playlists()
@@ -826,6 +982,13 @@ local function controller_for(owner)
             return
         end
 
+        controller.playlist_title:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        controller.playlist_list:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        controller.playlist_header_visible = false
         controller.animating = true
         prepare_focus()
 
@@ -852,8 +1015,10 @@ local function controller_for(owner)
                     function()
                         activate_buttons(
                             controller.playlist_buttons,
-                            controller.playlist_buttons[1]
+                            controller.playlist_initial_button or
+                                controller.playlist_buttons[1]
                         )
+                        position_playlist_chooser()
                     end
                 )
             end
@@ -973,9 +1138,13 @@ local function controller_for(owner)
         rebuild_main_actions(library)
         rebuild_playlist_buttons(library)
 
-        self.playlist_title:set {
-            text = "Add to playlist",
-        }
+        self.playlist_title:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        self.playlist_list:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        self.playlist_header_visible = false
         self.playlist_sheet:add_flag(
             lvgl.FLAG.HIDDEN
         )
@@ -1028,6 +1197,35 @@ local function controller_for(owner)
         return true
     end
 
+    function controller:activate_playlist(action)
+        local index = nil
+
+        if type(action) == "number" then
+            index = action
+        else
+            for candidate_index, label in ipairs(
+                self.playlist_labels or {}
+            ) do
+                if label == action then
+                    index = candidate_index
+                    break
+                end
+            end
+        end
+
+        local activate =
+            index and
+            self.playlist_activators and
+            self.playlist_activators[index]
+
+        if type(activate) == "function" then
+            activate()
+            return true
+        end
+
+        return false
+    end
+
     function controller:state()
         local highlighted_action = nil
 
@@ -1050,6 +1248,28 @@ local function controller_for(owner)
                 #self.main_buttons,
             playlist_count =
                 #self.playlist_buttons,
+            playlist_labels =
+                self.playlist_labels or {},
+            playlist_header_visible =
+                self.playlist_header_visible == true,
+            playlist_initial_scroll_y =
+                self.playlist_initial_scroll_y or 0,
+            playlist_create_hidden_on_open =
+                (self.playlist_initial_scroll_y or 0) >=
+                    BUTTON_HEIGHT,
+            playlist_initial_label =
+                (function()
+                    for index, button in ipairs(
+                        self.playlist_buttons
+                    ) do
+                        if button ==
+                                self.playlist_initial_button then
+                            return self.playlist_labels[index]
+                        end
+                    end
+
+                    return nil
+                end)(),
             active_count =
                 self.active_button_count,
             main_actions =
@@ -1061,7 +1281,11 @@ local function controller_for(owner)
 
     owner.go_back = function()
         if controller.is_open then
-            controller:close()
+            if controller.page == "playlists" then
+                show_main()
+            else
+                controller:close()
+            end
             return
         end
 

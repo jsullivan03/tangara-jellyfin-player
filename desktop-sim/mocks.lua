@@ -362,16 +362,122 @@ function M.install(lvgl)
     -- Fake playback queue
     ---------------------------------------------------------------------------
 
+    local queued_ids = {}
+    local shuffle_order = {}
+    local shuffle_cursor = nil
+
     local queue = {
         position = property(0),
         size = property(0),
         repeat_mode = property(0),
-        random = property(false),
         loading = property(false),
         ready = property(true),
     }
 
-    local queued_ids = {}
+    local random_property =
+        property(false)
+    queue.random = random_property
+
+    local function shuffled_positions(
+        count,
+        excluded
+    )
+        local positions = {}
+
+        for position = 0, count - 1 do
+            if position ~= excluded then
+                table.insert(
+                    positions,
+                    position
+                )
+            end
+        end
+
+        for index = #positions, 2, -1 do
+            local swap_index =
+                math.random(1, index)
+
+            positions[index],
+                positions[swap_index] =
+                positions[swap_index],
+                positions[index]
+        end
+
+        return positions
+    end
+
+    local function rebuild_shuffle(
+        preserve_current
+    )
+        shuffle_order = {}
+        shuffle_cursor = nil
+
+        if not queue.random:get() or
+            #queued_ids == 0 then
+            return
+        end
+
+        if preserve_current then
+            local current =
+                math.max(
+                    0,
+                    math.min(
+                        #queued_ids - 1,
+                        (
+                            tonumber(
+                                queue.position:get()
+                            ) or 1
+                        ) - 1
+                    )
+                )
+
+            shuffle_order = {current}
+
+            for _, position in ipairs(
+                shuffled_positions(
+                    #queued_ids,
+                    current
+                )
+            ) do
+                table.insert(
+                    shuffle_order,
+                    position
+                )
+            end
+        else
+            shuffle_order =
+                shuffled_positions(
+                    #queued_ids
+                )
+        end
+
+        shuffle_cursor = 1
+    end
+
+    local base_random_set =
+        random_property.set
+
+    function random_property:set(
+        enabled
+    )
+        enabled = enabled == true
+
+        base_random_set(
+            self,
+            enabled
+        )
+
+        if enabled then
+            -- Match the firmware: enabling shuffle during playback preserves
+            -- the current track and randomizes only subsequent navigation.
+            rebuild_shuffle(true)
+        else
+            shuffle_order = {}
+            shuffle_cursor = nil
+        end
+
+        return true
+    end
 
     local function select_queue_position(position)
         local id = queued_ids[position + 1]
@@ -406,13 +512,17 @@ function M.install(lvgl)
                 }
         end
 
-        queue.position:set(position)
+        queue.position:set(
+            position + 1
+        )
         playback.position:set(0)
         playback.track:set(selected_track)
     end
 
     function queue.clear()
         queued_ids = {}
+        shuffle_order = {}
+        shuffle_cursor = nil
         queue.position:set(0)
         queue.size:set(0)
         playback.track:set(nil)
@@ -445,24 +555,88 @@ function M.install(lvgl)
 
         queue.size:set(#queued_ids)
 
+        if queue.random:get() then
+            rebuild_shuffle(
+                not was_empty
+            )
+        end
+
         if was_empty and #queued_ids > 0 then
-            select_queue_position(0)
+            local initial_position = 0
+
+            if queue.random:get() and
+                shuffle_order[1] ~= nil then
+                initial_position =
+                    shuffle_order[1]
+            end
+
+            select_queue_position(
+                initial_position
+            )
         end
     end
 
     function queue.next()
-        local next_position = queue.position:get() + 1
+        if queue.random:get() then
+            if #shuffle_order ~=
+                    #queued_ids or
+                not shuffle_cursor then
+                rebuild_shuffle(true)
+            end
+
+            local next_cursor =
+                (shuffle_cursor or 1) + 1
+            local next_position =
+                shuffle_order[next_cursor]
+
+            if next_position ~= nil then
+                shuffle_cursor =
+                    next_cursor
+                select_queue_position(
+                    next_position
+                )
+            end
+
+            return
+        end
+
+        local next_position =
+            queue.position:get()
 
         if next_position < #queued_ids then
-            select_queue_position(next_position)
+            select_queue_position(
+                next_position
+            )
         end
     end
 
     function queue.previous()
-        local previous_position = queue.position:get() - 1
+        if queue.random:get() then
+            local previous_cursor =
+                (shuffle_cursor or 1) - 1
+            local previous_position =
+                shuffle_order[
+                    previous_cursor
+                ]
+
+            if previous_position ~= nil then
+                shuffle_cursor =
+                    previous_cursor
+                select_queue_position(
+                    previous_position
+                )
+            end
+
+            return
+        end
+
+        local previous_position =
+            queue.position:get() - 2
 
         if previous_position >= 0 then
-            select_queue_position(previous_position)
+            select_queue_position(
+                previous_position
+            )
         end
     end
 
@@ -512,11 +686,65 @@ function M.install(lvgl)
         queue.size:set(#queued_ids)
 
         if #queued_ids > 0 then
-            select_queue_position(0)
+            local initial_position = 0
+
+            if queue.random:get() then
+                -- Match TrackQueue::openPlaylist(): when shuffle was enabled
+                -- before opening, the first selected track is randomized.
+                rebuild_shuffle(false)
+                initial_position =
+                    shuffle_order[1] or 0
+            end
+
+            select_queue_position(
+                initial_position
+            )
         else
             queue.position:set(0)
             playback.track:set(nil)
         end
+    end
+
+    function queue.playback_order()
+        local order = {}
+
+        if #queued_ids == 0 then
+            return order
+        end
+
+        if queue.random:get() then
+            if #shuffle_order ~=
+                    #queued_ids or
+                not shuffle_cursor then
+                rebuild_shuffle(true)
+            end
+
+            for cursor =
+                shuffle_cursor or 1,
+                #shuffle_order do
+                table.insert(
+                    order,
+                    shuffle_order[cursor] + 1
+                )
+            end
+
+            return order
+        end
+
+        local current =
+            math.max(
+                1,
+                tonumber(
+                    queue.position:get()
+                ) or 1
+            )
+
+        for position = current,
+            #queued_ids do
+            table.insert(order, position)
+        end
+
+        return order
     end
 
     function queue.play_from(filepath, position)
@@ -524,6 +752,7 @@ function M.install(lvgl)
             if track.filepath == filepath then
                 queued_ids = { id }
                 queue.size:set(1)
+                rebuild_shuffle(false)
                 select_queue_position(0)
                 playback.position:set(position or 0)
                 return

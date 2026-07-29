@@ -6,6 +6,7 @@ local sync_manifest_cache =
 
 local M = {}
 local active = nil
+local queue_generation = 0
 
 local QUEUE_PLAYLIST_PATH =
     "/.tangara-jellyfin-current.playlist"
@@ -141,6 +142,10 @@ local function selected_track_matches(
     selected,
     context
 )
+    if type(selected) ~= "table" then
+        return false
+    end
+
     local selected_entry =
         context and
         context.entry_id
@@ -259,6 +264,12 @@ local function active_snapshot()
             size = #active.tracks,
             playlist_path =
                 active.playlist_path,
+            shuffle =
+                queue.random and
+                type(queue.random.get) ==
+                    "function" and
+                queue.random:get() == true or
+                false,
         },
     }
 end
@@ -279,15 +290,13 @@ local function sync_active_position(native_position)
 
     if native_position == nil then
         native_position =
-            math.max(
-                0,
-                (active.position or 1) - 1
-            )
+            active.position or 1
     end
 
-    -- Tangara's native queue position is zero-based. Lua arrays and the
-    -- Jellyfin collection position retained here are one-based.
-    local position = native_position + 1
+    -- Tangara exposes queue.position to Lua as a one-based value. Keep the
+    -- retained Jellyfin queue position in that same coordinate system.
+    local position =
+        math.floor(native_position)
 
     if position < 1 or
         position > #active.tracks then
@@ -334,7 +343,19 @@ function M.local_item(track)
     )
 end
 
-function M.play(track, context)
+function M.play_queue(
+    tracks,
+    context,
+    options
+)
+    context = context or {}
+    options = options or {}
+
+    if type(tracks) ~= "table" or
+        #tracks == 0 then
+        return false, "No tracks to play"
+    end
+
     local manifest, manifest_error =
         sync_manifest_cache.load()
 
@@ -355,33 +376,49 @@ function M.play(track, context)
         manifest_items_by_id(
             manifest
         )
+    local selected_track =
+        options.selected_track
+    local selected_item = nil
 
-    local selected_item, item_error =
-        local_item_from_manifest(
-            track,
-            items_by_id,
-            root,
-            true
-        )
+    if selected_track then
+        local item_error
 
-    if not selected_item then
-        return false, item_error
+        selected_item, item_error =
+            local_item_from_manifest(
+                selected_track,
+                items_by_id,
+                root,
+                true
+            )
+
+        if not selected_item then
+            return false, item_error
+        end
     end
+
+    local queue_context = {}
+
+    for key, value in pairs(context) do
+        queue_context[key] = value
+    end
+
+    queue_context.queue_tracks = tracks
 
     local queued_tracks,
         queued_items,
         selected_index =
         queue_entries(
-            track,
-            context or {},
+            selected_track,
+            queue_context,
             items_by_id,
             root
         )
 
-    if not selected_index then
+    if selected_track and
+        not selected_index then
         table.insert(
             queued_tracks,
-            track
+            selected_track
         )
         table.insert(
             queued_items,
@@ -389,6 +426,31 @@ function M.play(track, context)
         )
         selected_index =
             #queued_tracks
+    end
+
+    if #queued_tracks == 0 then
+        return false,
+            "No downloaded tracks are available"
+    end
+
+    if selected_track then
+        -- queue_entries preserves the exact selected occurrence, including a
+        -- duplicate playlist entry identified by context.entry_id.
+        selected_index =
+            selected_index or 1
+    else
+        selected_index =
+            math.max(
+                1,
+                math.min(
+                    #queued_tracks,
+                    math.floor(
+                        tonumber(
+                            options.start_index
+                        ) or 1
+                    )
+                )
+            )
     end
 
     local playlist_path,
@@ -402,38 +464,75 @@ function M.play(track, context)
         return false, playlist_error
     end
 
+    queue_generation =
+        queue_generation + 1
+
     active = {
         tracks = queued_tracks,
         items = queued_items,
         base_context =
             entry_context(
-                context or {},
+                context,
                 {}
             ),
         position = selected_index,
         playlist_path = playlist_path,
+        generation = queue_generation,
     }
 
-    sync_active_position(
-        selected_index - 1
-    )
+    local shuffle =
+        options.shuffle == true
 
     if queue.random and
         type(queue.random.set) ==
             "function" then
-        queue.random:set(false)
+        queue.random:set(shuffle)
     end
 
     queue.open_playlist(
         playlist_path
     )
-    queue.position:set(
-        selected_index - 1
-    )
+
+    if shuffle then
+        -- Tangara chooses the initial shuffled position while opening the
+        -- playlist. Preserve that native position so Shuffle All starts with
+        -- a random item instead of forcing the first track afterward.
+        sync_active_position(
+            queue.position:get()
+        )
+    else
+        queue.position:set(
+            selected_index
+        )
+        sync_active_position(
+            selected_index
+        )
+    end
 
     playback.playing:set(true)
 
     return true, active_snapshot()
+end
+
+function M.play(track, context)
+    context = context or {}
+
+    local tracks =
+        context.queue_tracks
+
+    if type(tracks) ~= "table" or
+        #tracks == 0 then
+        tracks = {track}
+    end
+
+    return M.play_queue(
+        tracks,
+        context,
+        {
+            selected_track = track,
+            shuffle = false,
+        }
+    )
 end
 
 function M.sync_position(position)
@@ -462,6 +561,102 @@ function M.current()
     return active_snapshot()
 end
 
+
+local function current_playback_order()
+    local count = #active.tracks
+    local order = nil
+
+    if type(queue.playback_order) ==
+            "function" then
+        local ok, result =
+            pcall(queue.playback_order)
+
+        if ok and
+            type(result) == "table" then
+            order = {}
+
+            for _, value in ipairs(result) do
+                local position =
+                    math.floor(
+                        tonumber(value) or 0
+                    )
+
+                if position >= 1 and
+                    position <= count then
+                    table.insert(
+                        order,
+                        position
+                    )
+                end
+            end
+
+            if #order == 0 then
+                order = nil
+            end
+        end
+    end
+
+    if order then
+        return order
+    end
+
+    order = {}
+
+    for position =
+        math.max(1, active.position or 1),
+        count do
+        table.insert(order, position)
+    end
+
+    return order
+end
+
+function M.queue_view()
+    sync_active_position()
+
+    if not active then
+        return nil
+    end
+
+    local source_positions =
+        current_playback_order()
+    local tracks = {}
+    local items = {}
+
+    for _, source_position in ipairs(
+        source_positions
+    ) do
+        table.insert(
+            tracks,
+            active.tracks[source_position]
+        )
+        table.insert(
+            items,
+            active.items[source_position]
+        )
+    end
+
+    return {
+        tracks = tracks,
+        items = items,
+        source_positions = source_positions,
+        position = #tracks > 0 and 1 or 0,
+        source_position = active.position,
+        size = #tracks,
+        total_size = #active.tracks,
+        playlist_path =
+            active.playlist_path,
+        generation =
+            active.generation or 0,
+        shuffle =
+            queue.random and
+            type(queue.random.get) ==
+                "function" and
+            queue.random:get() == true or
+            false,
+    }
+end
+
 function M.queue_state()
     if not active then
         return nil
@@ -472,6 +667,12 @@ function M.queue_state()
         size = #active.tracks,
         playlist_path =
             active.playlist_path,
+        shuffle =
+            queue.random and
+            type(queue.random.get) ==
+                "function" and
+            queue.random:get() == true or
+            false,
     }
 end
 

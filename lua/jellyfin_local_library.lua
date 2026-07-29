@@ -1,4 +1,6 @@
 local backstack = require("backstack")
+local jellyfin_collection_playback =
+    require("jellyfin_collection_playback")
 local jellyfin_list_ui =
     require("jellyfin_list_ui")
 local jellyfin_local_index =
@@ -51,6 +53,35 @@ local function artwork_path(item)
 
     return
         "//lua/img/playlist_placeholder.png"
+end
+
+
+local function background_artwork_path(item)
+    local artwork =
+        item and item.artwork
+
+    if type(artwork) == "table" then
+        local value = artwork.background
+
+        if type(value) == "string" and
+            value ~= "" and
+            value ~=
+                "//lua/img/background_placeholder.png" then
+            return value
+        end
+    end
+
+    local tracks =
+        item and item.tracks
+
+    if type(tracks) == "table" and
+        tracks[1] then
+        return background_artwork_path(
+            tracks[1]
+        )
+    end
+
+    return nil
 end
 
 local function load_library(self)
@@ -269,26 +300,68 @@ end
 AlbumScreen =
     screen:new {
         create_ui = function(self)
+            local library,
+                library_error =
+                jellyfin_local_index.load()
+
+            local album =
+                library and
+                find_album(
+                    library,
+                    self.album_key
+                ) or nil
+
+            local album_tracks =
+                album and
+                album.tracks or {}
+
+            local simulator_cache =
+                rawget(
+                    _G,
+                    "tangara_sim_cache_track_background"
+                )
+
+            if album_tracks[1] and
+                type(simulator_cache) ==
+                    "function" then
+                pcall(
+                    simulator_cache,
+                    album_tracks[1]
+                )
+
+                album.artwork =
+                    album_tracks[1].artwork
+            end
+
             jellyfin_list_ui.create_root(
                 self,
-                self.title or "Album"
+                self.title or "Album",
+                {
+                    background =
+                        background_artwork_path(
+                            album
+                        ),
+                    background_dimmer_opa =
+                        118,
+                }
             )
 
             jellyfin_track_action_sheet
                 .attach(self)
 
-            local library =
-                load_library(self)
-
             if not library then
+                local message =
+                    jellyfin_list_ui
+                        .add_message(
+                            self,
+                            library_error or
+                                "Local library unavailable"
+                        )
+
+                self.first_row =
+                    message.object
                 return
             end
-
-            local album =
-                find_album(
-                    library,
-                    self.album_key
-                )
 
             if not album then
                 create_empty_row(
@@ -298,19 +371,43 @@ AlbumScreen =
                 return
             end
 
+            if #album_tracks == 0 then
+                create_empty_row(
+                    self,
+                    "No local tracks"
+                )
+                return
+            end
+
+            local context = {
+                collection_kind =
+                    "local_album",
+                collection_id =
+                    album.key,
+            }
+
+            jellyfin_collection_playback
+                .attach(
+                    self,
+                    {
+                        tracks = album_tracks,
+                        context = context,
+                    }
+                )
+
             self.media_rows = {}
 
             for _, track in ipairs(
-                album.tracks or {}
+                album_tracks
             ) do
                 local track_copy = track
-                local context = {
+                local track_context = {
                     collection_kind =
-                        "local_album",
+                        context.collection_kind,
                     collection_id =
-                        album.key,
+                        context.collection_id,
                     queue_tracks =
-                        album.tracks,
+                        album_tracks,
                 }
 
                 local row =
@@ -325,7 +422,7 @@ AlbumScreen =
                                     function()
                                         play_track(
                                             track_copy,
-                                            context
+                                            track_context
                                         )
                                     end,
                                 on_long_press =
@@ -333,7 +430,7 @@ AlbumScreen =
                                         self.track_action_sheet
                                             :open(
                                                 track_copy,
-                                                context,
+                                                track_context,
                                                 track_copy
                                             )
                                     end,
@@ -456,6 +553,8 @@ ArtistScreen =
                         releases,
                         "albums"
                     )
+
+                self.sorted_releases = sorted
 
                 for index, album in ipairs(
                     sorted
@@ -667,6 +766,8 @@ AlbumsScreen =
                         albums,
                         "albums"
                     )
+
+                self.sorted_albums = sorted
 
                 if self.virtual_album_list then
                     self.virtual_album_list

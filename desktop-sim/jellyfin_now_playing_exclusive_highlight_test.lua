@@ -102,7 +102,7 @@ lvgl.Timer {
                 assert(
                     page.sheet_focus_state()
                         .highlighted_action ==
-                        "artist",
+                        "queue",
                     "first Now Playing action was not the sole visual selection"
                 )
 
@@ -110,12 +110,31 @@ lvgl.Timer {
                 assert(
                     page.sheet_focus_state()
                         .highlighted_action ==
-                        "favorite",
+                        "shuffle",
                     "Now Playing highlight did not follow the second focused action"
                 )
 
                 group:focus_next()
-                local third =
+                assert(
+                    page.sheet_focus_state()
+                        .highlighted_action ==
+                        "artist",
+                    "Now Playing highlight did not follow the third focused action"
+                )
+
+                group:focus_next()
+                local fourth =
+                    assert(group:get_focused())
+
+                assert(
+                    page.sheet_focus_state()
+                        .highlighted_action ==
+                        "favorite",
+                    "Now Playing highlight did not follow the fourth focused action"
+                )
+
+                group:focus_next()
+                local fifth =
                     assert(group:get_focused())
 
                 assert(
@@ -131,7 +150,7 @@ lvgl.Timer {
                     lvgl.STATE.FOCUSED |
                     lvgl.STATE.FOCUS_KEY
                 )
-                lvgl.group.focus_obj(third)
+                lvgl.group.focus_obj(fifth)
 
                 assert(
                     first:get_state() &
@@ -140,7 +159,7 @@ lvgl.Timer {
                     "exclusive highlight refresh left a stale row focused"
                 )
                 assert(
-                    third:get_state() &
+                    fifth:get_state() &
                             lvgl.STATE.FOCUSED ~=
                         0,
                     "exclusive highlight refresh cleared the real focused row"

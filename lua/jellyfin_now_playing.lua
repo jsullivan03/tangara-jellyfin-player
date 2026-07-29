@@ -7,6 +7,8 @@ local jellyfin_playback =
     require("jellyfin_playback")
 local jellyfin_track_actions =
     require("jellyfin_track_actions")
+local jellyfin_text_entry =
+    require("jellyfin_text_entry")
 local playback = require("playback")
 local power = require("power")
 local queue = require("queue")
@@ -605,20 +607,24 @@ local NowPlaying =
                     x = 6,
                     y = 5,
                     w = 148,
-                    text = "Add to playlist",
+                    text = "",
                     text_align = 2,
                     text_color = "#D7D8DE",
                     text_font = font.fusion_10,
                 }
+
+            playlist_title:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
 
             local playlist_list =
                 lvgl.List(
                     playlist_sheet,
                     {
                         x = 4,
-                        y = 17,
+                        y = 4,
                         w = 152,
-                        h = 55,
+                        h = 68,
                     }
                 )
 
@@ -629,6 +635,8 @@ local NowPlaying =
                 radius = 0,
                 bg_opa = 0,
             }
+
+            local playlist_header_visible = false
 
             local library =
                 sync_library_view.current()
@@ -648,6 +656,11 @@ local NowPlaying =
             local main_initial_button
             local rebuild_main_actions
             local playlist_buttons = {}
+            local playlist_labels = {}
+            local playlist_activators = {}
+            local playlist_initial_button
+            local create_playlist_button
+            local playlist_initial_scroll_y = 0
             local sheet_group = nil
             local previous_sheet_wrap = nil
             local active_sheet_button_count = 0
@@ -658,6 +671,13 @@ local NowPlaying =
             )
                 highlighted_sheet_button =
                     focused_button
+
+                if focused_button then
+                    pcall(function()
+                        focused_button
+                            :scroll_to_view_recursive(false)
+                    end)
+                end
 
                 local stale_focus_state =
                     lvgl.STATE.FOCUSED |
@@ -834,6 +854,71 @@ local NowPlaying =
                 )
             end
 
+            local function add_playlist_scroll_spacer(
+                list,
+                button_count
+            )
+                local button_height = 15
+                local viewport_height = 68
+                local required_content_height =
+                    viewport_height + button_height
+                local spacer_height =
+                    required_content_height -
+                    (button_count * button_height)
+
+                if spacer_height <= 0 then
+                    return nil
+                end
+
+                local spacer = list:add_btn(nil, "")
+
+                spacer:set {
+                    w = lvgl.PCT(100),
+                    h = spacer_height,
+                    pad_all = 0,
+                    border_width = 0,
+                    outline_width = 0,
+                    shadow_width = 0,
+                    radius = 0,
+                    bg_opa = 0,
+                    text_color = "#11131A",
+                }
+                spacer:clear_flag(
+                    lvgl.FLAG.CLICKABLE
+                )
+                remove_from_group(spacer)
+
+                return spacer
+            end
+
+            local function position_playlist_chooser()
+                local scroll_y = 0
+
+                if #playlist_buttons > 1 then
+                    scroll_y = 15
+                end
+
+                playlist_initial_scroll_y =
+                    scroll_y
+
+                local function apply_scroll()
+                    pcall(function()
+                        playlist_list:scroll_to {
+                            x = 0,
+                            y = scroll_y,
+                            anim = false,
+                        }
+                    end)
+                end
+
+                apply_scroll()
+                lvgl.Timer {
+                    period = 1,
+                    repeat_count = 1,
+                    cb = apply_scroll,
+                }
+            end
+
             local function restore_player_focus()
                 local group =
                     sheet_group or
@@ -890,6 +975,27 @@ local NowPlaying =
                             sheet_group ~= nil,
                         main_actions =
                             main_action_ids,
+                        playlist_labels =
+                            playlist_labels,
+                        playlist_header_visible =
+                            playlist_header_visible,
+                        playlist_initial_scroll_y =
+                            playlist_initial_scroll_y,
+                        playlist_create_hidden_on_open =
+                            playlist_initial_scroll_y >= 15,
+                        playlist_initial_label =
+                            (function()
+                                for index, button in ipairs(
+                                    playlist_buttons
+                                ) do
+                                    if button ==
+                                            playlist_initial_button then
+                                        return playlist_labels[index]
+                                    end
+                                end
+
+                                return nil
+                            end)(),
                         highlighted_action =
                             (function()
                                 for index, button in ipairs(
@@ -977,6 +1083,38 @@ local NowPlaying =
                         self.close_sheet()
                     end,
                 }
+            end
+
+            local function shuffle_enabled()
+                return
+                    queue.random and
+                    type(queue.random.get) ==
+                        "function" and
+                    queue.random:get() == true or
+                    false
+            end
+
+            local function toggle_shuffle()
+                if not queue.random or
+                    type(queue.random.set) ~=
+                        "function" then
+                    return
+                end
+
+                queue.random:set(
+                    not shuffle_enabled()
+                )
+                close_soon()
+            end
+
+            local function open_queue()
+                finish_close()
+
+                backstack.push(
+                    require(
+                        "jellyfin_queue"
+                    ):new()
+                )
             end
 
             local function open_artist(
@@ -1423,13 +1561,57 @@ local NowPlaying =
                     }
                 end
 
-            local playlist_back
+            local function show_main_sheet()
+                if self.sheet_animating then
+                    return
+                end
+
+                self.sheet_animating = true
+                prepare_sheet_focus()
+
+                animate_y(
+                    playlist_sheet,
+                    playlist_target_y,
+                    128,
+                    function()
+                        playlist_sheet:add_flag(
+                            lvgl.FLAG.HIDDEN
+                        )
+
+                        main_sheet:clear_flag(
+                            lvgl.FLAG.HIDDEN
+                        )
+
+                        self.sheet_page = "main"
+                        self.sheet_animating = false
+
+                        animate_y(
+                            main_sheet,
+                            128,
+                            main_target_y,
+                            function()
+                                activate_sheet_buttons(
+                                    main_buttons,
+                                    main_initial_button
+                                )
+                            end
+                        )
+                    end
+                )
+            end
 
             local function show_playlists()
                 if self.sheet_animating then
                     return
                 end
 
+                playlist_title:add_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+                playlist_list:clear_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+                playlist_header_visible = false
                 self.sheet_animating = true
                 prepare_sheet_focus()
 
@@ -1459,8 +1641,10 @@ local NowPlaying =
                             function()
                                 activate_sheet_buttons(
                                     playlist_buttons,
-                                    playlist_back
+                                    playlist_initial_button or
+                                        playlist_buttons[1]
                                 )
+                                position_playlist_chooser()
                             end
                         )
                     end
@@ -1496,7 +1680,13 @@ local NowPlaying =
                                 active.item,
                             context = context,
                             favorite = favorite,
+                            shuffle =
+                                shuffle_enabled(),
                             handlers = {
+                                open_queue =
+                                    open_queue,
+                                toggle_shuffle =
+                                    toggle_shuffle,
                                 open_artist =
                                     open_artist,
                                 toggle_favorite =
@@ -1573,57 +1763,67 @@ local NowPlaying =
                     end
                 end
 
-            playlist_back =
+            local function register_playlist_button(
+                label,
+                button,
+                activate
+            )
+                table.insert(
+                    playlist_buttons,
+                    button
+                )
+                table.insert(
+                    playlist_labels,
+                    label
+                )
+                table.insert(
+                    playlist_activators,
+                    activate
+                )
+            end
+
+            local create_playlist_action =
+                function()
+                    local track_id =
+                        track and track.id
+
+                    finish_close()
+
+                    backstack.push(
+                        jellyfin_text_entry.new {
+                            title = "New playlist",
+                            on_submit = function(name)
+                                local local_id,
+                                    operation_or_error =
+                                    sync_operation_queue
+                                        .enqueue_create_playlist(
+                                            name,
+                                            {track_id}
+                                        )
+
+                                if not local_id then
+                                    return false,
+                                        operation_or_error
+                                end
+
+                                return true
+                            end,
+                        }
+                    )
+                end
+
+            create_playlist_button =
                 add_sheet_button(
                     playlist_list,
-                    "Back",
-                    function()
-                        if self.sheet_animating then
-                            return
-                        end
-
-                        self.sheet_animating = true
-                        prepare_sheet_focus()
-
-                        animate_y(
-                            playlist_sheet,
-                            playlist_target_y,
-                            128,
-                            function()
-                                playlist_sheet
-                                    :add_flag(
-                                        lvgl.FLAG.HIDDEN
-                                    )
-
-                                main_sheet
-                                    :clear_flag(
-                                        lvgl.FLAG.HIDDEN
-                                    )
-
-                                self.sheet_page =
-                                    "main"
-                                self.sheet_animating =
-                                    false
-
-                                animate_y(
-                                    main_sheet,
-                                    128,
-                                    main_target_y,
-                                    function()
-                                        activate_sheet_buttons(
-                                            main_buttons,
-                                            main_initial_button
-                                        )
-                                    end
-                                )
-                            end
-                        )
-                    end,
+                    "Create playlist",
+                    create_playlist_action,
                     refresh_sheet_highlight
                 )
-            table.insert(
-                playlist_buttons,
-                playlist_back
+
+            register_playlist_button(
+                "Create playlist",
+                create_playlist_button,
+                create_playlist_action
             )
 
             if library then
@@ -1633,12 +1833,8 @@ local NowPlaying =
                     local playlist_copy =
                         playlist
 
-                    local playlist_button =
-                        add_sheet_button(
-                            playlist_list,
-                            playlist_copy.name or
-                                "Playlist",
-                            function()
+                    local playlist_action =
+                        function()
                             local playlist_id =
                                 playlist_copy
                                     .local_id or
@@ -1653,35 +1849,67 @@ local NowPlaying =
                                     )
 
                             if not operation then
+                                playlist_list:add_flag(
+                                    lvgl.FLAG.HIDDEN
+                                )
                                 playlist_title:set {
                                     text =
                                         operation_error or
                                         "Unable to queue add",
                                 }
-
+                                playlist_title:clear_flag(
+                                    lvgl.FLAG.HIDDEN
+                                )
+                                playlist_header_visible = true
                                 return
                             end
 
-                            playlist_title:set {
-                                text =
-                                    "Added to " ..
-                                    (
-                                        playlist_copy
-                                            .name or
-                                        "playlist"
-                                    ),
-                            }
+                            close_soon()
+                        end
 
-                                close_soon()
-                            end,
+                    local label =
+                        playlist_copy.name or
+                        "Playlist"
+                    local playlist_button =
+                        add_sheet_button(
+                            playlist_list,
+                            label,
+                            playlist_action,
                             refresh_sheet_highlight
                         )
-                    table.insert(
-                        playlist_buttons,
-                        playlist_button
+
+                    register_playlist_button(
+                        label,
+                        playlist_button,
+                        playlist_action
                     )
+
                 end
             end
+
+            playlist_initial_button =
+                playlist_buttons[2] or
+                playlist_buttons[1]
+
+            local playlist_scroll_spacer =
+                add_playlist_scroll_spacer(
+                    playlist_list,
+                    #playlist_buttons
+                )
+
+            self.activate_playlist_action =
+                function(label)
+                    for index, candidate in ipairs(
+                        playlist_labels
+                    ) do
+                        if candidate == label then
+                            playlist_activators[index]()
+                            return true
+                        end
+                    end
+
+                    return false
+                end
 
             remove_from_group(dimmer)
             remove_sheet_buttons()
@@ -1699,9 +1927,14 @@ local NowPlaying =
                     self.sheet_page = "main"
                     set_sim_transport_mode(false)
 
-                    playlist_title:set {
-                        text = "Add to playlist",
-                    }
+                    playlist_title:add_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+                    playlist_list:clear_flag(
+                        lvgl.FLAG.HIDDEN
+                    )
+                    playlist_header_visible = false
+                    playlist_initial_scroll_y = 0
 
                     playlist_sheet:add_flag(
                         lvgl.FLAG.HIDDEN
@@ -1745,7 +1978,12 @@ local NowPlaying =
             self.handle_back =
                 function()
                     if self.sheet_open then
-                        self.close_sheet()
+                        if self.sheet_page ==
+                                "playlists" then
+                            show_main_sheet()
+                        else
+                            self.close_sheet()
+                        end
                     else
                         self.go_back()
                     end

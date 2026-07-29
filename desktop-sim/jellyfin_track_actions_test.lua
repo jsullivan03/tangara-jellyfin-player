@@ -43,6 +43,7 @@ local main = actions.main {
     },
     favorite = true,
     handlers = {
+        open_queue = handler("queue"),
         open_artist = handler("artist"),
         toggle_favorite = handler("favorite"),
         show_playlists = handler("playlist"),
@@ -51,11 +52,12 @@ local main = actions.main {
 }
 
 assert(
-    #main == 4,
-    "playlist track should expose four current actions"
+    #main == 5,
+    "playlist track should expose five current actions"
 )
 
 local expected = {
+    {"queue", "Queue"},
     {"artist", "Go to artist"},
     {"favorite", "Remove favorite"},
     {"add_to_playlist", "Add to playlist"},
@@ -78,7 +80,7 @@ end
 
 assert(
     table.concat(calls, ",") ==
-        "artist,favorite,playlist,remove",
+        "queue,artist,favorite,playlist,remove",
     "track action callbacks were not preserved"
 )
 
@@ -146,6 +148,62 @@ assert(
         fallback_artist.name ==
             "Manifest Artist",
     "resolved playlist artist target was incorrect"
+)
+
+local shuffle_calls = 0
+local playback_actions = actions.main {
+    track = {
+        id = "track-5",
+        artist = "Shuffle Artist",
+        artist_key = "id:artist-5",
+    },
+    context = {},
+    favorite = false,
+    shuffle = false,
+    handlers = {
+        open_queue = handler("queue-5"),
+        toggle_shuffle = function()
+            shuffle_calls =
+                shuffle_calls + 1
+        end,
+        open_artist = handler("artist-5"),
+        toggle_favorite = handler("favorite-5"),
+        show_playlists = handler("playlist-5"),
+    },
+}
+
+assert(
+    playback_actions[1].id ==
+            "queue" and
+        playback_actions[1].label ==
+            "Queue" and
+        playback_actions[2].id ==
+            "shuffle" and
+        playback_actions[2].label ==
+            "Enable shuffle",
+    "Now Playing actions did not prepend Queue and the disabled shuffle toggle"
+)
+
+playback_actions[2].activate()
+assert(
+    shuffle_calls == 1,
+    "shuffle action did not preserve its callback"
+)
+
+local shuffled_actions = actions.main {
+    track = {id = "track-6"},
+    shuffle = true,
+    handlers = {
+        toggle_shuffle = function()
+        end,
+    },
+}
+
+assert(
+    #shuffled_actions == 1 and
+        shuffled_actions[1].label ==
+            "Disable shuffle",
+    "enabled shuffle state did not produce a disable action"
 )
 
 print(

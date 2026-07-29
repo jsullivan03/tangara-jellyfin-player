@@ -572,6 +572,121 @@ end
 
 local cached_artwork_by_track = {}
 
+local function cache_track_background(track)
+    if type(track) ~= "table" then
+        return false
+    end
+
+    local track_id =
+        track.id or
+        track.jellyfin_id
+
+    if type(track_id) ~= "string" or
+        track_id == "" then
+        return false
+    end
+
+    local current_manifest =
+        manifest_cache.load()
+
+    if not current_manifest then
+        return false
+    end
+
+    local item = nil
+
+    for _, candidate in ipairs(
+        current_manifest.items or {}
+    ) do
+        if candidate.id == track_id or
+            candidate.jellyfin_id ==
+                track_id then
+            item = candidate
+            break
+        end
+    end
+
+    if not item then
+        return false
+    end
+
+    local artwork_directory =
+        root .. "/sim-artwork"
+
+    os.execute(
+        "mkdir -p " ..
+        shell_quote(artwork_directory)
+    )
+
+    local stem =
+        track_id:gsub(
+            "[^A-Za-z0-9._-]",
+            "_"
+        )
+
+    local background_path =
+        artwork_directory ..
+        "/" ..
+        stem ..
+        "-background-v3.png"
+
+    local background_ready,
+        background_downloaded =
+        download_artwork(
+            track,
+            "background",
+            background_path
+        )
+
+    if not background_ready then
+        return false
+    end
+
+    local value =
+        "/" .. background_path
+
+    item.artwork =
+        item.artwork or {}
+
+    local manifest_changed =
+        item.artwork.background ~=
+            value
+
+    item.artwork.background = value
+    track.artwork =
+        track.artwork or {}
+    track.artwork.background = value
+
+    if manifest_changed then
+        local saved, save_error =
+            manifest_cache.save(
+                json_encode.encode(
+                    current_manifest
+                )
+            )
+
+        if not saved then
+            print(
+                "Album background cache save failed: " ..
+                tostring(save_error)
+            )
+            return false
+        end
+    end
+
+    if background_downloaded then
+        print(
+            "Album background cached for: " ..
+            tostring(track.album or track.title)
+        )
+    end
+
+    return true
+end
+
+_G.tangara_sim_cache_track_background =
+    cache_track_background
+
 local function apply_cached_artwork(
     track,
     cached
@@ -660,7 +775,7 @@ local function cache_track_artwork(track)
         artwork_directory ..
         "/" ..
         stem ..
-        "-background.png"
+        "-background-v3.png"
 
     local cover_ready,
         cover_downloaded =

@@ -92,6 +92,54 @@ assert(
     "Simulator track artwork still saves or logs unchanged cached artwork"
 )
 
+assert(
+    source:find(
+        "-background-v3.png",
+        1,
+        true
+    ) and
+        source:find(
+            "tangara_sim_cache_track_background",
+            1,
+            true
+        ),
+    "Simulator album backgrounds do not use the refreshed uniform-blur cache"
+)
+
+local server_file = assert(
+    io.open(
+        "server/tangara-sync/app.py",
+        "rb"
+    )
+)
+local server_source =
+    server_file:read("*a")
+server_file:close()
+
+assert(
+    server_source:find(
+        "ImageFilter.GaussianBlur",
+        1,
+        true
+    ) and
+        server_source:find(
+            "bleed = 24",
+            1,
+            true
+        ) and
+        server_source:find(
+            "radius=16",
+            1,
+            true
+        ) and
+        not server_source:find(
+            '"blur": "8"',
+            1,
+            true
+        ),
+    "Artwork server still delegates background blur to Jellyfin's vignetted renderer"
+)
+
 print(
     "Simulator artwork reuses cached files without repeated manifest saves or cache logs"
 )

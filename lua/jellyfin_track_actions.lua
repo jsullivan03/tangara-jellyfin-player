@@ -122,6 +122,22 @@ function M.main(options)
             options.item
         )
 
+    add_action(
+        actions,
+        "queue",
+        "Queue",
+        handlers.open_queue
+    )
+
+    add_action(
+        actions,
+        "shuffle",
+        options.shuffle and
+            "Disable shuffle" or
+            "Enable shuffle",
+        handlers.toggle_shuffle
+    )
+
     if artist and
         type(handlers.open_artist) ==
             "function" then

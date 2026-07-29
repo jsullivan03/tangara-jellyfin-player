@@ -99,7 +99,7 @@ local next_calls = 0
 local previous_calls = 0
 
 queue.size:set(#tracks)
-queue.position:set(active_index - 1)
+queue.position:set(active_index)
 playback.position:set(60)
 playback.playing:set(true)
 
@@ -115,7 +115,7 @@ package.loaded["jellyfin_playback"] = {
         return tracks[active_index]
     end,
     sync_position = function(position)
-        local logical_position = position + 1
+        local logical_position = position
 
         if logical_position >= 1 and
             logical_position <= #tracks then
@@ -130,7 +130,7 @@ package.loaded["jellyfin_playback"] = {
                 #tracks,
                 active_index + 1
             )
-        queue.position:set(active_index - 1)
+        queue.position:set(active_index)
         playback.position:set(0)
         return tracks[active_index]
     end,
@@ -142,7 +142,7 @@ package.loaded["jellyfin_playback"] = {
                 1,
                 active_index - 1
             )
-        queue.position:set(active_index - 1)
+        queue.position:set(active_index)
         playback.position:set(0)
         return tracks[active_index]
     end,
@@ -300,8 +300,12 @@ assert(
             "track-background-3" and
         next_media.title == "Third" and
         next_media.cover_x == 47 and
-        next_media.title_y == 83 and
-        next_media.artist_y == 95,
+        next_media.cover_zoom == 280 and
+        next_media.title_y == 90 and
+        next_media.artist_y == 100 and
+        next_media.background_y == 0 and
+        next_media.background_dimmer_opa ==
+            118,
     "next-track artwork or fixed text layout did not refresh"
 )
 

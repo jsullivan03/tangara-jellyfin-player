@@ -9,7 +9,6 @@ local jellyfin_status_bar =
     require("jellyfin_status_bar")
 local jellyfin_scroll_indicator =
     require("jellyfin_scroll_indicator")
-
 local M = {}
 
 local COLORS = {
@@ -38,7 +37,7 @@ local pending_initial_scrolls =
 
 local initial_scroll_timer = nil
 
-local INITIAL_SCROLL_Y = 25
+local INITIAL_SCROLL_ROW_Y = 25
 local INITIAL_SCROLL_ATTEMPTS = 30
 local INITIAL_SCROLL_ROOM = 100
 
@@ -134,14 +133,61 @@ local function selected_row_object(self)
     return nil
 end
 
+local function initial_scroll_rows(self)
+    local rows = {}
+
+    for _, model in ipairs(
+        self and self.leading_rows or {}
+    ) do
+        if model and
+            model.object and
+            model.object ~= self.first_row and
+            model.object ~= self.initial_scroll_anchor then
+            table.insert(rows, model.object)
+        end
+    end
+
+    if #rows == 0 and
+        self and
+        self.sort_row and
+        self.sort_row.object and
+        self.sort_row.object ~=
+            self.first_row then
+        table.insert(
+            rows,
+            self.sort_row.object
+        )
+    end
+
+    return rows
+end
+
 local function apply_initial_scroll(self)
+    local has_leading_rows =
+        self and self.leading_rows and
+        #self.leading_rows > 0
+
     if not self or
+        self.preserve_leading_controls_on_open or
         not self.ui_active or
         not self.list or
-        not self.sort_row or
+        (
+            not self.sort_row and
+            not has_leading_rows
+        ) or
         not self.first_row or
-        self.first_row ==
-            self.sort_row.object then
+        (
+            self.sort_row and
+            self.first_row ==
+                self.sort_row.object
+        ) then
+        return false
+    end
+
+    local leading_rows =
+        initial_scroll_rows(self)
+
+    if #leading_rows == 0 then
         return false
     end
 
@@ -151,19 +197,36 @@ local function apply_initial_scroll(self)
         function()
             self.list:scroll_to {
                 x = 0,
-                y = INITIAL_SCROLL_Y,
+                y =
+                    INITIAL_SCROLL_ROW_Y *
+                    #leading_rows,
                 anim = false,
             }
 
             local list_coordinates =
                 self.list:get_coords()
 
-            local row_coordinates =
-                self.first_row:get_coords()
+            local target_object =
+                self.initial_scroll_anchor or
+                self.first_row
 
-            local sort_coordinates =
-                self.sort_row.object
-                    :get_coords()
+            local row_coordinates =
+                target_object:get_coords()
+
+            local leading_rows_hidden = true
+
+            for _, object in ipairs(
+                leading_rows
+            ) do
+                local coordinates =
+                    object:get_coords()
+
+                if coordinates.y2 >=
+                    list_coordinates.y1 then
+                    leading_rows_hidden = false
+                    break
+                end
+            end
 
             local list_height =
                 list_coordinates.y2 -
@@ -175,8 +238,7 @@ local function apply_initial_scroll(self)
                     list_coordinates.y1 - 2 and
                 row_coordinates.y1 <=
                     list_coordinates.y1 + 1 and
-                sort_coordinates.y2 <
-                    list_coordinates.y1
+                leading_rows_hidden
         end
     )
 
@@ -238,17 +300,33 @@ local function ensure_initial_scroll_timer()
 end
 
 local function schedule_initial_scroll(self)
+    if self and
+        self.preserve_leading_controls_on_open then
+        pending_initial_scrolls[self] = nil
+        return
+    end
+
     if apply_initial_scroll(self) then
         pending_initial_scrolls[self] = nil
         return
     end
 
+    local has_leading_rows =
+        self and self.leading_rows and
+        #self.leading_rows > 0
+
     if not self or
         not self.ui_active or
-        not self.sort_row or
+        (
+            not self.sort_row and
+            not has_leading_rows
+        ) or
         not self.first_row or
-        self.first_row ==
-            self.sort_row.object then
+        (
+            self.sort_row and
+            self.first_row ==
+                self.sort_row.object
+        ) then
         return
     end
 
@@ -397,6 +475,21 @@ local function register_model(
     return model
 end
 
+local function register_leading_row(
+    self,
+    model
+)
+    self.leading_rows =
+        self.leading_rows or {}
+
+    table.insert(
+        self.leading_rows,
+        model
+    )
+
+    return model
+end
+
 local function attach_row_events(model)
     local object = model.object
 
@@ -439,11 +532,19 @@ local function attach_row_events(model)
     )
 
     local suppress_click = false
+    local pending_long_press = false
 
     object:onevent(
         lvgl.EVENT.PRESSED,
         function()
             suppress_click = false
+            pending_long_press = false
+
+            if type(model.on_press) ==
+                    "function" then
+                model.on_press()
+            end
+
             focus_object(object)
         end
     )
@@ -457,9 +558,59 @@ local function attach_row_events(model)
             end
 
             suppress_click = true
+
+            if model.defer_long_press_until_release then
+                pending_long_press = true
+
+                if type(
+                    model.on_long_press_preview
+                ) == "function" then
+                    model.on_long_press_preview()
+                end
+
+                return
+            end
+
             model.on_long_press()
         end
     )
+
+    if lvgl.EVENT.RELEASED then
+        object:onevent(
+            lvgl.EVENT.RELEASED,
+            function()
+                local handled =
+                    pending_long_press
+
+                pending_long_press = false
+
+                if handled and
+                    type(model.on_long_press) ==
+                        "function" then
+                    model.on_long_press()
+                end
+
+                if type(model.on_release) ==
+                        "function" then
+                    model.on_release(handled)
+                end
+            end
+        )
+    end
+
+    if lvgl.EVENT.PRESS_LOST then
+        object:onevent(
+            lvgl.EVENT.PRESS_LOST,
+            function()
+                pending_long_press = false
+
+                if type(model.on_press_lost) ==
+                        "function" then
+                    model.on_press_lost()
+                end
+            end
+        )
+    end
 
     object:onClicked(
         function()
@@ -650,6 +801,19 @@ local function create_artwork(
         lvgl.FLAG.CLICKABLE
     )
 
+    if source == "__playlist_blue__" then
+        model.frame:set {
+            bg_color = "#173A5E",
+            bg_opa = 255,
+        }
+
+        function model:set(next_source)
+            return next_source
+        end
+
+        return model
+    end
+
     if source == "__favorites_star__" then
         model.frame:set {
             bg_color = "#000000",
@@ -788,6 +952,47 @@ function M.create_root(
         lvgl.FLAG.SCROLLABLE
     )
 
+    local background_path =
+        options.background
+
+    if type(background_path) ==
+            "string" and
+        background_path ~= "" then
+        self.background_art =
+            self.root:Image {
+                x = 0,
+                y = 0,
+                src =
+                    lvgl.ImgData(
+                        background_path
+                    ),
+            }
+
+        self.background_dimmer =
+            self.root:Object {
+                x = 0,
+                y = 0,
+                w = 160,
+                h = 128,
+                pad_all = 0,
+                border_width = 0,
+                radius = 0,
+                bg_color = "#000000",
+                bg_opa =
+                    tonumber(
+                        options
+                            .background_dimmer_opa
+                    ) or 110,
+                scrollbar_mode =
+                    lvgl.SCROLLBAR_MODE.OFF,
+            }
+
+        self.background_dimmer
+            :clear_flag(
+                lvgl.FLAG.SCROLLABLE
+            )
+    end
+
     self.screen_loaded = false
 
     self.root:onevent(
@@ -840,21 +1045,29 @@ function M.create_root(
     self.bindings =
         self.status.bindings
 
+    self.header_marquee =
+        jellyfin_marquee.create(
+            self.root,
+            {
+                x = 5,
+                y = 15,
+                w = 150,
+                h = 13,
+                label_y = 0,
+                text = title or "",
+                align = "center",
+                text_color =
+                    COLORS.primary,
+                text_font =
+                    font.fusion_10,
+                autostart = true,
+            }
+        )
+
+    -- Preserve the prior public field for any callers that inspect the
+    -- non-focusable header object.
     self.header =
-        self.root:Label {
-            x = 5,
-            y = 15,
-            w = 150,
-            h = 13,
-            text = title or "",
-            text_align = 2,
-            text_color =
-                COLORS.primary,
-            text_font =
-                font.fusion_10,
-            long_mode =
-                lvgl.LABEL.LONG_CLIP,
-        }
+        self.header_marquee.view
 
     self.list =
         lvgl.List(
@@ -874,17 +1087,44 @@ function M.create_root(
         radius = 0,
         bg_color =
             COLORS.background,
-        bg_opa = 255,
+        bg_opa =
+            self.background_art and
+            0 or 255,
         scrollbar_mode =
             lvgl.SCROLLBAR_MODE.OFF,
     }
 
     self.rows = {}
     self.media_rows = {}
+    self.leading_rows = {}
     self.ui_active = false
 
     remove_from_group(self.list)
     remove_from_group(self.header)
+    remove_from_group(
+        self.background_art
+    )
+    remove_from_group(
+        self.background_dimmer
+    )
+
+    function self:background_state()
+        return {
+            enabled =
+                self.background_art ~= nil,
+            source = background_path,
+            dimmer_opa =
+                self.background_dimmer and
+                (
+                    tonumber(
+                        options
+                            .background_dimmer_opa
+                    ) or 110
+                ) or 0,
+            list_transparent =
+                self.background_art ~= nil,
+        }
+    end
 end
 
 local function add_modal_row_events(
@@ -1000,6 +1240,10 @@ function M.add_sort_control(
     register_model(self, model)
 
     self.sort_row = model
+    register_leading_row(
+        self,
+        model
+    )
     self.sort_options = options
     self.sort_dirty = false
     self.sort_menu_open = false
@@ -1427,6 +1671,250 @@ function M.add_sort_control(
     return model
 end
 
+function M.add_play_control(
+    self,
+    options
+)
+    options = options or {}
+
+    -- Keep the compact collection control as the first visible and focused
+    -- item. On sorted collection screens, only the Sort row is initially
+    -- scrolled above it; rotating upward still reveals Sort.
+    local container =
+        self.list:Object {
+            w = lvgl.PCT(100),
+            h = 24,
+            pad_all = 0,
+            border_width = 0,
+            radius = 0,
+            bg_opa = 0,
+            scrollbar_mode =
+                lvgl.SCROLLBAR_MODE.OFF,
+        }
+
+    container:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+    container:clear_flag(
+        lvgl.FLAG.CLICKABLE
+    )
+    remove_from_group(container)
+
+    local button =
+        container:Button {
+            x = 66,
+            y = 0,
+            w = 24,
+            h = 24,
+            pad_all = 0,
+            border_width = 0,
+            outline_width = 0,
+            shadow_width = 0,
+            radius = 12,
+            bg_opa = 0,
+        }
+
+    -- PNG image children and LVGL background images do not render reliably
+    -- inside this compact button in the desktop simulator. Draw the two
+    -- monochrome icons from small LVGL objects instead. This uses the same
+    -- primitive rendering path as the Favorites star artwork.
+    local function create_icon_piece(
+        x,
+        y,
+        width,
+        height,
+        color
+    )
+        local piece =
+            button:Object {
+                x = x,
+                y = y,
+                w = width,
+                h = height,
+                pad_all = 0,
+                border_width = 0,
+                radius = 0,
+                bg_color = color,
+                bg_opa = 255,
+                scrollbar_mode =
+                    lvgl.SCROLLBAR_MODE.OFF,
+            }
+
+        piece:clear_flag(
+            lvgl.FLAG.SCROLLABLE
+        )
+        piece:clear_flag(
+            lvgl.FLAG.CLICKABLE
+        )
+        remove_from_group(piece)
+
+        return piece
+    end
+
+    local function create_icon(
+        runs,
+        offset_x,
+        offset_y,
+        color
+    )
+        local pieces = {}
+
+        for _, run in ipairs(runs) do
+            table.insert(
+                pieces,
+                create_icon_piece(
+                    offset_x + run[1],
+                    offset_y + run[2],
+                    run[3],
+                    run[4] or 1,
+                    color
+                )
+            )
+        end
+
+        return pieces
+    end
+
+    local function set_icon_visible(
+        pieces,
+        visible
+    )
+        for _, piece in ipairs(pieces) do
+            if visible then
+                piece:clear_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+            else
+                piece:add_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+            end
+        end
+    end
+
+    -- Use a small number of rectangular primitives so the icons remain
+    -- inexpensive even when several collection screens are on the backstack.
+    local play_icon =
+        create_icon(
+            {
+                {8, 6, 2, 12},
+                {10, 7, 2, 10},
+                {12, 8, 2, 8},
+                {14, 9, 2, 6},
+                {16, 10, 2, 4},
+            },
+            0,
+            0,
+            COLORS.primary
+        )
+
+    local shuffle_icon =
+        create_icon(
+            {
+                -- Upper-left input crossing to the lower-right output.
+                {5, 8, 4, 2},
+                {9, 9, 3, 2},
+                {11, 11, 3, 2},
+                {13, 14, 5, 2},
+                {16, 16, 2, 2},
+                {18, 13, 2, 4},
+                -- Lower-left input crossing to the upper-right output.
+                {5, 14, 4, 2},
+                {9, 13, 3, 2},
+                {13, 9, 5, 2},
+                {16, 7, 2, 2},
+                {18, 8, 2, 4},
+            },
+            0,
+            0,
+            COLORS.background
+        )
+
+    set_icon_visible(
+        shuffle_icon,
+        false
+    )
+
+    local model = {
+        object = button,
+        container = container,
+        play_icon = play_icon,
+        shuffle_icon = shuffle_icon,
+        icon_mode = "play",
+        selection_id =
+            options.selection_id or
+            "control:play",
+    }
+
+    local function set_shuffle_preview(
+        enabled
+    )
+        model.icon_mode =
+            enabled and "shuffle" or "play"
+
+        set_icon_visible(
+            play_icon,
+            not enabled
+        )
+        set_icon_visible(
+            shuffle_icon,
+            enabled
+        )
+
+        if enabled then
+            button:set {
+                bg_color =
+                    COLORS.primary,
+                bg_opa = 255,
+            }
+        else
+            set_row_focus(
+                button,
+                model.focused == true
+            )
+        end
+    end
+
+    model.set_shuffle_preview =
+        set_shuffle_preview
+    model.reset_preview =
+        function()
+            set_shuffle_preview(false)
+        end
+    model.on_click =
+        options.on_play
+    model.on_long_press =
+        options.on_shuffle
+    model.defer_long_press_until_release =
+        true
+    model.on_press =
+        model.reset_preview
+    model.on_long_press_preview =
+        function()
+            if type(options.on_shuffle) ==
+                    "function" then
+                set_shuffle_preview(true)
+            end
+        end
+    model.on_release =
+        model.reset_preview
+    model.on_press_lost =
+        model.reset_preview
+
+    attach_row_events(model)
+    register_model(self, model)
+    register_leading_row(
+        self,
+        model
+    )
+
+    self.play_row = model
+    self.initial_focus_object = button
+    self.initial_scroll_anchor = button
+
+    return model
+end
+
 local function ensure_sort_scroll_room(self)
     if not self or
         not self.sort_row or
@@ -1461,6 +1949,11 @@ end
 
 function M.install_controls(self)
     self.ui_active = true
+
+    if self.header_marquee then
+        self.header_marquee:refresh(true)
+        self.header_marquee:start()
+    end
 
     ensure_sort_scroll_room(self)
 
@@ -1512,6 +2005,7 @@ function M.install_controls(self)
 
     local initial_object =
         restored_object or
+        self.initial_focus_object or
         self.first_row or
         (
             self.rows[1] and
@@ -1562,6 +2056,10 @@ end
 function M.restore_controls(self)
     self.ui_active = false
 
+    if self.header_marquee then
+        self.header_marquee:stop()
+    end
+
     if self.track_action_sheet and
         self.track_action_sheet.is_open then
         self.track_action_sheet:close(true)
@@ -1585,6 +2083,11 @@ function M.restore_controls(self)
     for _, model in ipairs(
         self.rows or {}
     ) do
+        if type(model.reset_preview) ==
+                "function" then
+            model.reset_preview()
+        end
+
         stop_marquees(model)
         set_row_focus(
             model.object,
@@ -1810,6 +2313,67 @@ function M.attach_scroll_indicator(
     self.scroll_indicator = indicator
 
     return indicator
+end
+
+function M.add_action_row(
+    self,
+    label,
+    options
+)
+    options = options or {}
+
+    local row =
+        self.list:Button {
+            w = lvgl.PCT(100),
+            h = tonumber(options.height) or 25,
+            pad_all = 0,
+            border_width = 0,
+            outline_width = 0,
+            shadow_width = 0,
+            radius = 3,
+            bg_opa = 0,
+        }
+
+    local text =
+        jellyfin_marquee.create(
+            row,
+            {
+                x = tonumber(options.x) or 5,
+                y = tonumber(options.y) or 6,
+                w = tonumber(options.width) or 150,
+                h = tonumber(options.text_height) or 14,
+                text = label or "",
+                text_color =
+                    options.text_color or
+                    COLORS.primary,
+                align = options.align,
+            }
+        )
+
+    local model = {
+        object = row,
+        label = text,
+        marquees = {text},
+        on_click = options.on_click,
+        on_long_press = options.on_long_press,
+        selection_id =
+            normalize_selection_id(
+                options.selection_id
+            ),
+    }
+
+    function model:set_label(next_label)
+        text:set(next_label or "")
+    end
+
+    attach_row_events(model)
+    register_model(self, model)
+
+    if options.leading then
+        register_leading_row(self, model)
+    end
+
+    return model
 end
 
 function M.add_count_row(
@@ -2038,8 +2602,14 @@ function M.add_playlist_row(
     self,
     collection,
     artwork_source,
-    callback
+    callback_or_options
 )
+    local options =
+        type(callback_or_options) == "table" and
+        callback_or_options or
+        {
+            on_click = callback_or_options,
+        }
     local row =
         self.list:Button {
             w = lvgl.PCT(100),
@@ -2092,7 +2662,8 @@ function M.add_playlist_row(
         artwork = artwork,
         name = name,
         badge = badge,
-        on_click = callback,
+        on_click = options.on_click,
+        on_long_press = options.on_long_press,
         selection_id =
             item_selection_id(
                 collection
@@ -2102,8 +2673,16 @@ function M.add_playlist_row(
     function model:update(
         next_collection,
         next_artwork,
-        next_callback
+        next_callback_or_options
     )
+        local next_options =
+            type(next_callback_or_options) ==
+                "table" and
+            next_callback_or_options or
+            {
+                on_click =
+                    next_callback_or_options,
+            }
         next_collection =
             next_collection or {}
 
@@ -2133,7 +2712,9 @@ function M.add_playlist_row(
         )
 
         model.on_click =
-            next_callback
+            next_options.on_click
+        model.on_long_press =
+            next_options.on_long_press
         update_model_selection(
             model,
             item_selection_id(

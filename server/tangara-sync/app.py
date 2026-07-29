@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 from flask import (
     Flask,
     Response,
@@ -237,9 +237,23 @@ def manifest_item(item):
             "thumbnail": (
                 "/.tangara-artwork/albums/"
                 + artwork_key
-                + ".png"
+                + "-sq28.png"
             ),
             "thumbnail_item_id":
+                artwork_source_id,
+            "cover": (
+                "/.tangara-artwork/albums/"
+                + artwork_key
+                + "-sq66.png"
+            ),
+            "cover_item_id":
+                artwork_source_id,
+            "background": (
+                "/.tangara-artwork/albums/"
+                + artwork_key
+                + "-bg160x128-v3.png"
+            ),
+            "background_item_id":
                 artwork_source_id,
         },
         "sync_state": "ready",
@@ -427,12 +441,15 @@ def device_artwork(
             "quality": "90",
         }
     else:
+        # Fetch a clean square source and create the 160x128 background
+        # ourselves. Jellyfin's blur response adds a visible edge vignette on
+        # some artwork, while a local Gaussian blur stays uniform across the
+        # screen.
         image_params = {
             "format": "png",
-            "fillWidth": "160",
-            "fillHeight": "70",
-            "quality": "85",
-            "blur": "8",
+            "fillWidth": "256",
+            "fillHeight": "256",
+            "quality": "90",
         }
 
     if image_tag:
@@ -480,7 +497,12 @@ def device_artwork(
             {"error": "Artwork was not found"}
         ), 404
 
-    if variant == "thumbnail":
+    if variant in {"thumbnail", "background"}:
+        cache_control = upstream.headers.get(
+            "Cache-Control",
+            "private, max-age=86400",
+        )
+
         try:
             image_bytes = upstream.content
             upstream.close()
@@ -491,15 +513,49 @@ def device_artwork(
                 image = ImageOps.exif_transpose(
                     image
                 )
-                image = image.convert("RGBA")
-                image = ImageOps.fit(
-                    image,
-                    (28, 28),
-                    method=(
-                        Image.Resampling.LANCZOS
-                    ),
-                    centering=(0.5, 0.5),
-                )
+
+                if variant == "thumbnail":
+                    image = image.convert("RGBA")
+                    image = ImageOps.fit(
+                        image,
+                        (28, 28),
+                        method=(
+                            Image.Resampling.LANCZOS
+                        ),
+                        centering=(0.5, 0.5),
+                    )
+                else:
+                    image = image.convert("RGB")
+
+                    # Blur an overscanned crop, then trim the bleed. This
+                    # keeps the final 160x128 image away from Pillow's filter
+                    # boundary and removes the vertical edge ridges that can
+                    # appear when a blur is applied directly at output size.
+                    bleed = 24
+                    image = ImageOps.fit(
+                        image,
+                        (
+                            160 + bleed * 2,
+                            128 + bleed * 2,
+                        ),
+                        method=(
+                            Image.Resampling.BICUBIC
+                        ),
+                        centering=(0.5, 0.5),
+                    )
+                    image = image.filter(
+                        ImageFilter.GaussianBlur(
+                            radius=16
+                        )
+                    )
+                    image = image.crop(
+                        (
+                            bleed,
+                            bleed,
+                            bleed + 160,
+                            bleed + 128,
+                        )
+                    )
 
                 output = BytesIO()
                 image.save(
@@ -507,7 +563,7 @@ def device_artwork(
                     format="PNG",
                     optimize=True,
                 )
-                thumbnail = output.getvalue()
+                processed = output.getvalue()
         except (
             OSError,
             ValueError,
@@ -515,24 +571,22 @@ def device_artwork(
             return jsonify(
                 {
                     "error": (
-                        "Artwork thumbnail "
-                        "processing failed"
+                        "Artwork "
+                        + variant
+                        + " processing failed"
                     ),
                     "detail": str(error),
                 }
             ), 502
 
         return Response(
-            thumbnail,
+            processed,
             status=200,
             headers={
                 "Content-Length":
-                    str(len(thumbnail)),
+                    str(len(processed)),
                 "Cache-Control":
-                    upstream.headers.get(
-                        "Cache-Control",
-                        "private, max-age=86400",
-                    ),
+                    cache_control,
             },
             mimetype="image/png",
         )

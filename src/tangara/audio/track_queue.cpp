@@ -43,11 +43,13 @@ RandomIterator::RandomIterator(size_t size) : seed_(), pos_(0), size_(size) {
   esp_fill_random(&seed_, sizeof(seed_));
 }
 
-auto RandomIterator::current() const -> size_t {
+auto RandomIterator::current() const -> size_t { return at(pos_); }
+
+auto RandomIterator::at(size_t position) const -> size_t {
   if (size_ == 0) {
     return 0;
   }
-  return MillerShuffle(pos_, seed_, size_);
+  return MillerShuffle(position, seed_, size_);
 }
 
 auto RandomIterator::next(bool repeat) -> bool {
@@ -149,6 +151,40 @@ auto TrackQueue::totalSize() const -> size_t {
     sum += opened_playlist_->size();
   }
   return sum;
+}
+
+auto TrackQueue::playbackOrder() const -> std::vector<size_t> {
+  const std::shared_lock<std::shared_mutex> lock(mutex_);
+
+  const size_t size =
+      playlist_.size() + (opened_playlist_ ? opened_playlist_->size() : 0);
+  std::vector<size_t> order;
+
+  if (size == 0 || position_ >= size) {
+    return order;
+  }
+
+  order.reserve(size - position_);
+
+  if (!shuffle_) {
+    for (size_t position = position_; position < size; position++) {
+      order.push_back(position);
+    }
+    return order;
+  }
+
+  // The current native queue position is authoritative. Remaining entries are
+  // then emitted in the exact order RandomIterator will use for next().
+  order.push_back(position_);
+
+  const size_t sequence_position = shuffle_->sequencePosition();
+  const size_t shuffle_size = shuffle_->size();
+
+  for (size_t cursor = sequence_position + 1; cursor < shuffle_size; cursor++) {
+    order.push_back(shuffle_->at(cursor));
+  }
+
+  return order;
 }
 
 auto TrackQueue::updateShuffler(bool andUpdatePosition) -> void {

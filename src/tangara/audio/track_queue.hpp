@@ -31,6 +31,8 @@ class RandomIterator {
   RandomIterator(size_t size);
 
   auto current() const -> size_t;
+  auto at(size_t position) const -> size_t;
+  auto sequencePosition() const -> size_t { return pos_; }
 
   auto next(bool repeat) -> bool;
   auto prev() -> void;
@@ -41,6 +43,7 @@ class RandomIterator {
   auto seed() -> size_t& { return seed_; }
   auto pos() -> size_t& { return pos_; }
   auto size() -> size_t& { return size_; }
+  auto size() const -> size_t { return size_; }
 
  private:
   size_t seed_;
@@ -73,6 +76,7 @@ class TrackQueue {
   auto currentPosition() const -> size_t;
   auto currentPosition(size_t position) -> bool;
   auto totalSize() const -> size_t;
+  auto playbackOrder() const -> std::vector<size_t>;
   auto open() -> bool;
   auto close() -> void;
   auto openPlaylist(const std::string& playlist_file,

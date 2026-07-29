@@ -636,7 +636,7 @@ backstack.flush(2)
 
 assert(
     virtual.selected_index == 1,
-    "first move below Sort skipped logical track 1 and selected " ..
+    "first move below Sort should select logical track 1, got " ..
         tostring(virtual.selected_index)
 )
 assert(
@@ -661,7 +661,7 @@ local sorted_second_id =
 assert(
     tracks_screen.selected_item_id ==
         sorted_second_id,
-    "second move below Sort selected the wrong track"
+    "third move below Sort selected the wrong track"
 )
 
 backstack.push(child)

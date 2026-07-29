@@ -80,16 +80,15 @@ package.preload["queue"] = function()
 
         file:close()
         queue.size:set(#opened_lines)
-        queue.position:set(0)
+        queue.position:set(
+            #opened_lines > 0 and 1 or 0
+        )
     end
 
     function queue.next()
         queue.position:set(
             math.min(
-                math.max(
-                    0,
-                    queue.size:get() - 1
-                ),
+                queue.size:get(),
                 queue.position:get() + 1
             )
         )
@@ -98,10 +97,29 @@ package.preload["queue"] = function()
     function queue.previous()
         queue.position:set(
             math.max(
-                0,
+                queue.size:get() > 0 and 1 or 0,
                 queue.position:get() - 1
             )
         )
+    end
+
+    function queue.playback_order()
+        if queue.random:get() then
+            return {1, 3, 2}
+        end
+
+        local order = {}
+
+        for position =
+            math.max(
+                1,
+                queue.position:get()
+            ),
+            queue.size:get() do
+            table.insert(order, position)
+        end
+
+        return order
     end
 
     return queue
@@ -229,7 +247,7 @@ assert(
         "/Music/Test/song-3.flac",
     "queue playlist did not preserve collection ordering or omit unavailable tracks"
 )
-assert(queue_position:get() == 1)
+assert(queue_position:get() == 2)
 assert(queue_size:get() == 3)
 assert(playing == true)
 assert(
@@ -258,6 +276,72 @@ assert(current.track.title == "Second")
 local state = assert(bridge.queue_state())
 assert(state.position == 2)
 assert(state.size == 3)
+
+local queue_view =
+    assert(bridge.queue_view())
+assert(
+    queue_view.tracks[1] == tracks[2] and
+        queue_view.tracks[2] == tracks[3] and
+        queue_view.items[1].jellyfin_id ==
+            "track-2" and
+        queue_view.position == 1 and
+        queue_view.source_position == 2 and
+        queue_view.size == 2 and
+        queue_view.total_size == 3 and
+        queue_view.source_positions[1] == 2 and
+        queue_view.source_positions[2] == 3 and
+        queue_view.generation == 1,
+    "queue_view did not expose the current and upcoming native queue order"
+)
+
+local shuffled, shuffle_error =
+    bridge.play_queue(
+        tracks,
+        {
+            collection_kind =
+                "local_tracks",
+        },
+        {shuffle = true}
+    )
+
+assert(shuffled, shuffle_error)
+assert(
+    require("queue").random:get() ==
+        true,
+    "Shuffle All did not enable the native queue shuffle state before playback"
+)
+assert(
+    #opened_lines == 3 and
+        queue_size:get() == 3,
+    "Shuffle All did not retain every downloaded collection item"
+)
+
+current = assert(bridge.current())
+assert(
+    current.track.title == "First" and
+        current.queue.shuffle == true,
+    "Shuffle All did not retain the native initial queue position and shuffle state"
+)
+
+state = assert(bridge.queue_state())
+assert(
+    state.shuffle == true,
+    "queue_state did not expose the current shuffle state"
+)
+
+queue_view = assert(bridge.queue_view())
+assert(
+    queue_view.shuffle == true and
+        queue_view.generation == 2 and
+        queue_view.position == 1 and
+        queue_view.source_positions[1] == 1 and
+        queue_view.source_positions[2] == 3 and
+        queue_view.source_positions[3] == 2 and
+        queue_view.tracks[1] == tracks[1] and
+        queue_view.tracks[2] == tracks[3] and
+        queue_view.tracks[3] == tracks[2],
+    "queue_view did not expose the native shuffled playback order"
+)
 
 os.execute("rm -rf " .. root)
 

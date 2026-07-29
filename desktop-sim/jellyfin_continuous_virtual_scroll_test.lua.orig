@@ -79,10 +79,23 @@ package.loaded["sync_library_view"] = {
 }
 
 local played_track = nil
+local collection_play = nil
 
 package.loaded["jellyfin_playback"] = {
     play = function(track)
         played_track = track
+        return false
+    end,
+    play_queue = function(
+        queue_tracks,
+        context,
+        options
+    )
+        collection_play = {
+            tracks = queue_tracks,
+            context = context,
+            options = options,
+        }
         return false
     end,
     current = function()
@@ -154,6 +167,7 @@ for _, module_name in ipairs({
     "jellyfin_sort",
     "jellyfin_marquee",
     "jellyfin_list_ui",
+    "jellyfin_collection_playback",
     "jellyfin_virtual_list",
     "jellyfin_virtual_track_list",
     "jellyfin_local_library",
@@ -399,9 +413,39 @@ assert(
 _G.tangara_sim_encoder_event(-1)
 
 assert(
+    virtual.continuous_leading_index == 2 and
+        virtual.continuous_at_sort == false and
+        tracks_screen.focus_group
+            :get_focused() ==
+            tracks_screen.play_row.object,
+    "one step below Sort should focus the collection Play control"
+)
+
+tracks_screen.play_row.on_click()
+assert(
+    collection_play and
+        collection_play.tracks ==
+            tracks_screen.sorted_tracks and
+        collection_play.options.shuffle ==
+            false,
+    "short-press Play did not use the current sorted Tracks collection"
+)
+
+tracks_screen.play_row.on_long_press()
+assert(
+    collection_play and
+        collection_play.options.shuffle ==
+            true,
+    "long-press Play did not request Shuffle All"
+)
+
+_G.tangara_sim_encoder_event(-1)
+
+assert(
     virtual.selected_index == 1 and
-        virtual.continuous_at_sort == false,
-    "one step below Sort should target logical item 1"
+        virtual.continuous_leading_index ==
+            nil,
+    "one step below Play should target logical item 1"
 )
 
 _G.tangara_sim_encoder_event(-24)

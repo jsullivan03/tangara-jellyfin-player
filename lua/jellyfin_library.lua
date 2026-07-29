@@ -1,10 +1,16 @@
 local backstack = require("backstack")
+local jellyfin_collection_playback =
+    require("jellyfin_collection_playback")
 local jellyfin_list_ui =
     require("jellyfin_list_ui")
 local jellyfin_now_playing =
     require("jellyfin_now_playing")
 local jellyfin_playback =
     require("jellyfin_playback")
+local jellyfin_playlist_action_sheet =
+    require("jellyfin_playlist_action_sheet")
+local jellyfin_text_entry =
+    require("jellyfin_text_entry")
 local jellyfin_local_index =
     require("jellyfin_local_index")
 local jellyfin_sort =
@@ -14,6 +20,8 @@ local jellyfin_track_action_sheet =
 local screen = require("screen")
 local sync_library_view =
     require("sync_library_view")
+local sync_operation_queue =
+    require("sync_operation_queue")
 
 local LibraryScreen
 local CollectionScreen
@@ -344,6 +352,25 @@ CollectionScreen =
                 return
             end
 
+            jellyfin_collection_playback
+                .attach(
+                    self,
+                    {
+                        tracks =
+                            function()
+                                return
+                                    self.sorted_tracks or
+                                    items
+                            end,
+                        context = {
+                            collection_kind =
+                                self.collection_kind,
+                            collection_id =
+                                self.collection_id,
+                        },
+                    }
+                )
+
             self.media_rows = {}
 
             for _, track in ipairs(
@@ -381,6 +408,8 @@ CollectionScreen =
                         items,
                         "tracks"
                     )
+
+                self.sorted_tracks = sorted
 
                 for index, track in ipairs(
                     sorted
@@ -469,6 +498,8 @@ LibraryScreen =
                 "Playlists"
             )
 
+            self.playlist_action_sheet = nil
+
             local library,
                 library_error =
                 sync_library_view.current()
@@ -486,6 +517,50 @@ LibraryScreen =
                     row.object
                 return
             end
+
+            local create_row =
+                jellyfin_list_ui
+                    .add_action_row(
+                        self,
+                        "Create playlist",
+                        {
+                            leading = true,
+                            height = 24,
+                            y = 5,
+                            text_height = 14,
+                            selection_id =
+                                "control:create-playlist",
+                            on_click = function()
+                                backstack.push(
+                                    jellyfin_text_entry.new {
+                                        title =
+                                            "New playlist",
+                                        on_submit =
+                                            function(name)
+                                                local local_id,
+                                                    operation_or_error =
+                                                    sync_operation_queue
+                                                        .enqueue_create_playlist(
+                                                            name,
+                                                            {}
+                                                        )
+
+                                                if not local_id then
+                                                    return false,
+                                                        operation_or_error
+                                                end
+
+                                                self.selected_item_id =
+                                                    local_id
+                                                self.needs_playlist_rebuild =
+                                                    true
+                                                return true
+                                            end,
+                                    }
+                                )
+                            end,
+                        }
+                    )
 
             local favorites = {}
 
@@ -518,10 +593,23 @@ LibraryScreen =
 
             self.first_row =
                 favorites_row.object
+            self.initial_focus_object =
+                favorites_row.object
+            self.initial_scroll_anchor =
+                favorites_row.object
 
             local playlist_rows = {
                 favorites_row,
             }
+
+            local list_rows = {
+                create_row,
+                favorites_row,
+            }
+
+            local action_sheet =
+                jellyfin_playlist_action_sheet
+                    .attach(self)
 
             for _, playlist in ipairs(
                 library.playlists or {}
@@ -533,51 +621,110 @@ LibraryScreen =
                     playlist_copy.local_id or
                     playlist_copy.id
 
+                local playlist_artwork =
+                    artwork_path(
+                        playlist_copy,
+                        nil
+                    )
+
+                playlist_artwork =
+                    playlist_artwork or
+                    "__playlist_blue__"
+
                 local row =
                     jellyfin_list_ui
                         .add_playlist_row(
                             self,
                             playlist_copy,
-                            artwork_path(
-                                playlist_copy,
-                                "//lua/img/playlist_placeholder.png"
-                            ),
-                            function()
-                                backstack.push(
-                                    CollectionScreen:new {
-                                        title =
-                                            playlist_copy.name or
-                                            "Playlist",
-                                        collection_kind =
-                                            "playlist",
-                                        collection_id =
-                                            playlist_id,
-                                    }
-                                )
-                            end
+                            playlist_artwork,
+                            {
+                                on_click = function()
+                                    backstack.push(
+                                        CollectionScreen:new {
+                                            title =
+                                                playlist_copy.name or
+                                                "Playlist",
+                                            collection_kind =
+                                                "playlist",
+                                            collection_id =
+                                                playlist_id,
+                                        }
+                                    )
+                                end,
+                                on_long_press =
+                                    function()
+                                        action_sheet:open(
+                                            playlist_copy
+                                        )
+                                    end,
+                            }
                         )
 
                 table.insert(
                     playlist_rows,
                     row
                 )
+                table.insert(
+                    list_rows,
+                    row
+                )
             end
 
+            self.create_playlist_row =
+                create_row
             self.playlist_rows = playlist_rows
+            self.list_rows = list_rows
 
             jellyfin_list_ui
                 .attach_scroll_indicator(
                     self,
-                    playlist_rows
+                    list_rows
                 )
+
+            function self:request_playlist_rebuild()
+                self.needs_playlist_rebuild =
+                    false
+
+                local was_active =
+                    self.ui_active == true
+
+                if was_active then
+                    jellyfin_list_ui
+                        .restore_controls(self)
+                end
+
+                if self.root then
+                    pcall(function()
+                        self.root:delete()
+                    end)
+                end
+
+                self.root = nil
+                self.playlist_action_sheet = nil
+                self:create_ui()
+
+                if was_active then
+                    jellyfin_list_ui
+                        .install_controls(self)
+                end
+            end
         end,
 
-        on_show =
+        on_show = function(self)
+            if self.needs_playlist_rebuild and
+                type(self.request_playlist_rebuild) ==
+                    "function" then
+                self:request_playlist_rebuild()
+            end
+
             jellyfin_list_ui
-                .install_controls,
-        on_hide =
+                .install_controls(self)
+        end,
+
+        on_hide = function(self)
             jellyfin_list_ui
-                .restore_controls,
+                .restore_controls(self)
+        end,
     }
 
 LibraryScreen.Collection =

@@ -11,13 +11,7 @@ end
 
 require("mocks").install(lvgl)
 
-local playback = require("playback")
 local queue = require("queue")
-
-queue.size:set(1)
-queue.position:set(1)
-playback.position:set(0)
-playback.playing:set(true)
 
 package.loaded["jellyfin_navigation"] = {
     set_back = function()
@@ -31,13 +25,10 @@ package.loaded["jellyfin_playback"] = {
         return {
             track = {
                 id = "track-1",
-                title = "Duration Test",
-                artist = "Artist",
+                title = "Shuffle Action",
+                artist = "Test Artist",
                 artist_key = "id:artist-1",
-                duration = 185,
-            },
-            item = {
-                duration = 185,
+                duration = 180,
             },
             context = {
                 server_connected = true,
@@ -84,45 +75,40 @@ package.loaded["sync_runtime"] = {
     end,
 }
 
+queue.random:set(false)
+
 local NowPlaying =
     require("jellyfin_now_playing")
 local page = NowPlaying:new()
 
 page:create_ui()
-
-local original_update = page.view.update
-local last_time_update = nil
-
-page.view.update = function(view, values)
-    if values and
-        (
-            values.elapsed ~= nil or
-            values.remaining ~= nil
-        ) then
-        last_time_update = values
-    end
-
-    return original_update(view, values)
-end
-
-playback.position:set(62)
+page:open_sheet()
 
 lvgl.Timer {
-    period = 40,
+    period = 240,
     repeat_count = 1,
     cb = function()
         local ok, failure = pcall(
             function()
+                local state =
+                    page.sheet_focus_state()
+
                 assert(
-                    last_time_update and
-                        last_time_update.elapsed ==
-                            "1:02",
-                    "left Now Playing time did not follow elapsed playback position"
+                    state.main_actions[1] ==
+                        "queue" and
+                        state.main_actions[2] ==
+                        "shuffle",
+                    "Queue and shuffle were not the first Now Playing actions"
                 )
                 assert(
-                    last_time_update.remaining ==
-                        "3:05",
-                    "right Now Playing time counted down instead of staying at total duration"
+                    page.activate_sheet_action(
+                        "shuffle"
+                    ) == true,
+                    "Now Playing shuffle action was unavailable"
+                )
+                assert(
+                    queue.random:get() == true,
+                    "Now Playing shuffle action did not enable native shuffle"
                 )
             end
         )
@@ -136,7 +122,7 @@ lvgl.Timer {
         end
 
         print(
-            "Now Playing keeps total duration static while elapsed time advances"
+            "Now Playing toggles the native queue shuffle state"
         )
         os.exit(0)
     end,

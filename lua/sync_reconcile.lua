@@ -160,73 +160,142 @@ function M.plan(manifest, managed_paths, file_exists)
 
         local artwork = item.artwork
 
-        if type(artwork) == "table" and
-            type(artwork.thumbnail) == "string" and
-            artwork.thumbnail ~= "" and
-            type(artwork.thumbnail_item_id) == "string" and
-            artwork.thumbnail_item_id ~= "" then
-            local artwork_local_path,
-                artwork_path_error =
-                normalize_local_path(
-                    artwork.thumbnail
-                )
+        if type(artwork) == "table" then
+            for _, artwork_variant in ipairs({
+                {
+                    path_key = "thumbnail",
+                    item_id_key =
+                        "thumbnail_item_id",
+                    variant = "thumbnail",
+                },
+                {
+                    path_key = "cover",
+                    item_id_key =
+                        "cover_item_id",
+                    variant = "cover",
+                },
+                {
+                    path_key = "background",
+                    item_id_key =
+                        "background_item_id",
+                    variant = "background",
+                },
+            }) do
+                local artwork_path_value =
+                    artwork[
+                        artwork_variant.path_key
+                    ]
+                local artwork_item_id =
+                    artwork[
+                        artwork_variant.item_id_key
+                    ]
 
-            if not artwork_local_path then
-                return nil,
-                    "manifest item " .. index ..
-                    " artwork: " .. artwork_path_error
-            end
-
-            local existing_kind =
-                desired_paths[artwork_local_path]
-
-            if existing_kind and existing_kind ~= "artwork" then
-                return nil,
-                    "artwork path conflicts with media path: " ..
-                    artwork_local_path
-            end
-
-            if not existing_kind then
-                desired_paths[artwork_local_path] = "artwork"
-
-                local artwork_storage_path =
-                    storage_path(root, artwork_local_path)
-
-                if not file_exists(artwork_storage_path) then
-                    local artwork_path,
+                if type(artwork_path_value) ==
+                        "string" and
+                    artwork_path_value ~= "" and
+                    type(artwork_item_id) ==
+                        "string" and
+                    artwork_item_id ~= "" then
+                    local artwork_local_path,
                         artwork_path_error =
-                        device_identity.artwork_path(
-                            artwork.thumbnail_item_id,
-                            "thumbnail"
+                        normalize_local_path(
+                            artwork_path_value
                         )
 
-                    if not artwork_path then
+                    if not artwork_local_path then
                         return nil,
                             "manifest item " .. index ..
-                            " artwork: " .. artwork_path_error
+                            " artwork " ..
+                            artwork_variant.variant ..
+                            ": " .. artwork_path_error
                     end
 
-                    local artwork_url,
-                        artwork_url_error =
-                        sync_client.url(artwork_path)
+                    local existing_kind =
+                        desired_paths[
+                            artwork_local_path
+                        ]
 
-                    if not artwork_url then
+                    if existing_kind and
+                        existing_kind ~=
+                            "artwork" then
                         return nil,
-                            "manifest item " .. index ..
-                            " artwork: " .. artwork_url_error
+                            "artwork path conflicts with media path: " ..
+                            artwork_local_path
                     end
 
-                    local artwork_action = {
-                        kind = "artwork",
-                        local_path = artwork_local_path,
-                        storage_path = artwork_storage_path,
-                        artwork_path = artwork_path,
-                        artwork_url = artwork_url,
-                        item = item,
-                    }
+                    if not existing_kind then
+                        desired_paths[
+                            artwork_local_path
+                        ] = "artwork"
 
-                    table.insert(plan.artwork, artwork_action)
-                    table.insert(plan.actions, artwork_action)
+                        local artwork_storage_path =
+                            storage_path(
+                                root,
+                                artwork_local_path
+                            )
+
+                        if not file_exists(
+                            artwork_storage_path
+                        ) then
+                            local remote_artwork_path,
+                                remote_path_error =
+                                device_identity
+                                    .artwork_path(
+                                        artwork_item_id,
+                                        artwork_variant.variant
+                                    )
+
+                            if not remote_artwork_path then
+                                return nil,
+                                    "manifest item " ..
+                                    index ..
+                                    " artwork " ..
+                                    artwork_variant.variant ..
+                                    ": " ..
+                                    remote_path_error
+                            end
+
+                            local artwork_url,
+                                artwork_url_error =
+                                sync_client.url(
+                                    remote_artwork_path
+                                )
+
+                            if not artwork_url then
+                                return nil,
+                                    "manifest item " ..
+                                    index ..
+                                    " artwork " ..
+                                    artwork_variant.variant ..
+                                    ": " ..
+                                    artwork_url_error
+                            end
+
+                            local artwork_action = {
+                                kind = "artwork",
+                                local_path =
+                                    artwork_local_path,
+                                storage_path =
+                                    artwork_storage_path,
+                                artwork_path =
+                                    remote_artwork_path,
+                                artwork_url =
+                                    artwork_url,
+                                artwork_variant =
+                                    artwork_variant.variant,
+                                item = item,
+                            }
+
+                            table.insert(
+                                plan.artwork,
+                                artwork_action
+                            )
+                            table.insert(
+                                plan.actions,
+                                artwork_action
+                            )
+                        end
+                    end
                 end
             end
         end

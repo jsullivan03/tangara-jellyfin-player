@@ -95,18 +95,22 @@ lvgl.Timer {
 
                 assert(
                     state.page == "main" and
-                        state.main_count == 3 and
-                        state.active_count == 3 and
+                        state.main_count == 5 and
+                        state.active_count == 5 and
                         state.wrap_disabled == true,
-                    "Now Playing main sheet did not restrict focus to its three visible options"
+                    "Now Playing main sheet did not restrict focus to its five visible options"
                 )
 
                 assert(
                     state.main_actions[1] ==
-                            "artist" and
+                            "queue" and
                         state.main_actions[2] ==
-                            "favorite" and
+                            "shuffle" and
                         state.main_actions[3] ==
+                            "artist" and
+                        state.main_actions[4] ==
+                            "favorite" and
+                        state.main_actions[5] ==
                             "add_to_playlist",
                     "Now Playing main sheet actions were not built in the expected order"
                 )
@@ -137,11 +141,46 @@ lvgl.Timer {
                 )
 
                 group:focus_next()
+                local fourth =
+                    assert(group:get_focused())
+
+                assert(
+                    fourth ~= third and
+                        fourth ~= second and
+                        fourth ~= first,
+                    "main sheet did not move to its fourth option"
+                )
+
+                group:focus_next()
+                local fifth =
+                    assert(group:get_focused())
+
+                assert(
+                    fifth ~= fourth and
+                        fifth ~= third and
+                        fifth ~= second and
+                        fifth ~= first,
+                    "main sheet did not move to its fifth option"
+                )
+
+                group:focus_next()
                 group:focus_next()
 
                 assert(
-                    group:get_focused() == third,
+                    group:get_focused() == fifth,
                     "main sheet wrapped or focused an invisible option below its last visible option"
+                )
+
+                group:focus_prev()
+                assert(
+                    group:get_focused() == fourth,
+                    "main sheet did not move back to its fourth option"
+                )
+
+                group:focus_prev()
+                assert(
+                    group:get_focused() == third,
+                    "main sheet did not move back to its third option"
                 )
 
                 group:focus_prev()
