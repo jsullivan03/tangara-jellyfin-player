@@ -1057,6 +1057,48 @@ function M.install(lvgl)
         return "desktop-sim/sd"
     end
 
+    function device.storage_info()
+        local root = device.storage_root()
+        local command =
+            "df -Pk " .. root ..
+            " 2>/dev/null"
+        local process = io.popen(command)
+
+        if not process then
+            return nil,
+                "simulator storage query failed"
+        end
+
+        process:read("*l")
+        local line = process:read("*l")
+        process:close()
+
+        if type(line) ~= "string" then
+            return nil,
+                "simulator storage query failed"
+        end
+
+        local total_kb, used_kb,
+            free_kb =
+            line:match(
+                "^%S+%s+(%d+)%s+(%d+)%s+(%d+)"
+            )
+
+        if not total_kb then
+            return nil,
+                "simulator storage query failed"
+        end
+
+        return {
+            total_bytes =
+                tonumber(total_kb) * 1024,
+            used_bytes =
+                tonumber(used_kb) * 1024,
+            free_bytes =
+                tonumber(free_kb) * 1024,
+        }
+    end
+
     local simulator_network =
         require("network")
 

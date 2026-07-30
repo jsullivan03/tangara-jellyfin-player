@@ -10,7 +10,6 @@ local M = {}
 
 local HomeScreen
 local SyncScreen
-local StorageScreen
 local SettingsScreen
 
 local function create_shell(
@@ -39,21 +38,6 @@ SyncScreen =
                 self,
                 "Sync",
                 "Server synchronization"
-            )
-        end,
-        on_show =
-            jellyfin_list_ui.install_controls,
-        on_hide =
-            jellyfin_list_ui.restore_controls,
-    }
-
-StorageScreen =
-    screen:new {
-        create_ui = function(self)
-            create_shell(
-                self,
-                "Storage",
-                "Device storage"
             )
         end,
         on_show =
@@ -302,7 +286,9 @@ HomeScreen =
                         "home:storage",
                     on_click = function()
                         backstack.push(
-                            StorageScreen:new()
+                            require(
+                                "jellyfin_storage_ui"
+                            ).Root:new()
                         )
                     end,
                 }
@@ -334,7 +320,8 @@ HomeScreen =
 
 M.Home = HomeScreen
 M.Sync = SyncScreen
-M.Storage = StorageScreen
+M.Storage =
+    require("jellyfin_storage_ui").Root
 M.Settings = SettingsScreen
 
 return M

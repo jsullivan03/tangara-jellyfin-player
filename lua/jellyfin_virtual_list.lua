@@ -791,17 +791,36 @@ function M.create(
             )
         end
 
-        apply(
-            screen.sort_row and
-                screen.sort_row.object or
-                nil
-        )
+        for _, model in ipairs(
+            screen.leading_rows or {}
+        ) do
+            apply(model and model.object)
+        end
 
         for _, model in ipairs(
             self.pool
         ) do
             apply(model.object)
         end
+    end
+
+    function controller:continuous_leading_rows()
+        local rows = {}
+
+        for _, model in ipairs(
+            screen.leading_rows or {}
+        ) do
+            if model == screen.sort_row or
+                model.virtual_list_boundary then
+                rows[#rows + 1] = model
+            end
+        end
+
+        if #rows == 0 and
+            screen.sort_row then
+            rows[1] = screen.sort_row
+        end
+        return rows
     end
 
     function controller:continuous_bind_model(
@@ -1208,21 +1227,29 @@ function M.create(
         return focus_model
     end
 
-    function controller:continuous_move_to_sort()
-        local sort_model = screen.sort_row
+    function controller:continuous_move_to_leading(
+        index
+    )
+        local leading_rows =
+            self:continuous_leading_rows()
+        local model = leading_rows[index]
 
-        if not sort_model or
-            not sort_model.object then
+        if not model or not model.object then
             return
         end
 
         self.continuous_at_sort = true
+        self.continuous_leading_index = index
         self.continuous_focus_change = true
-        focus_group_only(sort_model.object)
+        focus_group_only(model.object)
         self.continuous_focus_change = false
         self:continuous_scroll_to(
-            sort_model.object
+            model.object
         )
+    end
+
+    function controller:continuous_move_to_sort()
+        self:continuous_move_to_leading(1)
     end
 
     function controller:continuous_retarget(diff)
@@ -1250,17 +1277,54 @@ function M.create(
             end
         )
 
-        if screen.sort_row and
-            focused == screen.sort_row.object then
-            self.continuous_at_sort = true
+        local leading_rows =
+            self:continuous_leading_rows()
+
+        for index, model in ipairs(
+            leading_rows
+        ) do
+            if model and
+                focused == model.object then
+                self.continuous_at_sort = true
+                self.continuous_leading_index =
+                    index
+                break
+            end
         end
 
         if self.continuous_at_sort then
             if diff > 0 then
-                self:continuous_select(
-                    math.min(
-                        diff,
-                        #self.items
+                local next_leading =
+                    (
+                        self
+                            .continuous_leading_index or
+                        1
+                    ) + diff
+
+                if next_leading <=
+                    #leading_rows then
+                    self
+                        :continuous_move_to_leading(
+                            next_leading
+                        )
+                else
+                    self:continuous_select(
+                        math.min(
+                            next_leading -
+                                #leading_rows,
+                            #self.items
+                        )
+                    )
+                end
+            elseif diff < 0 then
+                self:continuous_move_to_leading(
+                    math.max(
+                        1,
+                        (
+                            self
+                                .continuous_leading_index or
+                            1
+                        ) + diff
                     )
                 )
             end
@@ -1272,7 +1336,17 @@ function M.create(
             self.selected_index + diff
 
         if next_index < 1 then
-            self:continuous_move_to_sort()
+            local leading_index =
+                math.max(
+                    1,
+                    #leading_rows + next_index
+                )
+
+            if #leading_rows > 0 then
+                self:continuous_move_to_leading(
+                    leading_index
+                )
+            end
             return
         end
 
@@ -1293,6 +1367,7 @@ function M.create(
 
         self.continuous_focus_model = model
         self.continuous_at_sort = false
+        self.continuous_leading_index = nil
         self.selected_index =
             model.virtual_index
         self:update_scroll_indicator()
@@ -1358,10 +1433,20 @@ function M.create(
             end
         )
 
-        self.continuous_at_sort =
-            screen.sort_row and
-            focused == screen.sort_row.object or
-            false
+        self.continuous_at_sort = false
+        self.continuous_leading_index = nil
+
+        for index, model in ipairs(
+            self:continuous_leading_rows()
+        ) do
+            if model and
+                focused == model.object then
+                self.continuous_at_sort = true
+                self.continuous_leading_index =
+                    index
+                break
+            end
+        end
 
         if not self.continuous_at_sort then
             for _, model in ipairs(
@@ -1444,10 +1529,20 @@ function M.create(
             end
         )
 
-        self.continuous_at_sort =
-            screen.sort_row and
-            focused == screen.sort_row.object or
-            false
+        self.continuous_at_sort = false
+        self.continuous_leading_index = nil
+
+        for index, model in ipairs(
+            self:continuous_leading_rows()
+        ) do
+            if model and
+                focused == model.object then
+                self.continuous_at_sort = true
+                self.continuous_leading_index =
+                    index
+                break
+            end
+        end
         self:continuous_refresh_coverage()
     end
 
@@ -1471,6 +1566,7 @@ function M.create(
         self.continuous_input_active = false
         self.continuous_encoder_callback = nil
         self.continuous_at_sort = false
+        self.continuous_leading_index = nil
         self.continuous_focus_change = false
         self.continuous_refreshing = false
         self.continuous_focus_model = nil
