@@ -529,23 +529,50 @@ local function playable_tracks(items)
     return result
 end
 
+local function reload_local_library()
+    -- Download-state changes must not reuse a Local index snapshot taken
+    -- before files/manifest membership caught up. Rebuild collection
+    -- membership from the current index owner.
+    if type(jellyfin_local_index.invalidate) ==
+            "function" then
+        jellyfin_local_index.invalidate(
+            "local download collection refresh"
+        )
+    end
+
+    return jellyfin_local_index.load()
+end
+
 local function apply_device_download_recency(items)
+    if type(
+        sync_runtime.reconcile_local_download_recency
+    ) == "function" then
+        sync_runtime.reconcile_local_download_recency(
+            items
+        )
+    end
+
     if type(sync_runtime.local_downloaded_at) ~=
             "function" then
         return
     end
 
     for _, item in ipairs(items or {}) do
-        if type(item) == "table" and
-            not item.pending_download then
-            local downloaded_at =
-                sync_runtime.local_downloaded_at(
-                    item
-                )
+        if type(item) == "table" then
+            if item.pending_download then
+                -- Queued/downloading/partial placeholders are not completed
+                -- downloads. Never let them inherit device NEW recency.
+                item.local_downloaded_at = nil
+            else
+                local downloaded_at =
+                    sync_runtime.local_downloaded_at(
+                        item
+                    )
 
-            if downloaded_at ~= nil then
-                item.local_downloaded_at =
-                    downloaded_at
+                if downloaded_at ~= nil then
+                    item.local_downloaded_at =
+                        downloaded_at
+                end
             end
         end
     end
@@ -1629,7 +1656,7 @@ AlbumScreen =
 
                 function self:refresh_download_state()
                     local next_library =
-                        jellyfin_local_index.load()
+                        reload_local_library()
                     local next_album =
                         next_library and
                         find_album(
@@ -2215,8 +2242,22 @@ AlbumsScreen =
             end
 
             function self:refresh_download_state()
+                local previously_pending = {}
+                for _, album in ipairs(albums) do
+                    if type(album) == "table" and
+                        album.pending_download then
+                        local key =
+                            jellyfin_album_identity
+                                .key(album)
+                        if key then
+                            previously_pending[key] =
+                                true
+                        end
+                    end
+                end
+
                 local next_library =
-                    jellyfin_local_index.load()
+                    reload_local_library()
 
                 if type(next_library) ~= "table" then
                     return
@@ -2225,6 +2266,30 @@ AlbumsScreen =
                 albums = merge_pending_albums(
                     next_library.albums or {}
                 )
+
+                if type(
+                    sync_runtime
+                        .note_local_download_completed
+                ) == "function" then
+                    for _, album in ipairs(albums) do
+                        local key =
+                            jellyfin_album_identity
+                                .key(album)
+                        if key and
+                            previously_pending[key] and
+                            not album.pending_download then
+                            -- Placeholder -> completed hydration on an
+                            -- already-mounted Local NEW list. Stamp device
+                            -- recency now and apply_sort immediately so the
+                            -- album becomes newest without leaving/re-entering.
+                            sync_runtime
+                                .note_local_download_completed(
+                                    album
+                                )
+                        end
+                    end
+                end
+
                 self.apply_sort()
             end
 
@@ -2378,7 +2443,7 @@ TracksScreen =
 
             function self:refresh_download_state()
                 local next_library =
-                    jellyfin_local_index.load()
+                    reload_local_library()
 
                 if type(next_library) ~= "table" then
                     return

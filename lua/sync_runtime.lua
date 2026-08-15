@@ -1,4 +1,6 @@
 local lvgl = require("lvgl")
+local json = require("json")
+local json_encode = require("json_encode")
 local sync_apply = require("sync_apply")
 local sync_artwork_cache =
     require("sync_artwork_cache")
@@ -86,6 +88,12 @@ local durable_requests_initial = true
 local durable_startup_attempt_ids = nil
 local last_durable_requests_result = nil
 local local_downloaded_at = {}
+local incomplete_download_keys = {}
+local recency_loaded = false
+local bump_state
+local RECENCY_VERSION = 1
+local RECENCY_FILE_NAME =
+    "/.tangara_device_download_recency.json"
 
 local function stable_item_id(item)
     return jellyfin_album_identity.item_id(
@@ -107,8 +115,36 @@ local function item_attempt_id(item)
 end
 
 local function local_download_key(item_or_key)
-    if type(item_or_key) == "table" and
-        item_or_key.kind == "track" then
+    if type(item_or_key) ~= "table" then
+        return jellyfin_album_identity.key(
+            item_or_key
+        )
+    end
+
+    -- Apply media items are manifest tracks. Their jellyfin_id is the
+    -- track id, so album_identity.key() would stamp recency on the track
+    -- instead of the Local album. Prefer the album id whenever it differs.
+    local album_id =
+        jellyfin_album_identity.canonical_id(
+            item_or_key.album_id or
+            item_or_key.parent_id or
+            item_or_key.jellyfin_album_id
+        )
+    local item_id =
+        jellyfin_album_identity.canonical_id(
+            item_or_key.jellyfin_id or
+            item_or_key.id
+        )
+    if album_id and
+        (
+            not item_id or
+            album_id ~= item_id
+        ) then
+        return "id:" .. album_id
+    end
+
+    if item_or_key.kind == "track" or
+        item_or_key.kind == "Audio" then
         return jellyfin_album_identity
             .track_album_key(item_or_key) or
             jellyfin_album_identity.key(
@@ -119,6 +155,257 @@ local function local_download_key(item_or_key)
     return jellyfin_album_identity.key(
         item_or_key
     )
+end
+
+local function positive_timestamp(value)
+    local timestamp = tonumber(value)
+    if type(timestamp) == "number" and
+        timestamp > 0 then
+        return timestamp
+    end
+    return nil
+end
+
+local function request_completed_at(request)
+    if type(request) ~= "table" then
+        return 0
+    end
+
+    return positive_timestamp(
+        request.updated_at
+    ) or positive_timestamp(
+        request.created_at
+    ) or 0
+end
+
+local function recency_storage_path()
+    local ok, device = pcall(require, "device")
+    if not ok or
+        type(device) ~= "table" or
+        type(device.storage_root) ~=
+            "function" then
+        return nil
+    end
+
+    local root_ok, root =
+        pcall(device.storage_root)
+    if not root_ok or
+        type(root) ~= "string" or
+        root == "" then
+        return nil
+    end
+
+    return root:gsub("/+$", "") ..
+        RECENCY_FILE_NAME
+end
+
+local function load_local_download_recency()
+    if recency_loaded then
+        return
+    end
+
+    recency_loaded = true
+
+    local path = recency_storage_path()
+    if not path then
+        return
+    end
+
+    local file = io.open(path, "rb")
+    if not file then
+        return
+    end
+
+    local contents = file:read("*a")
+    file:close()
+
+    local decoded_ok, decoded = pcall(
+        json.decode,
+        contents
+    )
+    if not decoded_ok or
+        type(decoded) ~= "table" or
+        decoded.version ~= RECENCY_VERSION or
+        type(decoded.completed) ~= "table" then
+        return
+    end
+
+    for key, timestamp in pairs(
+        decoded.completed
+    ) do
+        local completed =
+            positive_timestamp(timestamp)
+        if type(key) == "string" and
+            key ~= "" and
+            completed and
+            completed >
+                (local_downloaded_at[key] or 0) then
+            local_downloaded_at[key] =
+                completed
+        end
+    end
+end
+
+local function save_local_download_recency()
+    local path = recency_storage_path()
+    if not path then
+        return
+    end
+
+    local encoded_ok, contents = pcall(
+        json_encode.encode,
+        {
+            version = RECENCY_VERSION,
+            completed = local_downloaded_at,
+        }
+    )
+    if not encoded_ok or
+        type(contents) ~= "string" or
+        contents == "" then
+        return
+    end
+
+    local temporary = path .. ".tmp"
+    local file = io.open(temporary, "wb")
+    if not file then
+        return
+    end
+
+    local wrote = file:write(contents)
+    if wrote then
+        file:flush()
+    end
+    file:close()
+    if not wrote then
+        os.remove(temporary)
+        return
+    end
+
+    os.remove(path)
+    os.rename(temporary, path)
+end
+
+local function wall_clock()
+    if os and type(os.time) == "function" then
+        local ok, value = pcall(os.time)
+        if ok then
+            return positive_timestamp(value)
+        end
+    end
+
+    return nil
+end
+
+local function mark_incomplete_download(item_or_key)
+    local key = local_download_key(item_or_key)
+    if key then
+        incomplete_download_keys[key] = true
+    end
+    return key
+end
+
+local function record_completed_download(
+    item_or_key,
+    timestamp
+)
+    load_local_download_recency()
+    local key = local_download_key(item_or_key)
+    if not key then
+        return false
+    end
+
+    incomplete_download_keys[key] = nil
+
+    local stamp =
+        positive_timestamp(timestamp) or
+        wall_clock()
+    if not stamp then
+        return false
+    end
+
+    if stamp <= (local_downloaded_at[key] or 0) then
+        return false
+    end
+
+    local_downloaded_at[key] = stamp
+    save_local_download_recency()
+    local index_ok, index = pcall(
+        require,
+        "jellyfin_local_index"
+    )
+    if index_ok and
+        type(index) == "table" and
+        type(index.invalidate) ==
+            "function" then
+        index.invalidate(
+            "local download completed"
+        )
+    end
+    bump_state(false)
+    return true
+end
+
+local function track_recency_key(track)
+    if type(track) ~= "table" then
+        return nil
+    end
+
+    local track_id =
+        jellyfin_track_identity.canonical_id(
+            track.jellyfin_id or track.id
+        )
+    if not track_id then
+        return nil
+    end
+
+    return "id:" .. track_id
+end
+
+local function fold_track_recency_into_albums(items)
+    load_local_download_recency()
+    local remap = {}
+
+    local function remember(track, album_key)
+        local track_key = track_recency_key(track)
+        if track_key and album_key and
+            track_key ~= album_key then
+            remap[track_key] = album_key
+        end
+    end
+
+    for _, item in ipairs(items or {}) do
+        if type(item) == "table" then
+            local album_key =
+                local_download_key(item)
+            if type(item.tracks) == "table" then
+                for _, track in ipairs(item.tracks) do
+                    remember(track, album_key)
+                end
+            else
+                remember(item, album_key)
+            end
+        end
+    end
+
+    local folded = {}
+    local changed = false
+    for key, stamp in pairs(local_downloaded_at) do
+        local album_key = remap[key] or key
+        if album_key ~= key then
+            changed = true
+        end
+        if stamp > (folded[album_key] or 0) then
+            folded[album_key] = stamp
+        end
+    end
+
+    if not changed then
+        return false
+    end
+
+    local_downloaded_at = folded
+    save_local_download_recency()
+    return true
 end
 
 local function copy_value(value)
@@ -175,7 +462,7 @@ local function library_track(item_id)
     return nil
 end
 
-local function bump_state(content_changed)
+bump_state = function(content_changed)
     state_generation = state_generation + 1
 
     if content_changed then
@@ -440,6 +727,14 @@ local function complete_operation()
         local key = jellyfin_album_identity.key(
             optimistic_item
         )
+        local download_key =
+            local_download_key(optimistic_item)
+        if download_key and
+            not remaining_keys[download_key] then
+            record_completed_download(
+                optimistic_item
+            )
+        end
         if key and remaining_keys[key] then
             retained_states[item_id] =
                 optimistic_item_states[item_id]
@@ -758,6 +1053,23 @@ local function finish_apply(result, now)
     end
 
     inventory_report_pending = true
+
+    if result.ok then
+        load_local_download_recency()
+        for _, item in ipairs(
+            result.media_items or {}
+        ) do
+            local key = local_download_key(item)
+            if key and
+                (
+                    incomplete_download_keys[key] or
+                    local_downloaded_at[key] == nil
+                ) then
+                record_completed_download(item)
+            end
+        end
+    end
+
     bump_state(true)
 
     local owner = download_state()
@@ -982,6 +1294,7 @@ local function finish_library(
 
         next_library_at =
             now + refresh_interval_ms
+        bump_state(true)
 
         if download_operation_needs_library then
             download_operation_needs_library = false
@@ -1034,6 +1347,7 @@ local function finish_durable_requests(result)
     local latest_by_key = {}
     local observed_remote_keys = {}
     local download_recency_changed = false
+    load_local_download_recency()
     for _, request in ipairs(
         result.payload.requests or {}
     ) do
@@ -1052,19 +1366,38 @@ local function finish_durable_requests(result)
                 request.created_at or
                 request.updated_at
             ) or 0
-            local completed_timestamp = tonumber(
-                request.updated_at or
-                request.created_at
-            ) or 0
+            if key and
+                (
+                    request.state == "queued" or
+                    request.state == "downloading"
+                ) then
+                incomplete_download_keys[key] = true
+            end
+
+            local completed_timestamp =
+                request_completed_at(request)
 
             if key and
                 request.state == "downloaded" and
-                completed_timestamp > 0 and
-                completed_timestamp >
+                completed_timestamp > 0 then
+                local stamp = completed_timestamp
+                if incomplete_download_keys[key] then
+                    -- Companion often keeps created_at == updated_at at
+                    -- queue time. A live incomplete -> downloaded
+                    -- transition must sort as "downloaded now".
+                    local now_stamp = wall_clock()
+                    if now_stamp and
+                        now_stamp > stamp then
+                        stamp = now_stamp
+                    end
+                    incomplete_download_keys[key] =
+                        nil
+                end
+                if stamp >
                     (local_downloaded_at[key] or 0) then
-                local_downloaded_at[key] =
-                    completed_timestamp
-                download_recency_changed = true
+                    local_downloaded_at[key] = stamp
+                    download_recency_changed = true
+                end
             end
             local existing_timestamp =
                 existing and tonumber(
@@ -1242,6 +1575,7 @@ local function finish_durable_requests(result)
         -- Local "New" follows when media was downloaded to this device, not
         -- Jellyfin's original DateCreated. Durable request history is the
         -- authoritative cross-restart source for that device-side recency.
+        save_local_download_recency()
         bump_state(false)
     end
 
@@ -1723,6 +2057,7 @@ function M.start()
     -- manifest failure must not make a real accepted operation look stale.
     next_durable_requests_at = 0
     durable_requests_initial = true
+    load_local_download_recency()
 
     timer = lvgl.Timer {
         period = poll_period_ms,
@@ -1793,6 +2128,8 @@ function M.note_queued(item)
     if type(item) ~= "table" then
         return false
     end
+
+    mark_incomplete_download(item)
 
     -- Optimistic runtime lockout stays "queued" so item_state() preserves the
     -- pending marker before apply tracks the item. Sync row chrome reads the
@@ -2231,6 +2568,7 @@ function M.activity()
 end
 
 function M.local_downloaded_at(item_or_key)
+    load_local_download_recency()
     local key = local_download_key(item_or_key)
 
     if not key then
@@ -2238,6 +2576,20 @@ function M.local_downloaded_at(item_or_key)
     end
 
     return local_downloaded_at[key]
+end
+
+function M.note_local_download_completed(
+    item_or_key,
+    timestamp
+)
+    return record_completed_download(
+        item_or_key,
+        timestamp
+    )
+end
+
+function M.reconcile_local_download_recency(items)
+    return fold_track_recency_into_albums(items)
 end
 
 function M.local_gate_state()

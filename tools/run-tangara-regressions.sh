@@ -220,6 +220,7 @@ IDENTITY_TESTS=(
   desktop-sim/jellyfin_local_artists_lifecycle_test.lua
   desktop-sim/jellyfin_local_index_test.lua
   desktop-sim/jellyfin_local_index_cache_test.lua
+  desktop-sim/jellyfin_local_new_device_recency_test.lua
   desktop-sim/jellyfin_sync_album_identity_state_test.lua
 )
 
