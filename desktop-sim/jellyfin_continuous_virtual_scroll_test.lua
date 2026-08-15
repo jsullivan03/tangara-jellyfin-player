@@ -88,6 +88,11 @@ package.loaded["jellyfin_playback"] = {
     current = function()
         return nil
     end,
+    -- Local library availability checks use local_item() in production.
+    -- This fixture models every generated test track as locally playable.
+    local_item = function(track)
+        return track
+    end,
 }
 
 package.loaded["jellyfin_now_playing"] = {
@@ -194,6 +199,11 @@ assert(
 assert(
     virtual:pool_count() == 7,
     "continuous virtual scrolling changed the seven-row pool"
+)
+assert(
+    virtual.fixed_viewport == true and
+        virtual.motion_layer ~= nil,
+    "long local Tracks did not adopt the shared fixed viewport"
 )
 
 local function assert_unique_bindings(label)
@@ -324,6 +334,36 @@ local function assert_viewport_covered(label)
     assert_unique_bindings(label)
 end
 
+local function assert_fixed_motion_window(
+    label
+)
+    local canvas_coordinates =
+        virtual.canvas:get_coords()
+    local motion_coordinates =
+        virtual.motion_layer:get_coords()
+    local relative_y =
+        motion_coordinates.y1 -
+        canvas_coordinates.y1
+    local base_y =
+        virtual.fixed_base_y or 0
+
+    assert(
+        math.abs(relative_y - base_y) <=
+            virtual.row_stride,
+        label ..
+            ": fixed motion layer moved farther than one row"
+    )
+
+    assert(
+        motion_coordinates.y1 <=
+            canvas_coordinates.y1 and
+        motion_coordinates.y2 >=
+            canvas_coordinates.y2,
+        label ..
+            ": fixed motion layer does not cover the clipped viewport"
+    )
+end
+
 assert_viewport_covered("initial viewport")
 
 virtual:continuous_refresh_coverage()
@@ -351,18 +391,17 @@ assert(
 assert_viewport_covered(
     "immediate forward retarget"
 )
+assert_fixed_motion_window(
+    "immediate forward retarget"
+)
 
-for scroll_y = 25, 1250, 37 do
-    tracks_screen.list:scroll_to {
-        x = 0,
-        y = scroll_y,
-        anim = false,
-    }
-    assert_viewport_covered(
-        "forward scroll y=" ..
-            tostring(scroll_y)
-    )
-end
+backstack.flush(3)
+assert_viewport_covered(
+    "forward animation frames"
+)
+assert_fixed_motion_window(
+    "forward animation frames"
+)
 
 _G.tangara_sim_encoder_event(27)
 
@@ -373,18 +412,48 @@ assert(
 assert_viewport_covered(
     "immediate reverse retarget"
 )
+assert_fixed_motion_window(
+    "immediate reverse retarget"
+)
 
-for scroll_y = 1220, 25, -41 do
-    tracks_screen.list:scroll_to {
-        x = 0,
-        y = scroll_y,
-        anim = false,
-    }
-    assert_viewport_covered(
-        "reverse scroll y=" ..
-            tostring(scroll_y)
-    )
-end
+local real_is_scrolling =
+    virtual.continuous_is_scrolling
+virtual.continuous_is_scrolling =
+    function()
+        return true
+    end
+virtual:continuous_retarget(1)
+assert(
+    virtual.selected_index == 15,
+    "interrupted animation did not apply the next logical step immediately"
+)
+assert_viewport_covered(
+    "interrupted forward animation"
+)
+assert_fixed_motion_window(
+    "interrupted forward animation"
+)
+virtual:continuous_retarget(-1)
+assert(
+    virtual.selected_index == 14,
+    "interrupted reverse animation did not restore the logical selection"
+)
+assert_viewport_covered(
+    "interrupted reverse animation"
+)
+assert_fixed_motion_window(
+    "interrupted reverse animation"
+)
+virtual.continuous_is_scrolling =
+    real_is_scrolling
+
+backstack.flush(3)
+assert_viewport_covered(
+    "reverse animation frames"
+)
+assert_fixed_motion_window(
+    "reverse animation frames"
+)
 
 _G.tangara_sim_encoder_event(100)
 
@@ -402,6 +471,11 @@ assert(
     virtual.selected_index == 1 and
         virtual.continuous_at_sort == false,
     "one step below Sort should target logical item 1"
+)
+
+assert(
+    virtual:continuous_is_scrolling(),
+    "moving from a leading control into fixed item 1 should animate instead of snap"
 )
 
 _G.tangara_sim_encoder_event(-24)
@@ -454,7 +528,7 @@ assert(
 os.execute("rm -rf " .. root)
 
 print(
-    "Continuous virtual scrolling retargets bursts, reverses immediately, preserves coverage, and keeps seven rows"
+    "Continuous virtual scrolling retargets bursts through the shared covered fixed viewport and keeps seven rows"
 )
 
 os.exit(0)

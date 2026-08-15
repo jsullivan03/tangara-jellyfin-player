@@ -280,18 +280,20 @@ assert(state.size == 3)
 local queue_view =
     assert(bridge.queue_view())
 assert(
-    queue_view.tracks[1] == tracks[2] and
-        queue_view.tracks[2] == tracks[3] and
-        queue_view.items[1].jellyfin_id ==
+    queue_view.tracks[1] == tracks[1] and
+        queue_view.tracks[2] == tracks[2] and
+        queue_view.tracks[3] == tracks[3] and
+        queue_view.items[2].jellyfin_id ==
             "track-2" and
-        queue_view.position == 1 and
+        queue_view.position == 2 and
         queue_view.source_position == 2 and
-        queue_view.size == 2 and
+        queue_view.size == 3 and
         queue_view.total_size == 3 and
-        queue_view.source_positions[1] == 2 and
-        queue_view.source_positions[2] == 3 and
+        queue_view.source_positions[1] == 1 and
+        queue_view.source_positions[2] == 2 and
+        queue_view.source_positions[3] == 3 and
         queue_view.generation == 1,
-    "queue_view did not expose the current and upcoming native queue order"
+    "queue_view did not retain completed entries that Previous can revisit"
 )
 
 local shuffled, shuffle_error =

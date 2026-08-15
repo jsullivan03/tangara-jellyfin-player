@@ -56,6 +56,13 @@ package.loaded["sync_runtime"] = {
     last_result = function()
         return {ok = true}
     end,
+    local_downloaded_at = function(item)
+        if type(item) == "table" and
+            item.id == "album-001" then
+            return 9999999999
+        end
+        return nil
+    end,
 }
 
 package.loaded["sync_library_view"] = {
@@ -76,6 +83,12 @@ package.loaded["jellyfin_playback"] = {
     end,
     current = function()
         return nil
+    end,
+    local_item = function(track)
+        return track
+    end,
+    play_queue = function()
+        return false
     end,
 }
 
@@ -218,11 +231,16 @@ assert(
         albums_screen.list,
     "virtual row canvas is not attached to the Albums list"
 )
+assert(
+    virtual.fixed_viewport == true and
+        virtual.motion_layer ~= nil,
+    "Albums did not adopt the shared fixed viewport"
+)
 for _, model in ipairs(virtual.pool) do
     assert(
         model.object:get_parent() ==
-            virtual.canvas,
-        "a reusable Albums row is not parented to the virtual canvas"
+            virtual.motion_layer,
+        "a reusable Albums row is not parented to the fixed motion layer"
     )
 end
 
@@ -231,6 +249,11 @@ local initial_id =
         virtual.items[1].id,
         "first sorted album did not expose an ID"
     )
+
+assert(
+    initial_id == "album-001",
+    "Local New did not prioritize the album most recently downloaded to this device"
+)
 
 assert(
     albums_screen.selected_item_id ==
@@ -488,6 +511,65 @@ assert(
         virtual:selected_model().object,
     "post-sort child return did not focus the selected album row"
 )
+
+-- Exercise album long-hold after navigation/sort restoration so the
+-- action-sheet focus handoff does not alter the native group-order
+-- characterization above.
+local long_hold_model =
+    assert(
+        virtual:selected_model(),
+        "selected album row was not mounted for long-hold test"
+    )
+
+assert(
+    type(long_hold_model.on_long_press) ==
+        "function",
+    "Local album row did not expose long-hold options"
+)
+
+long_hold_model.on_long_press()
+
+local album_sheet =
+    assert(
+        albums_screen.track_action_sheet,
+        "Albums screen did not attach the shared action sheet"
+    )
+local album_sheet_state =
+    album_sheet:state()
+
+assert(
+    album_sheet_state.open == true,
+    "album long hold did not open its action sheet"
+)
+
+local expected_album_actions = {
+    play_album = false,
+    shuffle_album = false,
+    remove_local_album = false,
+}
+
+for _, action_id in ipairs(
+    album_sheet_state.main_actions or {}
+) do
+    if expected_album_actions[action_id] ~=
+            nil then
+        expected_album_actions[action_id] = true
+    end
+end
+
+for action_id, present in pairs(
+    expected_album_actions
+) do
+    assert(
+        present,
+        "album long-hold menu missing " ..
+            action_id
+    )
+end
+
+album_sheet:close(true)
+
+
 
 os.execute("rm -rf " .. root)
 

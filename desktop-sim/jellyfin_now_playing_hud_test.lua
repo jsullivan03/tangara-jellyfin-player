@@ -159,9 +159,9 @@ assert(
         media.cover == "cover-next" and
         media.title == "Next Track" and
         media.artist == "Next Artist" and
-        media.cover_x == 47 and
+        media.cover_x == 44 and
         media.cover_y == 19 and
-        media.cover_zoom == 280 and
+        media.cover_zoom == 256 and
         media.title_x == 6 and
         media.title_y == 90 and
         media.artist_x == 6 and

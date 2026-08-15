@@ -107,6 +107,6 @@ assert(
 )
 
 print(
-    "Now Playing Queue action opens the display-only Queue page"
+    "Now Playing Queue action opens the Queue page"
 )
 os.exit(0)

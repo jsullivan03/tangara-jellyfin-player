@@ -59,15 +59,16 @@ local function current_order()
     local order = {}
 
     if queue.random:get() then
-        for index = shuffle_cursor,
-            #shuffled_order do
+        for _, source_position in ipairs(
+            shuffled_order
+        ) do
             table.insert(
                 order,
-                shuffled_order[index]
+                source_position
             )
         end
     else
-        for index = current_source,
+        for index = 1,
             #source_tracks do
             table.insert(order, index)
         end
@@ -95,11 +96,22 @@ local function queue_view()
         )
     end
 
+    local display_position = 1
+
+    for index, source_position in ipairs(
+        positions
+    ) do
+        if source_position == current_source then
+            display_position = index
+            break
+        end
+    end
+
     return {
         tracks = tracks,
         items = items,
         source_positions = positions,
-        position = 1,
+        position = display_position,
         source_position = current_source,
         size = #tracks,
         total_size = #source_tracks,
@@ -189,8 +201,9 @@ assert(
 )
 assert(
     state.selected_detail ==
-        "Now playing - Sekito Shigeo (関戸剛)",
-    "Queue page did not mark the active track or preserve its original artist metadata"
+        "Sekito Shigeo (関戸剛)" and
+        state.current_visualizer == true,
+    "Queue page did not replace the active cover with the visualizer or preserve artist metadata"
 )
 assert(
     state.selected_artwork ==
@@ -203,34 +216,59 @@ assert(
     "Queue page did not expose the active shuffle state"
 )
 
--- Browse a future item, then advance playback. The viewed queue should drop
--- the completed entry, keep the real shuffled order, and preserve the selected
--- future occurrence by its stable source position.
+-- Browse a future item, then advance playback. The viewed queue should retain
+-- the completed entry because Previous can revisit it, move the visualizer to
+-- the next shuffled item, and preserve the user's selected future occurrence.
 page.virtual_queue_list:focus_index(4)
 queue.position:set(4)
 
 state = page.queue_page_state()
 assert(
-    state.current == 1 and
-        state.count == 19 and
-        state.selected == 3 and
+    state.current == 2 and
+        state.count == 20 and
+        state.selected == 4 and
         state.selected_id ==
             "queue:7:2" and
         state.selected_queue_index == 2,
-    "Queue advancement did not preserve the user's future-track selection"
+    "Queue advancement removed history or changed the user's future-track selection"
 )
 
 local current_model =
     assert(
         page.virtual_queue_list
-            :model_for_index(1)
+            :model_for_index(2)
     )
 assert(
     current_model.title.text ==
         "Track 4" and
         current_model.detail.text ==
-            "Now playing - Artist 4",
-    "Queue advancement did not move the first row and current-track marker to the next shuffled item"
+            "Artist 4" and
+        current_model.queue_visualizer_active == true,
+    "Queue advancement did not move the visualizer to the next shuffled item"
+)
+
+-- Click a shuffled-future row. Playback must jump by source queue_index, not
+-- display_index, and must resume even if playback was paused.
+local playback = require("playback")
+playback.playing:set(false)
+page.virtual_queue_list:focus_index(3)
+
+local clicked =
+    assert(page.virtual_queue_list:selected_model())
+assert(
+    page.queue_entries[3].queue_index == 15,
+    "Queue click fixture expected display row 3 to map to source index 15"
+)
+clicked.on_click()
+
+state = page.queue_page_state()
+assert(
+    current_source == 15 and
+        state.current == 3 and
+        state.selected_queue_index == 15 and
+        playback.playing:get() == true and
+        state.current_visualizer == true,
+    "Queue row click did not jump playback by source queue_index and resume"
 )
 
 queue.random:set(false)
@@ -242,6 +280,6 @@ assert(
 page:on_hide()
 
 print(
-    "Display-only Queue page shows actual playback order, local artwork, and stable virtual selection"
+    "Queue page shows playback order, local artwork, stable virtual selection, and click-to-play jumps"
 )
 os.exit(0)

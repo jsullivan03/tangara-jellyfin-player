@@ -2,12 +2,125 @@ local lvgl = require("lvgl")
 local controls = require("controls")
 local jellyfin_scroll_indicator =
     require("jellyfin_scroll_indicator")
+local jellyfin_track_identity =
+    require("jellyfin_track_identity")
 
 local M = {}
 
+local resume_metrics = nil
+
+pcall(
+    function()
+        resume_metrics =
+            require("sim_metrics")
+    end
+)
+
+local function resume_trace(message)
+    if resume_metrics and
+        type(resume_metrics.trace) ==
+            "function" then
+        resume_metrics.trace(
+            "fixed-list " .. tostring(message)
+        )
+    end
+end
+
+local function trace_fixed_rows(
+    controller,
+    stage
+)
+    if not resume_metrics or
+        type(resume_metrics.trace) ~=
+            "function" then
+        return
+    end
+
+    local viewport = nil
+    local canvas = nil
+
+    pcall(
+        function()
+            viewport =
+                controller.screen_list:
+                    get_coords()
+            canvas =
+                controller.canvas:get_coords()
+        end
+    )
+
+    resume_trace(
+        stage ..
+            " selected=" ..
+            tostring(controller.selected_index) ..
+            " window=" ..
+            tostring(controller.window_start) ..
+            " view=" ..
+            tostring(controller.fixed_view_start) ..
+            " base_y=" ..
+            tostring(controller.fixed_base_y) ..
+            " parent_scroll_y=" ..
+            tostring(
+                viewport and canvas and
+                (canvas.y1 - viewport.y1) or
+                "unknown"
+            ) ..
+            " clip=" ..
+            tostring(viewport and viewport.x1) ..
+            "," ..
+            tostring(viewport and viewport.y1) ..
+            "-" ..
+            tostring(viewport and viewport.x2) ..
+            "," ..
+            tostring(viewport and viewport.y2)
+    )
+
+    for slot, model in ipairs(
+        controller.pool or {}
+    ) do
+        local coordinates = nil
+        local visible = false
+        local parent = nil
+
+        pcall(
+            function()
+                coordinates =
+                    model.object:get_coords()
+                visible =
+                    model.object:is_visible()
+                parent =
+                    model.object:get_parent()
+            end
+        )
+
+        resume_trace(
+            stage ..
+                " row slot=" ..
+                tostring(slot) ..
+                " bound=" ..
+                tostring(model.virtual_index) ..
+                " y=" ..
+                tostring(
+                    coordinates and
+                    coordinates.y1
+                ) ..
+                " h=" ..
+                tostring(
+                    coordinates and
+                    coordinates.y2 -
+                        coordinates.y1 + 1
+                ) ..
+                " hidden=" ..
+                tostring(not visible) ..
+                " parent=" ..
+                tostring(parent)
+        )
+    end
+end
+
 local DEFAULT_POOL_SIZE = 7
 local DEFAULT_ANCHOR = 4
-local DEFAULT_ROW_HEIGHT = 32
+local DEFAULT_ROW_HEIGHT = 23
 local DEFAULT_ROW_GAP = 1
 
 local function normalize_id(value)
@@ -27,6 +140,26 @@ end
 local function default_item_id(item)
     if type(item) ~= "table" then
         return nil
+    end
+
+    -- Track-shaped rows use the canonical track key for selection/resume.
+    if item.kind == "track" or
+        item.track_key or
+        (
+            item.title and
+            (
+                item.jellyfin_id or
+                item.id
+            ) and
+            item.kind ~= "album" and
+            item.kind ~= "artist"
+        ) then
+        local track_key =
+            jellyfin_track_identity.key(item)
+
+        if track_key then
+            return track_key
+        end
     end
 
     for _, key in ipairs({
@@ -171,8 +304,59 @@ function M.create(
         )
     local row_stride =
         row_height + row_gap
+    local measured_viewport_height = 100
+
+    pcall(
+        function()
+            local coordinates =
+                screen.list:get_coords()
+            local height =
+                coordinates.y2 -
+                coordinates.y1 + 1
+
+            if height > 0 then
+                measured_viewport_height =
+                    height
+            end
+        end
+    )
+
+    local fixed_viewport_height =
+        math.max(
+            row_height,
+            math.floor(
+                tonumber(
+                    options.viewport_height
+                ) or
+                measured_viewport_height
+            )
+        )
+    local pool_limit =
+        math.max(
+            1,
+            math.floor(
+                tonumber(
+                    options.pool_size
+                ) or
+                DEFAULT_POOL_SIZE
+            )
+        )
+    local content_height =
+        math.max(
+            1,
+            #items * row_stride -
+                row_gap
+        )
+    local fixed_viewport =
+        options.fixed_viewport == true or
+        (
+            options.fixed_viewport == nil and
+            content_height >
+                fixed_viewport_height
+        )
 
     local controller = {
+        screen_list = screen.list,
         screen = screen,
         items = {},
         pool = {},
@@ -190,16 +374,33 @@ function M.create(
         row_height = row_height,
         row_gap = row_gap,
         row_stride = row_stride,
-        pool_limit =
+        fixed_viewport = fixed_viewport,
+        fixed_viewport_height =
+            fixed_viewport_height,
+        fixed_base_y = 0,
+        fixed_view_start = nil,
+        motion_duration =
             math.max(
                 1,
                 math.floor(
                     tonumber(
-                        options.pool_size
-                    ) or
-                    DEFAULT_POOL_SIZE
+                        options.motion_duration
+                    ) or 90
                 )
             ),
+        motion_generation = 0,
+        pool_limit = pool_limit,
+        total_count =
+            math.max(
+                #items,
+                math.floor(
+                    tonumber(
+                        options.total_count
+                    ) or #items
+                )
+            ),
+        total_count_authoritative =
+            options.total_count ~= nil,
         anchor =
             math.max(
                 1,
@@ -211,6 +412,17 @@ function M.create(
                 )
             ),
     }
+
+
+    local function assign_selected_id(id)
+        if screen.discography_selection_lock then
+            screen.selected_item_id =
+                screen.discography_selection_lock
+            return
+        end
+
+        screen.selected_item_id = id
+    end
 
     local function item_id(item)
         return
@@ -253,7 +465,25 @@ function M.create(
         for index, item in ipairs(
             self.items
         ) do
-            if item_id(item) == id then
+            local candidate = item_id(item)
+
+            if candidate == id then
+                return index
+            end
+
+            if jellyfin_track_identity
+                    .matches_selection(
+                        id,
+                        item
+                    ) or
+                (
+                    candidate and
+                    jellyfin_track_identity
+                        .matches_selection(
+                            id,
+                            candidate
+                        )
+                ) then
                 return index
             end
         end
@@ -279,9 +509,14 @@ function M.create(
             return 0
         end
 
+        local total = #self.items
+        if self.total_count_authoritative then
+            total = self.total_count or total
+        end
+
         return
             indicator:thumb_height_for(
-                item_count or #self.items
+                item_count or total
             )
     end
 
@@ -293,10 +528,35 @@ function M.create(
             return
         end
 
+        local total = #self.items
+
+        if self.total_count_authoritative then
+            total =
+                math.max(
+                    total,
+                    math.floor(
+                        tonumber(
+                            self.total_count
+                        ) or total
+                    )
+                )
+        end
+
+        indicator.item_count = total
         indicator:update(
-            #self.items,
+            total,
             self.selected_index
         )
+
+        if type(options.on_focus) ==
+                "function" then
+            options.on_focus(
+                self.selected_index,
+                self.items[
+                    self.selected_index
+                ]
+            )
+        end
     end
 
     function controller:canvas_height(
@@ -311,6 +571,10 @@ function M.create(
                 )
             )
 
+        if self.fixed_viewport then
+            return self.fixed_viewport_height
+        end
+
         return
             math.max(
                 1,
@@ -319,14 +583,189 @@ function M.create(
             )
     end
 
+    function controller:fixed_pool_height()
+        return
+            math.max(
+                1,
+                #self.pool * self.row_stride -
+                    self.row_gap
+            )
+    end
+
+    function controller:fixed_visible_count()
+        return
+            math.min(
+                #self.pool,
+                math.max(
+                    1,
+                    math.floor(
+                        (
+                            self.fixed_viewport_height +
+                            self.row_gap
+                        ) / self.row_stride
+                    )
+                )
+            )
+    end
+
+    function controller:fixed_resolve_view_start(
+        index
+    )
+        local visible_count =
+            self:fixed_visible_count()
+        local maximum_start =
+            math.max(
+                1,
+                #self.items -
+                    visible_count + 1
+            )
+        local current =
+            tonumber(
+                self.fixed_view_start
+            )
+
+        if not current then
+            current =
+                index -
+                visible_count + 1
+        end
+
+        current =
+            clamp(
+                math.floor(current),
+                1,
+                maximum_start
+            )
+
+        if index < current then
+            current = index
+        elseif index >
+                current +
+                    visible_count - 1 then
+            current =
+                index -
+                visible_count + 1
+        end
+
+        return
+            clamp(
+                current,
+                1,
+                maximum_start
+            )
+    end
+
+    function controller:fixed_pool_start_for(
+        view_start
+    )
+        local visible_count =
+            self:fixed_visible_count()
+        local overscan =
+            math.max(
+                0,
+                #self.pool -
+                    visible_count
+            )
+        local overscan_above =
+            math.floor(
+                overscan / 2
+            )
+        local maximum_start =
+            math.max(
+                1,
+                #self.items -
+                    #self.pool + 1
+            )
+
+        return
+            clamp(
+                view_start -
+                    overscan_above,
+                1,
+                maximum_start
+            )
+    end
+
     function controller:resize_canvas()
         if not self.canvas then
             return
         end
 
+        local height =
+            self:canvas_height()
+
         self.canvas:set {
-            h = self:canvas_height(),
+            h = height,
         }
+
+        if self.motion_layer then
+            self.motion_layer:set {
+                h = self:fixed_pool_height(),
+            }
+        end
+    end
+
+    function controller:set_viewport_height(
+        next_height
+    )
+        next_height =
+            math.max(
+                self.row_height,
+                math.floor(
+                    tonumber(next_height) or
+                    self.fixed_viewport_height
+                )
+            )
+
+        local changed =
+            next_height ~=
+            self.fixed_viewport_height
+
+        self.screen_list:set {
+            h = next_height,
+        }
+
+        if changed then
+            self:fixed_cancel_motion()
+            self.fixed_viewport_height =
+                next_height
+            self:resize_canvas()
+
+            if self.fixed_viewport then
+                self:fixed_prepare_selection()
+                self:invalidate_viewport()
+            end
+        end
+
+        -- Always resync the custom scrollbar track to the usable list height.
+        -- Mini-player may already have resized the list before this virtual
+        -- list was created, so an unchanged height must still update geometry.
+        if self.scroll_indicator then
+            local track_height =
+                math.max(
+                    1,
+                    next_height - 4
+                )
+
+            if type(
+                self.scroll_indicator
+                    .set_track_height
+            ) == "function" then
+                self.scroll_indicator:
+                    set_track_height(
+                        track_height
+                    )
+            else
+                self.scroll_indicator.height =
+                    track_height
+            end
+
+            self.scroll_indicator.visible_items =
+                self:fixed_visible_count()
+            self:update_scroll_indicator()
+        end
+
+        return changed
     end
 
     function controller:row_y(index)
@@ -346,10 +785,18 @@ function M.create(
             return
         end
 
+        local positioned_index =
+            logical_index
+
+        if self.fixed_viewport then
+            positioned_index =
+                model.virtual_slot or 1
+        end
+
         model.object:set {
             x = 0,
             y = self:row_y(
-                logical_index
+                positioned_index
             ),
         }
     end
@@ -572,6 +1019,50 @@ function M.create(
         self.selected_index = index
         self:update_scroll_indicator()
 
+        if self.fixed_viewport then
+            local model = nil
+            local id =
+                item_id(
+                    self.items[index]
+                )
+
+            if id then
+                assign_selected_id(id)
+            end
+
+            if screen.suppress_focus_scroll then
+                -- Resume/discography return: keep the restored motion offset
+                -- when the selection is already mounted and visible. If the
+                -- row is missing or clipped (e.g. Search still using a stale
+                -- native scroll offset against a fixed motion layer), snap
+                -- instantly without animation.
+                model =
+                    self:ensure_selection_visible()
+            else
+                model =
+                    self:fixed_prepare_selection()
+            end
+
+            if not model then
+                return nil
+            end
+
+            if screen.ui_active then
+                local previous_suppression =
+                    screen.suppress_selection_tracking
+
+                self.rebalancing = true
+                screen.suppress_selection_tracking =
+                    true
+                focus_group_only(model.object)
+                screen.suppress_selection_tracking =
+                    previous_suppression
+                self.rebalancing = false
+            end
+
+            return model.object
+        end
+
         local next_start =
             self:window_for(index)
 
@@ -593,7 +1084,7 @@ function M.create(
             )
 
         if id then
-            screen.selected_item_id = id
+            assign_selected_id(id)
         end
 
         if screen.ui_active then
@@ -603,7 +1094,11 @@ function M.create(
             self.rebalancing = true
             screen.suppress_selection_tracking =
                 true
-            focus_object(model.object)
+            if screen.suppress_focus_scroll then
+                focus_group_only(model.object)
+            else
+                focus_object(model.object)
+            end
             screen.suppress_selection_tracking =
                 previous_suppression
             self.rebalancing = false
@@ -806,12 +1301,19 @@ function M.create(
 
     function controller:continuous_leading_rows()
         local rows = {}
+        local seen = {}
 
+        -- Any focusable control registered before the virtual canvas is a
+        -- leading row. Keeping the shared registration order makes the fixed
+        -- viewport work consistently for Sort, multi-select, create, quick
+        -- action, and other list controls without screen-specific branches.
         for _, model in ipairs(
             screen.leading_rows or {}
         ) do
-            if model == screen.sort_row or
-                model.virtual_list_boundary then
+            if model and
+                model.object and
+                not seen[model] then
+                seen[model] = true
                 rows[#rows + 1] = model
             end
         end
@@ -820,6 +1322,7 @@ function M.create(
             screen.sort_row then
             rows[1] = screen.sort_row
         end
+
         return rows
     end
 
@@ -1048,6 +1551,22 @@ function M.create(
             return false
         end
 
+        if self.fixed_viewport then
+            local model =
+                self:model_for_index(
+                    self.selected_index
+                )
+
+            if model then
+                self.continuous_focus_model = model
+                return false
+            end
+
+            self:fixed_cancel_motion()
+            self:fixed_focus_selection()
+            return true
+        end
+
         local focus_model =
             self.continuous_focus_model
 
@@ -1171,21 +1690,582 @@ function M.create(
         self.continuous_focus_change = false
     end
 
-    function controller:continuous_scroll_to(object)
+    function controller:continuous_is_scrolling()
+        local scrolling = false
+
+        pcall(
+            function()
+                scrolling =
+                    screen.list:is_scrolling()
+            end
+        )
+
+        return scrolling == true
+    end
+
+    function controller:continuous_scroll_to(
+        object,
+        animate
+    )
         if not object then
             return
         end
 
         pcall(
             function()
+                screen.list:remove_all_anim()
+            end
+        )
+
+        pcall(
+            function()
                 object:scroll_to_view_recursive(
-                    true
+                    animate == true
                 )
             end
         )
     end
 
-    function controller:continuous_select(index)
+    function controller:fixed_cancel_motion()
+        if not self.fixed_viewport or
+            not self.motion_layer then
+            return
+        end
+
+        self.motion_generation =
+            self.motion_generation + 1
+
+        pcall(
+            function()
+                self.motion_layer:
+                    remove_all_anim()
+            end
+        )
+
+        self.motion_layer:set {
+            y = self.fixed_base_y or 0,
+        }
+    end
+
+    function controller:fixed_prepare_selection()
+        if not self.fixed_viewport then
+            return nil
+        end
+
+        local view_start =
+            self:fixed_resolve_view_start(
+                self.selected_index
+            )
+        local pool_start =
+            self:fixed_pool_start_for(
+                view_start
+            )
+
+        self.fixed_view_start =
+            view_start
+        self:bind_window(pool_start)
+
+        local model =
+            self:model_for_index(
+                self.selected_index
+            )
+
+        if not model then
+            return nil
+        end
+
+        local pool_height =
+            self:fixed_pool_height()
+        local maximum_scroll =
+            math.max(
+                0,
+                pool_height -
+                    self.fixed_viewport_height
+            )
+        local desired_scroll =
+            math.max(
+                0,
+                (
+                    view_start -
+                        pool_start
+                ) * self.row_stride
+            )
+
+        self.fixed_base_y =
+            -clamp(
+                desired_scroll,
+                0,
+                maximum_scroll
+            )
+        self.motion_layer:set {
+            y = self.fixed_base_y,
+        }
+
+        return model
+    end
+
+    function controller:selection_in_viewport()
+        if not self.fixed_viewport or
+            not screen.list then
+            return false
+        end
+
+        local model =
+            self:model_for_index(
+                self.selected_index
+            )
+
+        if not model or not model.object then
+            return false
+        end
+
+        local visible = false
+        pcall(
+            function()
+                screen.list:update_layout()
+                if self.motion_layer then
+                    self.motion_layer:
+                        update_layout()
+                end
+                if self.canvas then
+                    self.canvas:update_layout()
+                end
+
+                local list_coordinates =
+                    screen.list:get_coords()
+                local row_coordinates =
+                    model.object:get_coords()
+
+                visible =
+                    row_coordinates.y1 >=
+                        list_coordinates.y1 - 1 and
+                    row_coordinates.y2 <=
+                        list_coordinates.y2 + 1
+            end
+        )
+
+        return visible
+    end
+
+    function controller:ensure_selection_visible()
+        if not self.fixed_viewport then
+            return nil
+        end
+
+        local locked =
+            normalize_id(
+                screen.discography_selection_lock
+            )
+        local selected_id =
+            locked or
+            normalize_id(
+                screen.selected_item_id
+            )
+        local index =
+            self:find_index(selected_id)
+
+        if index then
+            self.selected_index = index
+            if selected_id then
+                assign_selected_id(selected_id)
+            end
+        end
+
+        local model =
+            self:model_for_index(
+                self.selected_index
+            )
+
+        if model and
+            self:selection_in_viewport() then
+            return model
+        end
+
+        return self:fixed_prepare_selection()
+    end
+
+    function controller:fixed_focus_selection(animate_parent)
+        local model =
+            self:fixed_prepare_selection()
+
+        if not model then
+            return nil
+        end
+
+        self.continuous_focus_model = model
+        self:continuous_focus(model)
+
+        -- Lifecycle resume must not native-scroll the clipped canvas. Encoder
+        -- motion uses fixed_animate instead.
+        if not screen.suppress_focus_scroll then
+            pcall(
+                function()
+                    self.canvas:update_layout()
+                    self.canvas:
+                        scroll_to_view_recursive(
+                            animate_parent == true
+                        )
+                end
+            )
+        end
+
+        return model
+    end
+
+    function controller:resume_viewport()
+        if not self.fixed_viewport then
+            return nil
+        end
+
+        local selected_id =
+            normalize_id(
+                screen.selected_item_id
+            )
+        local selected_index =
+            self:find_index(selected_id)
+
+        if selected_index then
+            self.selected_index =
+                selected_index
+        end
+
+        local preserved_window_start =
+            self.window_start
+        local preserved_base_y =
+            self.fixed_base_y or 0
+
+        self:fixed_cancel_motion()
+        self:bind_window(
+            preserved_window_start
+        )
+
+        local maximum_scroll =
+            math.max(
+                0,
+                self:fixed_pool_height() -
+                    self.fixed_viewport_height
+            )
+
+        self.fixed_base_y =
+            -clamp(
+                -preserved_base_y,
+                0,
+                maximum_scroll
+            )
+        self.motion_layer:set {
+            y = self.fixed_base_y,
+        }
+        self.fixed_view_start =
+            clamp(
+                self.window_start +
+                math.floor(
+                    (-self.fixed_base_y) /
+                    self.row_stride
+                ),
+                1,
+                math.max(
+                    1,
+                    #self.items -
+                        self:fixed_visible_count() + 1
+                )
+            )
+
+        local model =
+            self:model_for_index(
+                self.selected_index
+            )
+
+        if not model then
+            model =
+                self:fixed_prepare_selection()
+        end
+
+        self.continuous_focus_model = model
+        self:update_scroll_indicator()
+
+        self:invalidate_viewport()
+
+        self.resume_generation =
+            (self.resume_generation or 0) + 1
+        self.last_resume_bound_count =
+            #self.pool
+
+        trace_fixed_rows(
+            self,
+            "resume"
+        )
+
+        return model
+    end
+
+    function controller:capture_resume_viewport()
+        if not self.fixed_viewport then
+            return false
+        end
+
+        pcall(
+            function()
+                screen.list:update_layout()
+                self.canvas:update_layout()
+
+                local viewport =
+                    screen.list:get_coords()
+                local canvas =
+                    self.canvas:get_coords()
+
+                self.resume_native_offset_y =
+                    canvas.y1 - viewport.y1
+            end
+        )
+
+        return true
+    end
+
+    function controller:restore_resume_viewport()
+        if not self.fixed_viewport then
+            return false
+        end
+
+        -- Fixed catalogs scroll exclusively through motion_layer. Native list
+        -- scroll must stay origin-aligned; restoring a stale native offset
+        -- (from list:scroll_to / scroll_to_view) fights fixed_base_y and can
+        -- park the selected row above or below the clip after Escape.
+        pcall(
+            function()
+                screen.list:update_layout()
+                self.canvas:update_layout()
+
+                local viewport =
+                    screen.list:get_coords()
+                local canvas =
+                    self.canvas:get_coords()
+                local current =
+                    canvas.y1 - viewport.y1
+
+                if current ~= 0 then
+                    screen.list:scroll_by(
+                        0,
+                        -current,
+                        false
+                    )
+                    screen.list:update_layout()
+                    self.canvas:update_layout()
+                end
+            end
+        )
+
+        self.resume_native_offset_y = 0
+        return true
+    end
+
+    function controller:invalidate_viewport()
+        if not self.fixed_viewport then
+            return false
+        end
+
+        -- Settle parent geometry first, then the clipped fixed-list layers.
+        -- install_controls() invokes this once more after restoring focus so
+        -- the complete viewport, rather than only the focus damage region,
+        -- is ready for the first rendered frame after Back.
+        pcall(
+            function()
+                screen.list:update_layout()
+                self.motion_layer:update_layout()
+                self.canvas:update_layout()
+            end
+        )
+
+        resume_trace(
+            "invalidate complete viewport"
+        )
+
+        for _, row_model in ipairs(
+            self.pool
+        ) do
+            if row_model.object then
+                row_model.object:invalidate()
+            end
+        end
+
+        pcall(
+            function()
+                self.motion_layer:invalidate()
+                self.canvas:invalidate()
+                screen.list:invalidate()
+                if screen.root then
+                    screen.root:invalidate()
+                end
+            end
+        )
+
+        return true
+    end
+
+    function controller:repair_resumed_viewport()
+        if not self.fixed_viewport then
+            return false
+        end
+
+        -- A simulator Back pop calls the parent's on_show before the native
+        -- backstack loads that parent's LVGL screen. Rebind the complete pool
+        -- once the parent is active, while preserving the logical viewport
+        -- and selection restored synchronously by resume_viewport().
+        local preserved_window_start =
+            self.window_start
+        local preserved_base_y =
+            self.fixed_base_y or 0
+        local preserved_selected_index =
+            self.selected_index
+
+        self:bind_window(
+            preserved_window_start
+        )
+
+        self.window_start =
+            preserved_window_start
+        self.fixed_base_y =
+            preserved_base_y
+        self.selected_index =
+            preserved_selected_index
+
+        self:restore_resume_viewport()
+        self.motion_layer:set {
+            y = self.fixed_base_y,
+        }
+
+        self.fixed_view_start =
+            clamp(
+                self.window_start +
+                math.floor(
+                    (-self.fixed_base_y) /
+                    self.row_stride
+                ),
+                1,
+                math.max(
+                    1,
+                    #self.items -
+                        self:fixed_visible_count() + 1
+                )
+            )
+
+        self:update_scroll_indicator()
+        self:invalidate_viewport()
+
+        -- Native canvas realignment can leave a recycled selection clipped
+        -- (especially Search, which historically used list:scroll_to). Snap
+        -- instantly when the logical selection is not fully inside the list.
+        self:ensure_selection_visible()
+
+        self.post_resume_repaint_count =
+            (self.post_resume_repaint_count or 0) + 1
+        self.last_post_resume_bound_count =
+            #self.pool
+
+        trace_fixed_rows(
+            self,
+            "post-pop"
+        )
+
+        return true
+    end
+
+    function controller:fixed_animate(
+        direction,
+        animate
+    )
+        if not self.fixed_viewport or
+            not self.motion_layer then
+            return
+        end
+
+        self:fixed_cancel_motion()
+
+        if animate ~= true or
+            direction == 0 then
+            return
+        end
+
+        local pool_height =
+            self:fixed_pool_height()
+        local minimum_y =
+            math.min(
+                0,
+                self.fixed_viewport_height -
+                    pool_height
+            )
+        local target_y =
+            self.fixed_base_y or 0
+        local proposed_start =
+            target_y +
+            (
+                direction > 0 and
+                self.row_stride or
+                -self.row_stride
+            )
+        local start_y =
+            clamp(
+                proposed_start,
+                minimum_y,
+                0
+            )
+
+        if start_y == target_y then
+            self.motion_layer:set {
+                y = target_y,
+            }
+            return
+        end
+
+        local generation =
+            self.motion_generation
+
+        self.motion_layer:set {
+            y = start_y,
+        }
+
+        self.motion_layer:Anim {
+            run = true,
+            start_value = start_y,
+            end_value = target_y,
+            duration = self.motion_duration,
+            path = "linear",
+            exec_cb =
+                function(
+                    animated_object,
+                    position
+                )
+                    if self.motion_generation ~=
+                            generation then
+                        return
+                    end
+
+                    animated_object:set {
+                        y = position,
+                    }
+                end,
+            done_cb = function()
+                if self.motion_generation ==
+                        generation and
+                    self.motion_layer then
+                    self.motion_layer:set {
+                        y = self.fixed_base_y or 0,
+                    }
+                end
+            end,
+        }
+    end
+
+    function controller:fixed_select(
+        index,
+        animate
+    )
+        local previous_index =
+            self.selected_index
+        local previous_view_start =
+            self.fixed_view_start
+        local from_leading =
+            self.continuous_at_sort == true
+
         index = clamp(
             math.floor(
                 tonumber(index) or 1
@@ -1193,6 +2273,13 @@ function M.create(
             1,
             #self.items
         )
+
+        local direction = 0
+        if index > previous_index then
+            direction = 1
+        elseif index < previous_index then
+            direction = -1
+        end
 
         self.selected_index = index
         self.continuous_at_sort = false
@@ -1204,10 +2291,175 @@ function M.create(
             )
 
         if id then
-            screen.selected_item_id = id
+            assign_selected_id(id)
         end
 
-        local focus_model =
+        -- Stop the prior one-layer animation before rebinding. LVGL does not
+        -- draw between these synchronous operations, so the old pool is never
+        -- exposed half-recycled. The next frame contains a complete fixed
+        -- seven-row window with two or more overscan rows on each side.
+        self:fixed_cancel_motion()
+        local model =
+            self:fixed_focus_selection(
+                animate == true and
+                    from_leading
+            )
+        local viewport_moved =
+            previous_view_start ~= nil and
+            self.fixed_view_start ~=
+                previous_view_start
+
+        self:fixed_animate(
+            direction,
+            animate == true and
+                viewport_moved
+        )
+
+        return model
+    end
+
+    function controller:continuous_select(
+        index,
+        animate,
+        rebase_direction
+    )
+        index = clamp(
+            math.floor(
+                tonumber(index) or 1
+            ),
+            1,
+            #self.items
+        )
+
+        if self.fixed_viewport then
+            return self:fixed_select(
+                index,
+                animate
+            )
+        end
+
+        self.selected_index = index
+        self.continuous_at_sort = false
+        self:update_scroll_indicator()
+
+        local id =
+            item_id(
+                self.items[index]
+            )
+
+        if id then
+            assign_selected_id(id)
+        end
+
+        local focus_model = nil
+
+        if rebase_direction == 1 or
+            rebase_direction == -1 then
+            pcall(
+                function()
+                    screen.list:remove_all_anim()
+                end
+            )
+
+            -- A burst can move the logical selection farther than the
+            -- seven-row pool can animate through. Reuse an already bound
+            -- destination row when possible; otherwise rebind the pool
+            -- around the destination. Then jump to a covered target
+            -- viewport and animate only the final row. Logical selection
+            -- remains immediate while visual motion stays short and
+            -- consistent.
+            local pool_count = #self.pool
+            local maximum_start =
+                math.max(
+                    1,
+                    #self.items - pool_count + 1
+                )
+            local directional_start = nil
+
+            -- Stage burst animations with the destination row at the edge
+            -- that is entering the viewport. The other six pooled rows then
+            -- cover the entire viewport behind it while the final one-row
+            -- motion completes. Centering the destination left only three
+            -- rows on the trailing side and exposed the transparent canvas
+            -- as a black band during fast scrolling.
+            if rebase_direction > 0 then
+                directional_start =
+                    clamp(
+                        index - pool_count + 1,
+                        1,
+                        maximum_start
+                    )
+            else
+                directional_start =
+                    clamp(
+                        index,
+                        1,
+                        maximum_start
+                    )
+            end
+
+            self:bind_window(directional_start)
+            focus_model =
+                self:model_for_index(index)
+
+            if not focus_model then
+                self:bind_window(
+                    self:window_for(index)
+                )
+                focus_model =
+                    self:model_for_index(index) or
+                    self.pool[1]
+            end
+            self.continuous_focus_model =
+                focus_model
+            self:continuous_focus(focus_model)
+
+            pcall(
+                function()
+                    self.canvas:update_layout()
+                    focus_model.object
+                        :scroll_to_view_recursive(
+                            false
+                        )
+                    self.canvas:update_layout()
+
+                    local list_coordinates =
+                        screen.list:get_coords()
+                    local focus_coordinates =
+                        focus_model.object
+                            :get_coords()
+                    local stage_delta = 0
+
+                    if rebase_direction > 0 then
+                        stage_delta =
+                            list_coordinates.y2 +
+                            self.row_gap + 1 -
+                            focus_coordinates.y1
+                    else
+                        stage_delta =
+                            list_coordinates.y1 -
+                            self.row_gap - 1 -
+                            focus_coordinates.y2
+                    end
+
+                    screen.list
+                        :scroll_by_bounded(
+                            0,
+                            stage_delta,
+                            false
+                        )
+                    focus_model.object
+                        :scroll_to_view_recursive(
+                            animate == true
+                        )
+                end
+            )
+
+            self:continuous_refresh_coverage()
+            return focus_model
+        end
+
+        focus_model =
             self.continuous_focus_model
 
         if not focus_model then
@@ -1221,7 +2473,8 @@ function M.create(
         self:continuous_refresh_coverage()
         self:continuous_focus(focus_model)
         self:continuous_scroll_to(
-            focus_model.object
+            focus_model.object,
+            animate
         )
 
         return focus_model
@@ -1238,13 +2491,18 @@ function M.create(
             return
         end
 
+        if self.fixed_viewport then
+            self:fixed_cancel_motion()
+        end
+
         self.continuous_at_sort = true
         self.continuous_leading_index = index
         self.continuous_focus_change = true
         focus_group_only(model.object)
         self.continuous_focus_change = false
         self:continuous_scroll_to(
-            model.object
+            model.object,
+            true
         )
     end
 
@@ -1270,6 +2528,8 @@ function M.create(
             screen.focus_group or
             lvgl.group.get_default()
         local focused = nil
+        local list_was_scrolling =
+            self:continuous_is_scrolling()
 
         pcall(
             function()
@@ -1308,12 +2568,20 @@ function M.create(
                             next_leading
                         )
                 else
-                    self:continuous_select(
+                    local target_index =
                         math.min(
                             next_leading -
                                 #leading_rows,
                             #self.items
                         )
+                    local rapid =
+                        math.abs(diff) > 1 or
+                        list_was_scrolling
+
+                    self:continuous_select(
+                        target_index,
+                        true,
+                        rapid and 1 or nil
                     )
                 end
             elseif diff < 0 then
@@ -1350,11 +2618,23 @@ function M.create(
             return
         end
 
-        self:continuous_select(
+        local target_index =
             math.min(
                 next_index,
                 #self.items
             )
+        local direction =
+            target_index >=
+                self.selected_index and
+            1 or -1
+        local rapid =
+            math.abs(diff) > 1 or
+            list_was_scrolling
+
+        self:continuous_select(
+            target_index,
+            true,
+            rapid and direction or nil
         )
     end
 
@@ -1380,10 +2660,15 @@ function M.create(
             )
 
         if id then
-            screen.selected_item_id = id
+            assign_selected_id(id)
         end
 
-        self:continuous_refresh_coverage()
+        -- Fixed catalogs keep coverage via motion_layer / fixed_prepare.
+        -- Native continuous refresh rebases the window and fights Escape
+        -- restore when focus is reassigned during resume repaint.
+        if not self.fixed_viewport then
+            self:continuous_refresh_coverage()
+        end
     end
 
     function controller:install_continuous_input()
@@ -1571,17 +2856,23 @@ function M.create(
         self.continuous_refreshing = false
         self.continuous_focus_model = nil
 
-        self:bind_window(
-            self:window_for(
-                self.selected_index
+        if self.fixed_viewport then
+            self:fixed_cancel_motion()
+        else
+            self:bind_window(
+                self:window_for(
+                    self.selected_index
+                )
             )
-        )
+        end
     end
 
     function controller:on_row_focused(model)
         if self.continuous_focus_change or
             self.rebalancing or
-            screen.suppress_selection_tracking then
+            screen.suppress_selection_tracking or
+            screen.suppress_focus_scroll or
+            screen.discography_selection_lock then
             return
         end
 
@@ -1619,8 +2910,7 @@ function M.create(
             item_id(selected)
 
         if selected_id then
-            screen.selected_item_id =
-                selected_id
+            assign_selected_id(selected_id)
         end
 
         local selected_slot =
@@ -1670,8 +2960,7 @@ function M.create(
         )
 
         if selected_id then
-            screen.selected_item_id =
-                selected_id
+            assign_selected_id(selected_id)
         end
     end
 
@@ -1696,6 +2985,17 @@ function M.create(
         end
 
         self.items = next_items
+        self.total_count_authoritative =
+            set_options.total_count ~= nil
+        self.total_count =
+            math.max(
+                #next_items,
+                math.floor(
+                    tonumber(
+                        set_options.total_count
+                    ) or #next_items
+                )
+            )
         self:resize_canvas()
 
         local selected_index = nil
@@ -1721,15 +3021,22 @@ function M.create(
             item_id(selected_item)
 
         if resolved_id then
-            screen.selected_item_id =
-                resolved_id
+            assign_selected_id(resolved_id)
         end
 
-        self:bind_window(
-            self:window_for(
-                self.selected_index
+        if self.fixed_viewport then
+            if set_options.reset_selection then
+                self.fixed_view_start = nil
+            end
+
+            self:fixed_prepare_selection()
+        else
+            self:bind_window(
+                self:window_for(
+                    self.selected_index
+                )
             )
-        )
+        end
 
         if self.continuous_input_active then
             self.continuous_focus_model =
@@ -1793,11 +3100,47 @@ function M.create(
         controller.canvas
     screen.media_rows = {}
 
+    local row_parent =
+        controller.canvas
+
+    if controller.fixed_viewport then
+        controller.motion_layer =
+            controller.canvas:Object {
+                x = 0,
+                y = 0,
+                w = lvgl.PCT(100),
+                h = math.max(
+                    1,
+                    pool_count * row_stride -
+                        row_gap
+                ),
+                pad_all = 0,
+                border_width = 0,
+                radius = 0,
+                bg_opa = 0,
+                scrollbar_mode =
+                    lvgl.SCROLLBAR_MODE.OFF,
+            }
+        controller.motion_layer:
+            clear_flag(
+                lvgl.FLAG.SCROLLABLE
+            )
+        controller.motion_layer:
+            clear_flag(
+                lvgl.FLAG.CLICKABLE
+            )
+        remove_from_group(
+            controller.motion_layer
+        )
+        row_parent =
+            controller.motion_layer
+    end
+
     local previous_row_parent =
         screen.virtual_row_parent
 
     screen.virtual_row_parent =
-        controller.canvas
+        row_parent
 
     for slot = 1, pool_count do
         local item = items[slot]
@@ -1854,8 +3197,20 @@ function M.create(
             model.virtual_on_click
         model.on_long_press =
             model.virtual_on_long_press
+
+        if model.available == false then
+            model.on_click = nil
+            model.on_long_press = nil
+        end
+
+        local previous_on_focus =
+            model.on_focus
         model.on_focus =
             function()
+                if type(previous_on_focus) ==
+                        "function" then
+                    previous_on_focus()
+                end
                 controller:on_row_focused(
                     model
                 )
@@ -1883,26 +3238,92 @@ function M.create(
     screen.virtual_row_parent =
         previous_row_parent
 
+    local scroll_indicator_options =
+        options.scroll_indicator
+
+    if scroll_indicator_options ~= false then
+        local normalized_options = {}
+
+        if type(scroll_indicator_options) ==
+                "table" then
+            for key, value in pairs(
+                scroll_indicator_options
+            ) do
+                normalized_options[key] = value
+            end
+        end
+
+        if normalized_options.visible_items ==
+                nil then
+            normalized_options.visible_items =
+                math.max(
+                    1,
+                    math.floor(
+                        (
+                            fixed_viewport_height +
+                            row_gap
+                        ) / row_stride
+                    )
+                )
+        end
+
+        if normalized_options.height == nil then
+            normalized_options.height =
+                math.max(
+                    1,
+                    fixed_viewport_height - 4
+                )
+        end
+
+        scroll_indicator_options =
+            normalized_options
+    end
+
     controller.scroll_indicator =
         jellyfin_scroll_indicator.create(
             screen.list,
-            options.scroll_indicator
+            scroll_indicator_options
         )
+
+    if controller.scroll_indicator then
+        controller.scroll_indicator.models =
+            screen.media_rows
+    end
+
     screen.virtual_scroll_indicator =
+        controller.scroll_indicator
+    screen.scroll_indicator =
         controller.scroll_indicator
     screen.virtual_list_controller = controller
 
     screen.list:onevent(
         lvgl.EVENT.SCROLL,
         function()
-            controller:continuous_refresh_coverage()
+            -- The custom encoder path prepares all seven pooled rows before
+            -- starting a one-row animation. Rebinding rows again from inside
+            -- each LVGL scroll frame makes objects move while the frame is
+            -- being invalidated, which appears as flashing or a black band
+            -- creeping in from the trailing edge. Leave the prepared pool
+            -- stable for the animation and reconcile once at SCROLL_END.
+            if not controller.fixed_viewport and
+                (
+                    not controller
+                        .continuous_input_active or
+                    controller
+                        .continuous_input_suspended
+                ) then
+                controller:continuous_refresh_coverage()
+            end
         end
     )
 
     screen.list:onevent(
         lvgl.EVENT.SCROLL_END,
         function()
-            controller:continuous_refresh_coverage()
+            if not controller.fixed_viewport then
+                controller:
+                    continuous_refresh_coverage()
+            end
         end
     )
 
@@ -1918,6 +3339,17 @@ function M.create(
             controller.selected_index =
                 index
             controller:update_scroll_indicator()
+
+            if controller.fixed_viewport then
+                local model =
+                    controller:
+                        fixed_prepare_selection()
+
+                return
+                    model and
+                    model.object or
+                    nil
+            end
 
             if controller.continuous_input_active then
                 controller.continuous_focus_model =
@@ -1955,7 +3387,13 @@ function M.create(
                 nil
         end
 
-    controller:set_items(items)
+    controller:set_items(
+        items,
+        {
+            total_count =
+                options.total_count,
+        }
+    )
 
     return controller
 end

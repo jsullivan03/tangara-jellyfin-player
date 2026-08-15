@@ -3,8 +3,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <lauxlib.h>
 #include <lvgl.h>
@@ -38,6 +40,38 @@ typedef struct {
 } firmware_backstack_state_t;
 
 static firmware_backstack_state_t state;
+
+static bool resume_trace_enabled(void) {
+    const char *value =
+        getenv("TANGARA_SIM_RESUME_TRACE");
+
+    return value != NULL &&
+        strcmp(value, "0") != 0 &&
+        strcmp(value, "false") != 0;
+}
+
+static void resume_trace(
+    const char *event,
+    const firmware_screen_t *screen
+) {
+    if (!resume_trace_enabled()) {
+        return;
+    }
+
+    fprintf(
+        stderr,
+        "[resume-trace %lu] backstack %s serial=%llu depth=%zu loaded=%llu pending=%d\n",
+        (unsigned long)lv_tick_get(),
+        event,
+        screen != NULL ?
+            (unsigned long long)screen->serial : 0ULL,
+        state.depth,
+        state.loaded != NULL ?
+            (unsigned long long)state.loaded->serial : 0ULL,
+        state.load_pending ? 1 : 0
+    );
+    fflush(stderr);
+}
 
 static void call_method(
     firmware_screen_t *screen,
@@ -174,6 +208,7 @@ static void destroy_screen(firmware_screen_t *screen) {
     }
 
     if (state.L != NULL && screen->lua_ref != LUA_NOREF) {
+        call_method(screen, "on_destroy");
         luaL_unref(state.L, LUA_REGISTRYINDEX, screen->lua_ref);
         screen->lua_ref = LUA_NOREF;
     }
@@ -275,16 +310,20 @@ static int backstack_pop(lua_State *L) {
     }
 
     firmware_screen_t *previous = state.current;
+    resume_trace("pop-start", previous);
     call_method(previous, "on_hide");
 
     state.current = state.stack[--state.depth];
     state.stack[state.depth] = NULL;
 
     activate_screen_context(state.current);
+    resume_trace("parent-on-show-start", state.current);
     call_method(state.current, "on_show");
+    resume_trace("parent-on-show-end", state.current);
 
     state.load_pending = true;
     retire_screen(previous);
+    resume_trace("pop-end", state.current);
 
     lua_pushinteger(L, (lua_Integer)state.depth);
     return 1;
@@ -298,6 +337,7 @@ void firmware_backstack_service(void) {
         return;
     }
 
+    resume_trace("screen-load-start", state.current);
     lv_screen_load(state.current->root);
 
     if (state.keyboard != NULL) {
@@ -314,6 +354,7 @@ void firmware_backstack_service(void) {
     state.loaded = state.current;
     state.load_pending = false;
     destroy_retired_screens();
+    resume_trace("screen-load-end", state.current);
 }
 
 static int backstack_flush(lua_State *L) {
@@ -326,6 +367,14 @@ static int backstack_flush(lua_State *L) {
     firmware_backstack_service();
 
     for (int index = 0; index < passes; ++index) {
+        /* The simulator tick source follows wall time. Sleep briefly so
+         * native LVGL Anim/Timer timelines can advance during headless
+         * flushes the same way they do in the live SDL loop. */
+        struct timespec delay = {
+            .tv_sec = 0,
+            .tv_nsec = 16 * 1000 * 1000L,
+        };
+        nanosleep(&delay, NULL);
         lv_timer_handler();
         firmware_backstack_service();
     }

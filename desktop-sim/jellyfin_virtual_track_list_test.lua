@@ -200,11 +200,16 @@ assert(
         tracks_screen.list,
     "virtual row canvas is not attached to the Tracks list"
 )
+assert(
+    virtual.fixed_viewport == true and
+        virtual.motion_layer ~= nil,
+    "Tracks did not adopt the shared fixed viewport"
+)
 for _, model in ipairs(virtual.pool) do
     assert(
         model.object:get_parent() ==
-            virtual.canvas,
-        "a reusable Tracks row is not parented to the virtual canvas"
+            virtual.motion_layer,
+        "a reusable Tracks row is not parented to the fixed motion layer"
     )
 end
 local initial_row_one_coordinates =

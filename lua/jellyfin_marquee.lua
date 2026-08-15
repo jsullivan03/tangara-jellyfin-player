@@ -4,18 +4,9 @@ local jellyfin_theme =
 
 local M = {}
 
-local DEFAULT_HOLD_MS = 900
 local DEFAULT_MS_PER_PIXEL = 18
 local DEFAULT_MIN_DURATION_MS = 280
-local DEFAULT_STEP_MS = 35
-
-local scheduled_controllers =
-    setmetatable(
-        {},
-        {__mode = "k"}
-    )
-
-local scheduler_timer = nil
+local CIRCULAR_GAP_PX = 24
 
 local function alignment_value(value)
     if value == "center" then
@@ -25,110 +16,64 @@ local function alignment_value(value)
     return "left"
 end
 
-local function cancel_schedule(controller)
-    controller.pending_task = nil
-    scheduled_controllers[controller] = nil
+local function long_mode_value(name)
+    local modes = lvgl.LABEL or {}
+    local value = modes[name]
+    if value == nil then
+        return nil
+    end
+    return value
 end
 
-local function has_scheduled_tasks()
-    for controller in pairs(
-        scheduled_controllers
-    ) do
-        if controller.destroyed or
-            not controller.pending_task then
-            scheduled_controllers[
-                controller
-            ] = nil
-        else
-            return true
-        end
+local function content_width()
+    return lvgl.SIZE_CONTENT or nil
+end
+
+local function clip_mode()
+    return long_mode_value("LONG_CLIP") or
+        long_mode_value("LONG_DOT") or
+        "LONG_CLIP"
+end
+
+local function stop_anim(controller)
+    if controller.anim and
+        type(controller.anim.delete) ==
+            "function" then
+        pcall(function()
+            controller.anim:delete()
+        end)
     end
 
-    return false
+    controller.anim = nil
 end
 
-local function ensure_scheduler()
-    if scheduler_timer then
-        return scheduler_timer
-    end
-
-    scheduler_timer =
-        lvgl.Timer {
-            paused = true,
-            period = DEFAULT_STEP_MS,
-            repeat_count = -1,
-            cb = function()
-                for controller in pairs(
-                    scheduled_controllers
-                ) do
-                    local task =
-                        controller.pending_task
-
-                    if controller.destroyed or
-                        not task then
-                        scheduled_controllers[
-                            controller
-                        ] = nil
-                    else
-                        task.remaining_ms =
-                            task.remaining_ms -
-                            DEFAULT_STEP_MS
-
-                        if task.remaining_ms <= 0 then
-                            controller.pending_task =
-                                nil
-                            scheduled_controllers[
-                                controller
-                            ] = nil
-
-                            if controller.generation ==
-                                    task.generation and
-                                not controller.destroyed then
-                                task.callback()
-                            end
-
-                            if controller.pending_task and
-                                not controller.destroyed then
-                                scheduled_controllers[
-                                    controller
-                                ] = true
-                            end
-                        end
-                    end
-                end
-
-                if not has_scheduled_tasks() then
-                    scheduler_timer:pause()
-                end
-            end,
-        }
-
-    return scheduler_timer
-end
-
-local function schedule(
-    controller,
-    milliseconds,
-    generation,
-    callback
+local function clear_label_scroll_state(
+    label
 )
-    cancel_schedule(controller)
+    if not label then
+        return
+    end
 
-    controller.pending_task = {
-        remaining_ms = math.max(
-            1,
-            math.floor(
-                tonumber(milliseconds) or 1
-            )
-        ),
-        generation = generation,
-        callback = callback,
-    }
-
-    scheduled_controllers[controller] =
-        true
-
-    ensure_scheduler():resume()
+    -- Force LVGL to drop LONG_SCROLL*_CIRCULAR offset anims / expand state.
+    local clip = clip_mode()
+    pcall(function()
+        label:set {
+            long_mode = clip,
+        }
+    end)
+    pcall(function()
+        label:scroll_to {
+            x = 0,
+            y = 0,
+            anim = false,
+        }
+    end)
+    pcall(function()
+        label:set {
+            translate_x = 0,
+            translate_y = 0,
+        }
+    end)
 end
 
 function M.create(parent, options)
@@ -149,9 +94,6 @@ function M.create(parent, options)
         ),
         alignment =
             alignment_value(options.align),
-        hold_ms =
-            tonumber(options.hold_ms) or
-            DEFAULT_HOLD_MS,
         ms_per_pixel =
             tonumber(options.ms_per_pixel) or
             DEFAULT_MS_PER_PIXEL,
@@ -160,19 +102,18 @@ function M.create(parent, options)
                 options.min_duration_ms
             ) or
             DEFAULT_MIN_DURATION_MS,
-        step_ms =
-            tonumber(options.step_ms) or
-            DEFAULT_STEP_MS,
         generation = 0,
         active =
             options.autostart == true,
         measured = false,
         overflow = 0,
+        text_width = 0,
         short_x = 0,
         current_x = 0,
         destroyed = false,
-        pending_task = nil,
         text = nil,
+        anim = nil,
+        uses_native_circular = false,
     }
 
     controller.view =
@@ -226,35 +167,115 @@ function M.create(parent, options)
         }
     end
 
-    local function reset_position()
-        if controller.destroyed then
-            return
-        end
+    local function reset_baseline()
+        -- Full clean slate before measuring/binding a new string. Do not reuse
+        -- prior overflow, fixed circular width, native scroll offsets, or x.
+        stop_anim(controller)
+        controller.uses_native_circular =
+            false
+        controller.measured = false
+        controller.overflow = 0
+        controller.text_width = 0
+        controller.short_x = 0
+        controller.current_x = 0
+
+        clear_label_scroll_state(
+            controller.label
+        )
+
+        controller.label:set {
+            w = content_width(),
+            long_mode = clip_mode(),
+            x = 0,
+            text_opa = 255,
+            text = controller.text or "",
+        }
+
+        pcall(function()
+            controller.label:set {
+                text_align = 0,
+            }
+        end)
+
+        controller.label:update_layout()
+    end
+
+    local function apply_static_mode()
+        stop_anim(controller)
+        controller.uses_native_circular =
+            false
+        clear_label_scroll_state(
+            controller.label
+        )
+
+        local clip = clip_mode()
 
         if controller.overflow > 0 then
+            controller.label:set {
+                w = controller.width,
+                long_mode = clip,
+                text = controller.text or "",
+            }
             set_x(0)
         else
+            -- Short labels omit a fixed width so x centering matches the
+            -- pre-optimization Now Playing layout contract.
+            controller.label:set {
+                w = nil,
+                long_mode = clip,
+                text = controller.text or "",
+            }
             set_x(controller.short_x)
         end
 
         controller.label:set {
             text_opa = 255,
         }
+
+        if controller.overflow <= 0 then
+            controller.label:update_layout()
+        end
     end
 
-    local function animate_to(
-        generation,
-        target,
-        done_callback
-    )
-        local start =
-            controller.current_x
+    local function begin_native_circular()
+        stop_anim(controller)
 
-        local distance =
-            math.abs(target - start)
+        local circular =
+            long_mode_value(
+                "LONG_SCROLL_CIRCULAR"
+            )
 
-        if distance <= 0 then
-            done_callback()
+        if circular == nil then
+            return false
+        end
+
+        set_x(0)
+        controller.label:set {
+            w = controller.width,
+            long_mode = circular,
+            text = controller.text or "",
+            text_opa = 255,
+        }
+        controller.uses_native_circular =
+            true
+        controller.current_x = 0
+        return true
+    end
+
+    local function begin_anim_cycle()
+        stop_anim(controller)
+        controller.uses_native_circular =
+            false
+        clear_label_scroll_state(
+            controller.label
+        )
+
+        local travel =
+            controller.overflow +
+            CIRCULAR_GAP_PX
+
+        if travel <= 0 then
+            apply_static_mode()
             return
         end
 
@@ -262,136 +283,72 @@ function M.create(parent, options)
             math.max(
                 controller.min_duration_ms,
                 math.floor(
-                    distance *
+                    travel *
                     controller.ms_per_pixel
                 )
             )
 
-        local steps =
-            math.max(
-                1,
-                math.ceil(
-                    duration /
-                    controller.step_ms
-                )
-            )
-
-        local index = 0
-
-        local function advance()
-            if controller.generation ~=
-                    generation or
-                not controller.active or
-                controller.destroyed then
-                return
-            end
-
-            index = index + 1
-
-            local progress =
-                math.min(
-                    1,
-                    index / steps
-                )
-
-            set_x(
-                start +
-                (target - start) *
-                progress
-            )
-
-            if progress >= 1 then
-                done_callback()
-                return
-            end
-
-            schedule(
-                controller,
-                controller.step_ms,
-                generation,
-                advance
-            )
-        end
-
-        schedule(
-            controller,
-            controller.step_ms,
-            generation,
-            advance
-        )
-    end
-
-    local function begin_cycle()
-        if not controller.active or
-            not controller.measured or
-            controller.overflow <= 0 or
-            controller.destroyed then
-            return
-        end
-
-        controller.generation =
-            controller.generation + 1
+        set_x(0)
+        controller.label:set {
+            w = content_width(),
+            long_mode = clip_mode(),
+            text = controller.text or "",
+            text_opa = 255,
+        }
 
         local generation =
             controller.generation
 
-        set_x(0)
-
-        local move_forward
-        local move_backward
-
-        move_forward =
-            function()
-                if controller.generation ~=
-                        generation or
-                    not controller.active or
-                    controller.destroyed then
-                    return
-                end
-
-                animate_to(
-                    generation,
-                    -controller.overflow,
-                    function()
-                        schedule(
-                            controller,
-                            controller.hold_ms,
-                            generation,
-                            move_backward
-                        )
-                    end
+        local ok, anim = pcall(function()
+            return controller.label:Anim {
+                run = true,
+                start_value = 0,
+                end_value = -travel,
+                duration = duration,
+                repeat_count =
+                    lvgl.ANIM_REPEAT_INFINITE or
+                    -1,
+                path = "linear",
+                exec_cb = function(
+                    animated_object,
+                    position
                 )
-            end
-
-        move_backward =
-            function()
-                if controller.generation ~=
-                        generation or
-                    not controller.active or
-                    controller.destroyed then
-                    return
-                end
-
-                animate_to(
-                    generation,
-                    0,
-                    function()
-                        schedule(
-                            controller,
-                            controller.hold_ms,
-                            generation,
-                            move_forward
-                        )
+                    if controller.destroyed or
+                        controller.generation ~=
+                            generation or
+                        not controller.active then
+                        return
                     end
-                )
-            end
 
-        schedule(
-            controller,
-            controller.hold_ms,
-            generation,
-            move_forward
-        )
+                    controller.current_x =
+                        math.floor(position)
+                    animated_object:set {
+                        x = controller.current_x,
+                    }
+                end,
+            }
+        end)
+
+        if ok then
+            controller.anim = anim
+        else
+            apply_static_mode()
+        end
+    end
+
+    local function begin_scroll()
+        if controller.destroyed or
+            not controller.active or
+            controller.overflow <= 0 then
+            apply_static_mode()
+            return
+        end
+
+        if begin_native_circular() then
+            return
+        end
+
+        begin_anim_cycle()
     end
 
     local function finish_measurement(
@@ -404,9 +361,17 @@ function M.create(parent, options)
             return
         end
 
-        -- Label coordinates can still describe the previous string until
-        -- LVGL completes a layout pass. Force that pass before measuring.
         controller.label:update_layout()
+
+        local clip = clip_mode()
+
+        controller.label:set {
+            w = content_width(),
+            long_mode = clip,
+            x = 0,
+        }
+        controller.label:update_layout()
+        controller.view:update_layout()
 
         local coordinates =
             controller.label:get_coords()
@@ -415,6 +380,7 @@ function M.create(parent, options)
             coordinates.x2 -
             coordinates.x1 + 1
 
+        controller.text_width = text_width
         controller.overflow =
             math.max(
                 0,
@@ -440,18 +406,19 @@ function M.create(parent, options)
         end
 
         controller.measured = true
-        reset_position()
 
-        -- Synchronous refreshes run immediately before the first visible
-        -- frame. Settle the newly centered x position as well as the text
-        -- width; otherwise the last refreshed label can render once at x=0.
-        if settle_position then
+        if settle_position and
+            controller.overflow <= 0 then
+            apply_static_mode()
             controller.label:update_layout()
+            return
         end
 
         if controller.active and
             controller.overflow > 0 then
-            begin_cycle()
+            begin_scroll()
+        else
+            apply_static_mode()
         end
     end
 
@@ -462,17 +429,7 @@ function M.create(parent, options)
         local generation =
             controller.generation
 
-        controller.measured = false
-        controller.overflow = 0
-        controller.short_x = 0
-        controller.current_x = 0
-
-        -- Keep replacement text visible while LVGL settles its width.
-        -- Hiding it during measurement made recycled list rows blink.
-        controller.label:set {
-            x = 0,
-            text_opa = 255,
-        }
+        reset_baseline()
 
         if immediate then
             finish_measurement(
@@ -482,16 +439,25 @@ function M.create(parent, options)
             return
         end
 
-        schedule(
-            controller,
-            35,
-            generation,
-            function()
+        lvgl.Timer {
+            period = 1,
+            repeat_count = 1,
+            cb = function()
                 finish_measurement(
                     generation
                 )
-            end
-        )
+            end,
+        }
+    end
+
+    function controller:reset()
+        if controller.destroyed then
+            return
+        end
+
+        controller.generation =
+            controller.generation + 1
+        reset_baseline()
     end
 
     function controller:set(value)
@@ -508,17 +474,22 @@ function M.create(parent, options)
         end
 
         controller.text = next_text
-        controller.generation =
-            controller.generation + 1
-        cancel_schedule(controller)
-
-        controller.label:set {
-            text = next_text,
-            x = 0,
-            text_opa = 255,
-        }
-
         measure()
+    end
+
+    function controller:rebind(
+        value,
+        immediate
+    )
+        if controller.destroyed then
+            return
+        end
+
+        -- Always fully reset prior marquee geometry before binding new text,
+        -- even when the string is unchanged after a suspend/resume cycle.
+        controller.text =
+            tostring(value or "")
+        measure(immediate ~= false)
     end
 
     function controller:refresh(
@@ -528,7 +499,6 @@ function M.create(parent, options)
             return
         end
 
-        cancel_schedule(controller)
         measure(immediate == true)
     end
 
@@ -555,7 +525,6 @@ function M.create(parent, options)
             w = controller.width,
         }
 
-        cancel_schedule(controller)
         measure()
     end
 
@@ -566,9 +535,17 @@ function M.create(parent, options)
 
         controller.active = true
 
-        if controller.measured and
-            controller.overflow > 0 then
-            begin_cycle()
+        if not controller.measured then
+            measure(true)
+            return
+        end
+
+        if controller.overflow > 0 then
+            begin_scroll()
+        else
+            -- Fitting titles must re-assert centered static geometry. A prior
+            -- long track can leave fixed width / x=0 until this runs.
+            apply_static_mode()
         end
     end
 
@@ -580,8 +557,9 @@ function M.create(parent, options)
         controller.active = false
         controller.generation =
             controller.generation + 1
-        cancel_schedule(controller)
-        reset_position()
+        -- Stop must not keep the previous track's circular/fixed-width layout.
+        -- Reset to a neutral baseline; the next set/rebind remasures.
+        reset_baseline()
     end
 
     function controller:destroy()
@@ -589,10 +567,25 @@ function M.create(parent, options)
         controller.destroyed = true
         controller.generation =
             controller.generation + 1
-        cancel_schedule(controller)
+        stop_anim(controller)
+        clear_label_scroll_state(
+            controller.label
+        )
     end
 
-    controller:set(options.text or "")
+    if options.text ~= nil then
+        controller:rebind(
+            options.text,
+            true
+        )
+    else
+        controller.text = ""
+        reset_baseline()
+    end
+
+    if controller.active then
+        controller:start()
+    end
 
     return controller
 end

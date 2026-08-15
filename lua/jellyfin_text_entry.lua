@@ -471,10 +471,14 @@ local TextEntryScreen =
                 )
 
             self.space_button =
-                add_text_action_button(
+                add_action_button(
                     47,
                     "text-entry:space",
-                    "_",
+                    {
+                        {6, 11, 14, 1},
+                        {6, 8, 1, 4},
+                        {19, 8, 1, 4},
+                    },
                     function()
                         self:insert_space()
                     end
@@ -502,18 +506,18 @@ local TextEntryScreen =
                     119,
                     "text-entry:confirm",
                     {
-                        {6, 11, 1, 1},
                         {7, 12, 1, 1},
                         {8, 13, 1, 1},
                         {9, 14, 1, 1},
-                        {10, 13, 1, 1},
-                        {11, 12, 1, 1},
-                        {12, 11, 1, 1},
-                        {13, 10, 1, 1},
-                        {14, 9, 1, 1},
-                        {15, 8, 1, 1},
-                        {16, 7, 1, 1},
-                        {17, 6, 1, 1},
+                        {10, 15, 1, 1},
+                        {11, 14, 1, 1},
+                        {12, 13, 1, 1},
+                        {13, 12, 1, 1},
+                        {14, 11, 1, 1},
+                        {15, 10, 1, 1},
+                        {16, 9, 1, 1},
+                        {17, 8, 1, 1},
+                        {18, 7, 1, 1},
                     },
                     function()
                         self:submit()
@@ -741,6 +745,10 @@ local TextEntryScreen =
                     local accepted, message =
                         self.on_submit(name)
 
+                    if accepted == "handled" then
+                        return true
+                    end
+
                     if accepted == false then
                         self.preview_label:set {
                             text =
@@ -788,7 +796,7 @@ local TextEntryScreen =
                         "confirm",
                     },
                     action_icons = {
-                        space = "underscore",
+                        space = "bounded_line",
                         backspace_max_thickness = 1,
                         confirm_max_thickness = 1,
                     },
@@ -815,12 +823,14 @@ local TextEntryScreen =
                 self
             )
 
-            -- The encoder starts in normal list-navigation mode. Pressing the
-            -- carousel captures it; Back releases it before leaving the page.
-            pcall(
-                controls.set_encoder_handler,
-                nil
-            )
+            if self.initial_carousel_active then
+                self:enter_carousel()
+            else
+                pcall(
+                    controls.set_encoder_handler,
+                    nil
+                )
+            end
         end,
 
         on_hide = function(self)

@@ -1,4 +1,10 @@
 local device = require("device")
+local jellyfin_artist_identity =
+    require("jellyfin_artist_identity")
+local jellyfin_album_identity =
+    require("jellyfin_album_identity")
+local jellyfin_track_identity =
+    require("jellyfin_track_identity")
 local sync_manifest_cache =
     require("sync_manifest_cache")
 local index_generation =
@@ -33,6 +39,14 @@ local function normalized_text(
     value,
     fallback
 )
+    if value == nil then
+        return fallback or ""
+    end
+
+    if type(value) == "number" then
+        value = tostring(value)
+    end
+
     if type(value) == "string" and
         value ~= "" then
         return value
@@ -131,11 +145,20 @@ local function track_sort(left, right)
             right_track
     end
 
+    local left_title =
+        normalized_key(left.title)
+    local right_title =
+        normalized_key(right.title)
+
+    if left_title ~= right_title then
+        return left_title < right_title
+    end
+
     return normalized_key(
-        left.title
+        left.jellyfin_id or left.id
     ) <
         normalized_key(
-            right.title
+            right.jellyfin_id or right.id
         )
 end
 
@@ -174,12 +197,16 @@ end
 
 local function track_from_item(item)
     local jellyfin_id =
+        jellyfin_track_identity.stable_id(
+            item
+        ) or
         normalized_text(
             item.jellyfin_id,
             item.id
         )
 
-    if jellyfin_id == "" then
+    if jellyfin_id == nil or
+        jellyfin_id == "" then
         return nil
     end
 
@@ -200,44 +227,80 @@ local function track_from_item(item)
         )
 
     local album_id =
-        normalized_text(
-            item.album_id,
-            item.parent_id
-        )
+        jellyfin_album_identity.album_id(
+            {
+                kind = "track",
+                album_id = item.album_id,
+                parent_id = item.parent_id,
+                jellyfin_album_id =
+                    item.jellyfin_album_id,
+            }
+        ) or ""
 
+    local album_artist_id =
+        jellyfin_artist_identity
+            .album_artist_id(item) or ""
     local artist_id =
-        normalized_text(
-            item.artist_id,
-            item.album_artist_id
+        jellyfin_artist_identity
+            .canonical_id(
+                item.artist_id or
+                item.jellyfin_artist_id
+            ) or
+        album_artist_id or
+        ""
+
+    local album_key =
+        jellyfin_album_identity
+            .track_album_key(
+                {
+                    kind = "track",
+                    album_id =
+                        album_id ~= "" and
+                        album_id or nil,
+                    album = album,
+                    artist = artist,
+                    album_artist =
+                        item.album_artist,
+                }
+            )
+
+    local artist_key =
+        jellyfin_artist_identity
+            .canonical_key(
+                {
+                    artist_id = artist_id,
+                    album_artist_id =
+                        album_artist_id,
+                    artist = artist,
+                }
+            )
+
+    local track_key =
+        jellyfin_track_identity.key(
+            {
+                jellyfin_id = jellyfin_id,
+                id = jellyfin_id,
+                album_key = album_key,
+                album_id =
+                    album_id ~= "" and
+                    album_id or nil,
+                album = album,
+                artist = artist,
+                title = item.title,
+                disc = item.disc or
+                    item.disc_number,
+                track = item.track or
+                    item.track_number or
+                    item.IndexNumber,
+            }
         )
-
-    local album_key
-
-    if album_id ~= "" then
-        album_key =
-            "id:" .. album_id
-    else
-        album_key =
-            "name:" ..
-            normalized_key(artist) ..
-            "\0" ..
-            normalized_key(album)
-    end
-
-    local artist_key
-
-    if artist_id ~= "" then
-        artist_key =
-            "id:" .. artist_id
-    else
-        artist_key =
-            "name:" ..
-            normalized_key(artist)
-    end
 
     return {
         id = jellyfin_id,
         jellyfin_id = jellyfin_id,
+        -- Canonical track key lives beside bare media ids so list selection
+        -- (which prefers `key`) keeps using bare Jellyfin ids for resume.
+        track_key = track_key,
         title =
             normalized_text(
                 item.title,
@@ -248,11 +311,26 @@ local function track_from_item(item)
         album_id = album_id,
         album_key = album_key,
         artist_id = artist_id,
+        album_artist_id =
+            album_artist_id,
         artist_key = artist_key,
         duration =
             tonumber(
                 item.duration
             ) or 0,
+        -- Local New/Old is based on when the item became available on this
+        -- device. New downloads carry local_added_at in the durable manifest.
+        -- Older manifests fall back to their existing date so migration stays
+        -- stable instead of reshuffling on every boot.
+        local_added_at =
+            normalized_text(
+                item.local_added_at or
+                item.downloaded_at,
+                normalized_text(
+                    item.date_created,
+                    ""
+                )
+            ),
         date_created =
             normalized_text(
                 item.date_created,
@@ -376,6 +454,11 @@ function M.from_manifest(
                             track.album_key,
                         id =
                             track.album_id,
+                        jellyfin_id =
+                            track.album_id ~=
+                                "" and
+                            track.album_id or
+                            nil,
                         name =
                             track.album,
                         artist =
@@ -384,6 +467,8 @@ function M.from_manifest(
                             track.artist_key,
                         tracks = {},
                         track_count = 0,
+                        local_added_at =
+                            track.local_added_at,
                         date_created =
                             track.date_created,
                         artwork =
@@ -406,6 +491,12 @@ function M.from_manifest(
                         )
                 end
 
+                album.local_added_at =
+                    newest_date(
+                        album.local_added_at,
+                        track.local_added_at
+                    )
+
                 album.date_created =
                     newest_date(
                         album.date_created,
@@ -416,48 +507,145 @@ function M.from_manifest(
                     album.tracks,
                     track
                 )
-
-                local artist =
-                    artists_by_key[
-                        track.artist_key
-                    ]
-
-                if not artist then
-                    artist = {
-                        key =
-                            track.artist_key,
-                        id =
-                            track.artist_id,
-                        name =
-                            track.artist,
-                        releases_by_key =
-                            {},
-                        releases = {},
-                        track_count = 0,
-                        release_count = 0,
-                        date_created =
-                            track.date_created,
-                    }
-
-                    artists_by_key[
-                        track.artist_key
-                    ] = artist
-                end
-
-                artist.track_count =
-                    artist.track_count + 1
-
-                artist.date_created =
-                    newest_date(
-                        artist.date_created,
-                        track.date_created
-                    )
-
-                artist.releases_by_key[
-                    track.album_key
-                ] = album
             end
         end
+    end
+
+    local function resolve_album_artist(album)
+        local album_artist_id = nil
+        local votes = {}
+        local preferred_name =
+            album.artist or
+            "Unknown Artist"
+
+        for _, track in ipairs(
+            album.tracks or {}
+        ) do
+            local track_album_artist_id =
+                jellyfin_artist_identity
+                    .canonical_id(
+                        track.album_artist_id
+                    )
+
+            if track_album_artist_id and
+                not album_artist_id then
+                album_artist_id =
+                    track_album_artist_id
+            end
+
+            local track_artist_id =
+                jellyfin_artist_identity
+                    .canonical_id(
+                        track.artist_id
+                    )
+
+            if track_artist_id then
+                local vote =
+                    votes[track_artist_id]
+
+                if not vote then
+                    vote = {
+                        count = 0,
+                        name =
+                            track.artist or
+                            preferred_name,
+                    }
+                    votes[track_artist_id] =
+                        vote
+                end
+
+                vote.count = vote.count + 1
+
+                if type(track.artist) ==
+                        "string" and
+                    track.artist ~= "" then
+                    vote.name = track.artist
+                end
+            elseif type(track.artist) ==
+                    "string" and
+                track.artist ~= "" then
+                preferred_name = track.artist
+            end
+        end
+
+        local majority_id = nil
+        local majority_count = 0
+        local majority_name = preferred_name
+
+        for artist_id, vote in pairs(
+            votes
+        ) do
+            if vote.count >
+                    majority_count then
+                majority_id = artist_id
+                majority_count = vote.count
+                majority_name = vote.name
+            end
+        end
+
+        local resolved_id =
+            album_artist_id or
+            majority_id
+        local resolved_name =
+            majority_name or
+            preferred_name
+        local artist_key,
+            stable_id =
+            jellyfin_artist_identity
+                .canonical_key(
+                    {
+                        artist_id =
+                            resolved_id,
+                        artist =
+                            resolved_name,
+                    }
+                )
+
+        album.artist = resolved_name
+        album.artist_id =
+            stable_id or ""
+        album.artist_key = artist_key
+
+        return artist_key, stable_id, resolved_name
+    end
+
+    local function ensure_artist(
+        artist_key,
+        stable_id,
+        name,
+        seed
+    )
+        local artist =
+            artists_by_key[artist_key]
+
+        if artist then
+            return artist
+        end
+
+        artist = {
+            key = artist_key,
+            id = stable_id or "",
+            jellyfin_id =
+                stable_id or nil,
+            name = name,
+            releases_by_key = {},
+            releases = {},
+            track_count = 0,
+            release_count = 0,
+            local_added_at =
+                seed and
+                seed.local_added_at or
+                "",
+            date_created =
+                seed and
+                seed.date_created or
+                "",
+        }
+
+        artists_by_key[artist_key] =
+            artist
+
+        return artist
     end
 
     local albums = {}
@@ -473,6 +661,36 @@ function M.from_manifest(
         album.track_count =
             #album.tracks
 
+        local artist_key,
+            stable_id,
+            resolved_name =
+            resolve_album_artist(album)
+
+        local artist =
+            ensure_artist(
+                artist_key,
+                stable_id,
+                resolved_name,
+                album
+            )
+
+        artist.track_count =
+            artist.track_count +
+            album.track_count
+        artist.local_added_at =
+            newest_date(
+                artist.local_added_at,
+                album.local_added_at
+            )
+        artist.date_created =
+            newest_date(
+                artist.date_created,
+                album.date_created
+            )
+        artist.releases_by_key[
+            album.key
+        ] = album
+
         table.insert(
             albums,
             album
@@ -483,6 +701,79 @@ function M.from_manifest(
         albums,
         release_sort
     )
+
+    -- Coalesce incomplete name: fallbacks into a unique stable-ID artist with
+    -- the same display name. Distinct stable IDs that share a name stay apart.
+    local id_artist_by_name = {}
+
+    for key, artist in pairs(
+        artists_by_key
+    ) do
+        if key:sub(1, 3) == "id:" then
+            local name_key =
+                jellyfin_artist_identity
+                    .normalize_name(
+                        artist.name
+                    )
+            local existing =
+                id_artist_by_name[name_key]
+
+            if existing == nil then
+                id_artist_by_name[name_key] =
+                    artist
+            else
+                -- Multiple stable IDs share this display name; do not merge
+                -- name-fallback rows into either of them by name alone.
+                id_artist_by_name[name_key] =
+                    false
+            end
+        end
+    end
+
+    for key, artist in pairs(
+        artists_by_key
+    ) do
+        if key:sub(1, 5) == "name:" then
+            local name_key =
+                jellyfin_artist_identity
+                    .normalize_name(
+                        artist.name
+                    )
+            local target =
+                id_artist_by_name[name_key]
+
+            if type(target) == "table" then
+                for album_key, album in pairs(
+                    artist.releases_by_key or {}
+                ) do
+                    target.releases_by_key[
+                        album_key
+                    ] = album
+                    album.artist_key =
+                        target.key
+                    album.artist_id =
+                        target.id or ""
+                    album.artist =
+                        target.name
+                end
+
+                target.track_count =
+                    target.track_count +
+                    artist.track_count
+                target.local_added_at =
+                    newest_date(
+                        target.local_added_at,
+                        artist.local_added_at
+                    )
+                target.date_created =
+                    newest_date(
+                        target.date_created,
+                        artist.date_created
+                    )
+                artists_by_key[key] = nil
+            end
+        end
+    end
 
     local artists = {}
 

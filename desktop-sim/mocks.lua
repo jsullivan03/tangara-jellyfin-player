@@ -1,5 +1,21 @@
 local M = {}
 
+local function dead_lvgl_callback_error(value)
+    local message = tostring(value or "")
+
+    return
+        message:find(
+            "expected lua lvgl object, got null",
+            1,
+            true
+        ) ~= nil or
+        message:find(
+            "attempt to use a deleted lvgl object",
+            1,
+            true
+        ) ~= nil
+end
+
 local function property(initial_value)
     local value = initial_value
     local callbacks = {}
@@ -13,25 +29,53 @@ local function property(initial_value)
     function p:set(new_value)
         value = new_value
 
-        for _, callback in ipairs(callbacks) do
-            callback(value)
+        for _, binding in ipairs(callbacks) do
+            if binding.active then
+                local ok, callback_error =
+                    pcall(
+                        binding.callback,
+                        value
+                    )
+
+                if not ok then
+                    if dead_lvgl_callback_error(
+                        callback_error
+                    ) then
+                        binding.active = false
+                        binding.callback =
+                            function()
+                            end
+                    else
+                        error(callback_error, 0)
+                    end
+                end
+            end
         end
 
         return true
     end
 
     function p:bind(callback)
-        table.insert(callbacks, callback)
+        local binding = {
+            property = p,
+            callback = callback,
+            active = true,
+        }
+
+        function binding:unbind()
+            self.active = false
+            self.callback = function()
+            end
+        end
+
+        table.insert(callbacks, binding)
 
         -- Tangara properties run their binding once immediately.
         callback(value)
 
         -- The real firmware returns a binding userdata. A table is sufficient
         -- for the simulator because the UI only keeps a reference to it.
-        return {
-            property = p,
-            callback = callback,
-        }
+        return binding
     end
 
     return p
@@ -407,13 +451,18 @@ function M.install(lvgl)
     end
 
     local function rebuild_shuffle(
-        preserve_current
+        preserve_current,
+        force
     )
         shuffle_order = {}
         shuffle_cursor = nil
 
-        if not queue.random:get() or
-            #queued_ids == 0 then
+        if #queued_ids == 0 then
+            return
+        end
+
+        if not force and
+            not queue.random:get() then
             return
         end
 
@@ -462,16 +511,19 @@ function M.install(lvgl)
     )
         enabled = enabled == true
 
-        base_random_set(
-            self,
-            enabled
-        )
-
         if enabled then
-            -- Match the firmware: enabling shuffle during playback preserves
-            -- the current track and randomizes only subsequent navigation.
-            rebuild_shuffle(true)
+            -- Rebuild before notifying bindings so queue_view / refresh see a
+            -- consistent shuffle_order instead of rebuilding twice.
+            rebuild_shuffle(true, true)
+            base_random_set(
+                self,
+                true
+            )
         else
+            base_random_set(
+                self,
+                false
+            )
             shuffle_order = {}
             shuffle_cursor = nil
         end
@@ -857,6 +909,19 @@ function M.install(lvgl)
         end
     end
 
+    local function destroy_screen(value)
+        if not value or not value.root then
+            return
+        end
+
+        if value.on_destroy then
+            value:on_destroy()
+        end
+
+        value.root:delete()
+        value.root = nil
+    end
+
     local function show_screen(value)
         current_screen = value
 
@@ -876,6 +941,12 @@ function M.install(lvgl)
     function backstack.reset(value)
         if current_screen then
             hide_screen(current_screen)
+            destroy_screen(current_screen)
+        end
+
+        for _, stacked in ipairs(screen_stack) do
+            hide_screen(stacked)
+            destroy_screen(stacked)
         end
 
         screen_stack = {}
@@ -896,8 +967,47 @@ function M.install(lvgl)
             return
         end
 
-        hide_screen(current_screen)
+        local retired = current_screen
+
+        hide_screen(retired)
         show_screen(table.remove(screen_stack))
+        destroy_screen(retired)
+    end
+
+    -- Match the small read-only inspection surface exposed by the firmware
+    -- simulator backstack. This lets lifecycle regressions exercise the same
+    -- stack used by desktop-sim/jellyfin_library.lua instead of silently
+    -- testing only the native test backstack.
+    function backstack.current()
+        return current_screen
+    end
+
+    function backstack.depth()
+        return #screen_stack
+    end
+
+    function backstack.focus(object)
+        lvgl.group.focus_obj(object)
+    end
+
+    function backstack.is_focused(object)
+        return
+            lvgl.group.get_default():
+                get_focused() == object
+    end
+
+    function backstack.flush()
+        if current_screen and
+            current_screen.root then
+            pcall(
+                function()
+                    current_screen.root:
+                        update_layout()
+                    current_screen.root:
+                        invalidate()
+                end
+            )
+        end
     end
 
     ---------------------------------------------------------------------------

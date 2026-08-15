@@ -299,8 +299,8 @@ assert(
         next_media.background ==
             "track-background-3" and
         next_media.title == "Third" and
-        next_media.cover_x == 47 and
-        next_media.cover_zoom == 280 and
+        next_media.cover_x == 44 and
+        next_media.cover_zoom == 256 and
         next_media.title_y == 90 and
         next_media.artist_y == 100 and
         next_media.background_y == 0 and

@@ -24,6 +24,8 @@ package.preload["sync_manifest_cache"] =
 
 local index =
     require("jellyfin_local_index")
+local jellyfin_sort =
+    require("jellyfin_sort")
 
 local root =
     "/tmp/tangara-local-index-test"
@@ -132,6 +134,18 @@ assert(
 assert(
     library.artists[1].date_created ==
         "2026-03-01T00:00:00Z"
+)
+
+local recent_albums =
+    jellyfin_sort.sort(
+        "local-index-recent-test",
+        library.albums,
+        "albums"
+    )
+assert(
+    recent_albums[1].id == "album-a" and
+        recent_albums[2].id == "single-b",
+    "Local recent albums did not use manifest Jellyfin DateCreated"
 )
 
 print(

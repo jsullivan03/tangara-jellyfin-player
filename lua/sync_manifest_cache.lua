@@ -6,6 +6,29 @@ local index_generation =
 
 local M = {}
 
+-- Keep the decoded manifest in process memory. Collection screens call
+-- jellyfin_playback.local_item() once per track while binding rows; without a
+-- memory cache each call re-reads and re-parses the on-disk JSON and freezes
+-- navigation for hundreds of milliseconds.
+local memory_manifest = nil
+local memory_from_backup = false
+local memory_valid = false
+
+local function clear_memory_cache()
+    memory_manifest = nil
+    memory_from_backup = false
+    memory_valid = false
+end
+
+local function store_memory_cache(
+    manifest,
+    from_backup
+)
+    memory_manifest = manifest
+    memory_from_backup = from_backup == true
+    memory_valid = manifest ~= nil
+end
+
 local function cache_paths()
     local root, root_error = device.storage_root()
 
@@ -163,11 +186,26 @@ function M.save(text)
     index_generation.invalidate(
         "manifest cache saved"
     )
+    store_memory_cache(
+        temporary_manifest,
+        false
+    )
 
     return true
 end
 
+function M.invalidate_memory(reason)
+    clear_memory_cache()
+    return reason
+end
+
 function M.load()
+    if memory_valid and memory_manifest ~= nil then
+        return memory_manifest,
+            nil,
+            memory_from_backup
+    end
+
     local paths, path_error = cache_paths()
 
     if not paths then
@@ -177,12 +215,20 @@ function M.load()
     local manifest, manifest_error = load_path(paths.current)
 
     if manifest then
+        store_memory_cache(
+            manifest,
+            false
+        )
         return manifest, nil, false
     end
 
     local backup, backup_error = load_path(paths.backup)
 
     if backup then
+        store_memory_cache(
+            backup,
+            true
+        )
         return backup, nil, true
     end
 

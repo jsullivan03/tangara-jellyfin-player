@@ -251,6 +251,71 @@ lvgl.Timer {
                             "id:artist-1",
                     "list Go to artist did not push the matching local artist page"
                 )
+
+                local custom_activated =
+                    false
+                assert(
+                    sheet:open_custom {
+                        {
+                            id = "cancel",
+                            label = "Cancel",
+                        },
+                        {
+                            id = "download",
+                            label =
+                                "Download to this Tangara",
+                            activate = function()
+                                custom_activated =
+                                    true
+                            end,
+                        },
+                    }
+                )
+                owner.custom_activated =
+                    function()
+                        return custom_activated
+                    end
+            end
+        )
+
+        if not ok then
+            io.stderr:write(
+                tostring(failure),
+                "\n"
+            )
+            os.exit(1)
+        end
+
+    end,
+}
+
+lvgl.Timer {
+    period = 1000,
+    repeat_count = 1,
+    cb = function()
+        local ok, failure = pcall(
+            function()
+                local state = sheet:state()
+                assert(
+                    state.open and
+                        not state.animating and
+                        state.highlighted_action ==
+                            "cancel",
+                    "custom confirmation did not focus its first visible action"
+                )
+                local group =
+                    assert(lvgl.group.get_default())
+                group:focus_next()
+                assert(
+                    sheet:state()
+                        .highlighted_action ==
+                        "download",
+                    "rotary focus could not move to the custom confirmation action"
+                )
+                assert(
+                    sheet:activate("download")
+                )
+                assert(owner.custom_activated())
             end
         )
 
@@ -263,7 +328,7 @@ lvgl.Timer {
         end
 
         print(
-            "Track action sheet opens from list rows, restores focus, and keeps playlist context"
+            "Track action sheet opens from list rows, restores focus, and supports rotary custom confirmations"
         )
         os.exit(0)
     end,

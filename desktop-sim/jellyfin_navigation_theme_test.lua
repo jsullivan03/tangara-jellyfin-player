@@ -16,6 +16,17 @@ package.loaded["backstack"] =
     simulator.backstack
 
 package.loaded["sync_config"] = {
+    load = function()
+        return {
+            ssid = "",
+            password = "",
+            server_url = "",
+        }
+    end,
+    valid = function()
+        return false,
+            "sync server URL is required"
+    end,
     status = function()
         return {
             connected = false,

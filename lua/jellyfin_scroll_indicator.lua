@@ -169,6 +169,26 @@ function M.create(
             )
     end
 
+    function model:set_track_height(height)
+        height =
+            math.max(
+                1,
+                math.floor(
+                    tonumber(height) or
+                    self.height
+                )
+            )
+
+        self.height = height
+        self.minimum_thumb_height =
+            math.min(
+                self.minimum_thumb_height,
+                self.height
+            )
+
+        return true
+    end
+
     function model:update(
         item_count,
         selected_index
@@ -232,6 +252,34 @@ function M.create(
             y = self.y + thumb_y,
             h = thumb_height,
         }
+
+        -- The indicator is floating inside a scrollable list.  Its initial
+        -- style can be calculated before LVGL has laid out the newly-bound
+        -- rows, so explicitly invalidate it whenever its geometry changes.
+        -- Subsequent focus updates use this same path.
+        self.thumb:invalidate()
+    end
+
+    function model:initialize(
+        item_count,
+        selected_index
+    )
+        -- Force the first list layout after its rows and total count have
+        -- been bound, then calculate and redraw the thumb.  This keeps a new
+        -- screen from displaying geometry left over from the previously
+        -- loaded LVGL screen until the first wheel event.
+        pcall(
+            function()
+                list:update_layout()
+            end
+        )
+
+        self:update(
+            item_count,
+            selected_index
+        )
+
+        self.thumb:invalidate()
     end
 
     model:update(0, 1)

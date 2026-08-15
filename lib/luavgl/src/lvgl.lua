@@ -1472,6 +1472,7 @@ end
 --- @field zoom integer
 --- @field antialias boolean
 --- @field pivot table
+--- @field inner_align integer
 ---
 
 --- Label style

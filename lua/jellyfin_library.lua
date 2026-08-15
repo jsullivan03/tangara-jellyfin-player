@@ -1,8 +1,11 @@
 local backstack = require("backstack")
+local device = require("device")
 local jellyfin_collection_playback =
     require("jellyfin_collection_playback")
 local jellyfin_list_ui =
     require("jellyfin_list_ui")
+local jellyfin_mini_player =
+    require("jellyfin_mini_player")
 local jellyfin_now_playing =
     require("jellyfin_now_playing")
 local jellyfin_playback =
@@ -17,14 +20,251 @@ local jellyfin_sort =
     require("jellyfin_sort")
 local jellyfin_track_action_sheet =
     require("jellyfin_track_action_sheet")
+local jellyfin_virtual_track_list =
+    require("jellyfin_virtual_track_list")
+local jellyfin_track_identity =
+    require("jellyfin_track_identity")
+local jellyfin_playback_session =
+    require("jellyfin_playback_session")
+local lvgl = require("lvgl")
 local screen = require("screen")
 local sync_library_view =
     require("sync_library_view")
 local sync_operation_queue =
     require("sync_operation_queue")
+local sync_runtime = require("sync_runtime")
 
 local LibraryScreen
 local CollectionScreen
+local function playable_tracks(items)
+    local result = {}
+
+    for _, track in ipairs(items or {}) do
+        if jellyfin_playback.local_item(track) then
+            result[#result + 1] = track
+        end
+    end
+
+    return result
+end
+
+local active_local_screen = nil
+local local_poll_timer = nil
+
+local function runtime_generation()
+    if type(sync_runtime.state_generation) ==
+            "function" then
+        return sync_runtime.state_generation()
+    end
+
+    return 0
+end
+
+local function poll_local_screen()
+    local self = active_local_screen
+
+    if not self or not self.ui_active then
+        return
+    end
+
+    local generation = runtime_generation()
+
+    if generation ==
+        (self.download_state_generation or -1) then
+        return
+    end
+
+    self.download_state_generation = generation
+
+    if type(self.refresh_download_state) ==
+            "function" then
+        self:refresh_download_state()
+    end
+end
+
+local function ensure_local_poll_timer()
+    if local_poll_timer then
+        return
+    end
+
+    local_poll_timer = lvgl.Timer {
+        period = 250,
+        cb = poll_local_screen,
+    }
+end
+
+local function create_local_root(
+    self,
+    title
+)
+    jellyfin_list_ui.create_root(
+        self,
+        title
+    )
+    jellyfin_mini_player.attach(self)
+end
+
+local function local_on_show(self)
+    active_local_screen = self
+    ensure_local_poll_timer()
+
+    local previous_generation =
+        self.download_state_generation
+    local generation = runtime_generation()
+    local should_refresh =
+        previous_generation ~= nil and
+        previous_generation ~= generation
+
+    self.download_state_generation =
+        generation
+
+    -- A newly started session can make the mini-player appear for the first
+    -- time while returning from Now Playing. Reserve its list space before
+    -- restoring the pooled viewport and focus, otherwise resizing afterward
+    -- can rebind the focused row object to the adjacent logical track.
+    if self.mini_player then
+        self.mini_player:refresh()
+    end
+
+    -- Playlist/Favorites track lists must re-select the user's track before
+    -- install_controls / schedule_resume_repaint. Play-button entry leaves
+    -- selected_item_id=control:play otherwise and wipes track chrome.
+    if self.virtual_track_list and
+        type(
+            jellyfin_playback_session
+                .restore_track_list_resume
+        ) == "function" then
+        jellyfin_playback_session
+            .restore_track_list_resume(self)
+
+        if self.track_list_resume or
+            self.album_track_resume then
+            local snapshot =
+                self.track_list_resume or
+                self.album_track_resume
+            local track_key =
+                snapshot.track_key or
+                snapshot.track_id
+            local lock_generation =
+                (
+                    self.track_list_resume_lock_generation or
+                    0
+                ) + 1
+
+            self.track_list_resume_lock_generation =
+                lock_generation
+            self.discography_selection_lock =
+                track_key
+            self.selected_item_id = track_key
+
+            if type(
+                self.selection_object_for_id
+            ) == "function" then
+                local object =
+                    self.selection_object_for_id(
+                        track_key
+                    )
+
+                if object then
+                    self.initial_focus_object =
+                        object
+                    self.first_row = object
+                end
+            end
+
+            lvgl.Timer {
+                period = 1,
+                repeat_count = 1,
+                cb = function()
+                    if self.track_list_resume_lock_generation ~=
+                            lock_generation then
+                        return
+                    end
+
+                    if type(
+                        jellyfin_playback_session
+                            .clear_track_list_resume_lock
+                    ) == "function" then
+                        jellyfin_playback_session
+                            .clear_track_list_resume_lock(
+                                self
+                            )
+                    end
+                end,
+            }
+        end
+    end
+
+    jellyfin_list_ui.install_controls(self)
+
+    if self.mini_player then
+        self.mini_player:on_show()
+    end
+
+    -- create_ui already applied the current download state. Rebinding every
+    -- track on each show re-enters local_item/manifest work and stalls
+    -- Favorites and Now Playing navigation. Refresh only when sync reports a
+    -- newer generation after this screen has already been shown once.
+    if should_refresh and
+        type(self.refresh_download_state) ==
+            "function" then
+        self:refresh_download_state()
+    end
+end
+
+local function local_on_hide(self)
+    if active_local_screen == self then
+        active_local_screen = nil
+    end
+
+    if self.virtual_track_list and
+        type(
+            jellyfin_playback_session
+                .capture_track_list_resume
+        ) == "function" then
+        jellyfin_playback_session
+            .capture_track_list_resume(self)
+    end
+
+    if self.mini_player then
+        self.mini_player:on_hide()
+    end
+
+    jellyfin_list_ui.restore_controls(self)
+end
+
+local function display_artwork_path(value)
+    if type(value) ~= "string" or
+        value == "" or
+        value:sub(1, 1) ~= "/" or
+        value:sub(1, 2) == "//" then
+        return value
+    end
+
+    local ok, root =
+        pcall(device.storage_root)
+
+    if not ok or type(root) ~= "string" or
+        root == "" or root == "/sd" then
+        return value
+    end
+
+    local display_root =
+        "/" ..
+        root:gsub("^/+", "")
+            :gsub("/+$", "")
+
+    if value == display_root or
+        value:sub(
+            1,
+            #display_root + 1
+        ) == display_root .. "/" then
+        return value
+    end
+
+    return display_root ..
+        value
+end
 
 local function artwork_path(
     collection,
@@ -45,7 +285,9 @@ local function artwork_path(
 
             if type(value) == "string" and
                 value ~= "" then
-                return value
+                return display_artwork_path(
+                    value
+                )
             end
         end
     end
@@ -260,7 +502,7 @@ end
 CollectionScreen =
     screen:new {
         create_ui = function(self)
-            jellyfin_list_ui.create_root(
+            create_local_root(
                 self,
                 self.title or "Playlist"
             )
@@ -358,9 +600,10 @@ CollectionScreen =
                     {
                         tracks =
                             function()
-                                return
+                                return playable_tracks(
                                     self.sorted_tracks or
                                     items
+                                )
                             end,
                         context = {
                             collection_kind =
@@ -371,33 +614,55 @@ CollectionScreen =
                     }
                 )
 
-            self.media_rows = {}
+            local function track_context(track)
+                return {
+                    collection_kind =
+                        self.collection_kind,
+                    collection_id =
+                        self.collection_id,
+                    entry_id =
+                        track.playlist_entry_id,
+                    queue_tracks =
+                        playable_tracks(
+                            self.sorted_tracks
+                        ),
+                }
+            end
 
-            for _, track in ipairs(
-                items
-            ) do
-                local row =
-                    jellyfin_list_ui
-                        .add_track_row(
-                            self,
-                            track,
-                            {
-                                artwork =
-                                    track_artwork_path(
-                                        track,
-                                        album_artwork
-                                    ),
-                                detail =
-                                    track.artist,
-                                on_click =
-                                    function()
-                                    end,
-                            }
-                        )
+            local function track_available(track)
+                return
+                    jellyfin_playback.local_item(
+                        track
+                    ) ~= nil
+            end
 
-                table.insert(
-                    self.media_rows,
-                    row
+            local function play_track(track)
+                if not track_available(track) then
+                    return
+                end
+
+                local played =
+                    jellyfin_playback.play(
+                        track,
+                        track_context(track)
+                    )
+
+                if played then
+                    backstack.push(
+                        jellyfin_now_playing:new()
+                    )
+                end
+            end
+
+            local function open_track(track)
+                if not track_available(track) then
+                    return
+                end
+
+                self.track_action_sheet:open(
+                    track,
+                    track_context(track),
+                    track
                 )
             end
 
@@ -411,89 +676,88 @@ CollectionScreen =
 
                 self.sorted_tracks = sorted
 
-                for index, track in ipairs(
-                    sorted
-                ) do
-                    local track_copy =
-                        track
-
-                    local context = {
-                        collection_kind =
-                            self.collection_kind,
-                        collection_id =
-                            self.collection_id,
-                        entry_id =
-                            track_copy
-                                .playlist_entry_id,
-                        queue_tracks = sorted,
-                    }
-
-                    self.media_rows[index]
-                        :update(
-                            track_copy,
+                if self.virtual_track_list then
+                    self.virtual_track_list:
+                        set_items(sorted)
+                else
+                    jellyfin_virtual_track_list
+                        .create(
+                            self,
+                            sorted,
                             {
-                                artwork =
-                                    track_artwork_path(
-                                        track_copy,
-                                        album_artwork
-                                    ),
-                                detail =
-                                    track_copy.artist,
-                                on_click =
-                                    function()
-                                        local played =
-                                            jellyfin_playback
-                                                .play(
-                                                    track_copy,
-                                                    context
+                                item_id =
+                                    function(track)
+                                        return
+                                            jellyfin_track_identity
+                                                .key(
+                                                    track
                                                 )
-
-                                        if played then
-                                            backstack.push(
-                                                jellyfin_now_playing
-                                                    :new()
-                                            )
-                                        end
                                     end,
+                                artwork =
+                                    function(track)
+                                        return
+                                            track_artwork_path(
+                                                track,
+                                                album_artwork
+                                            )
+                                    end,
+                                detail =
+                                    function(track)
+                                        return track.artist
+                                    end,
+                                available =
+                                    track_available,
+                                on_click = play_track,
                                 on_long_press =
-                                    function()
-                                        self.track_action_sheet
-                                            :open(
-                                                track_copy,
-                                                context,
-                                                track_copy
-                                            )
-                                    end,
+                                    open_track,
                             }
                         )
                 end
 
                 self.first_row =
-                    self.media_rows[1]
-                        .object
+                    self.media_rows[1].object
+            end
+
+            function self:refresh_download_state()
+                local next_library =
+                    sync_library_view.current()
+                local next_collection = nil
+
+                if type(next_library) == "table" then
+                    if self.collection_kind ==
+                            "favorites" then
+                        next_collection =
+                            next_library.favorites
+                    else
+                        next_collection =
+                            find_playlist(
+                                next_library,
+                                self.collection_id
+                            )
+                    end
+                end
+
+                if type(next_collection) ~= "table" then
+                    return
+                end
+
+                items = next_collection.items or {}
+                album_artwork =
+                    local_album_artwork()
+                self.apply_sort()
             end
 
             self.apply_sort()
-
-            jellyfin_list_ui
-                .attach_scroll_indicator(
-                    self,
-                    self.media_rows
-                )
         end,
 
-        on_show =
-            jellyfin_list_ui
-                .install_controls,
-        on_hide =
-            jellyfin_list_ui
-                .restore_controls,
+        on_show = local_on_show,
+        on_hide = local_on_hide,
     }
 
 LibraryScreen =
     screen:new {
         create_ui = function(self)
-            jellyfin_list_ui.create_root(
+            create_local_root(
                 self,
                 "Playlists"
             )
@@ -689,8 +953,7 @@ LibraryScreen =
                     self.ui_active == true
 
                 if was_active then
-                    jellyfin_list_ui
-                        .restore_controls(self)
+                    local_on_hide(self)
                 end
 
                 if self.root then
@@ -704,8 +967,7 @@ LibraryScreen =
                 self:create_ui()
 
                 if was_active then
-                    jellyfin_list_ui
-                        .install_controls(self)
+                    local_on_show(self)
                 end
             end
         end,
@@ -717,13 +979,11 @@ LibraryScreen =
                 self:request_playlist_rebuild()
             end
 
-            jellyfin_list_ui
-                .install_controls(self)
+            local_on_show(self)
         end,
 
         on_hide = function(self)
-            jellyfin_list_ui
-                .restore_controls(self)
+            local_on_hide(self)
         end,
     }
 

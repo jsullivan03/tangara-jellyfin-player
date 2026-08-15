@@ -292,8 +292,7 @@ end
 
 function M.busy()
     return session ~= nil or
-        completed_result ~= nil or
-        download.busy()
+        completed_result ~= nil
 end
 
 function M.poll()

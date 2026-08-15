@@ -3,10 +3,13 @@ local playback = require("playback")
 local queue = require("queue")
 local sync_manifest_cache =
     require("sync_manifest_cache")
+local jellyfin_track_identity =
+    require("jellyfin_track_identity")
 
 local M = {}
 local active = nil
 local queue_generation = 0
+local current_playback_order = nil
 
 local QUEUE_PLAYLIST_PATH =
     "/.tangara-jellyfin-current.playlist"
@@ -34,13 +37,32 @@ local function manifest_items_by_id(
     for _, item in ipairs(
         manifest.items or {}
     ) do
+        local stable =
+            jellyfin_track_identity.stable_id(
+                item
+            )
+
+        if stable then
+            by_id[stable] = item
+        end
+
         if type(item.jellyfin_id) ==
                 "string" then
-            by_id[item.jellyfin_id] = item
+            by_id[
+                jellyfin_track_identity
+                    .stable_id(
+                        item.jellyfin_id
+                    ) or
+                item.jellyfin_id
+            ] = item
         end
 
         if type(item.id) == "string" then
-            by_id[item.id] = item
+            by_id[
+                jellyfin_track_identity
+                    .stable_id(item.id) or
+                item.id
+            ] = item
         end
     end
 
@@ -78,15 +100,32 @@ local function local_item_from_manifest(
     root,
     verify_file
 )
-    if type(track) ~= "table" or
-        type(track.id) ~= "string" or
-        track.id == "" then
+    if type(track) ~= "table" then
+        return nil,
+            "Jellyfin track ID is missing"
+    end
+
+    local track_id =
+        jellyfin_track_identity.stable_id(
+            track
+        )
+
+    if not track_id then
         return nil,
             "Jellyfin track ID is missing"
     end
 
     local item =
-        items_by_id[track.id]
+        items_by_id[track_id] or
+        (
+            type(track.id) == "string" and
+            items_by_id[track.id]
+        ) or
+        (
+            type(track.jellyfin_id) ==
+                "string" and
+            items_by_id[track.jellyfin_id]
+        )
 
     if not item then
         return nil,
@@ -158,7 +197,10 @@ local function selected_track_matches(
             selected_entry
     end
 
-    return candidate.id == selected.id
+    return jellyfin_track_identity.same(
+        candidate,
+        selected
+    )
 end
 
 local function write_queue_playlist(
@@ -224,7 +266,7 @@ local function queue_entries(
                 candidate,
                 items_by_id,
                 root,
-                false
+                true
             )
 
         -- Collection views may contain a temporarily unavailable item. Keep
@@ -256,12 +298,16 @@ local function active_snapshot()
     end
 
     return {
+        generation = active.generation,
         track = copy_value(active.track),
         item = copy_value(active.item),
         context = copy_value(active.context),
         queue = {
             position = active.position,
             size = #active.tracks,
+            items = copy_value(
+                active.tracks
+            ),
             playlist_path =
                 active.playlist_path,
             shuffle =
@@ -511,6 +557,27 @@ function M.play_queue(
 
     playback.playing:set(true)
 
+    -- Capture the complete display order while the native queue still exposes
+    -- the full shuffled sequence. Later playback_order() calls only expose the
+    -- unplayed tail, but the Queue screen must retain earlier tracks because
+    -- Previous can still return to them.
+    active.display_shuffle = shuffle
+    active.display_order = {}
+
+    if shuffle and
+        type(current_playback_order) ==
+            "function" then
+        active.display_order =
+            current_playback_order()
+    else
+        for index = 1, #queued_tracks do
+            table.insert(
+                active.display_order,
+                index
+            )
+        end
+    end
+
     return true, active_snapshot()
 end
 
@@ -535,12 +602,254 @@ function M.play(track, context)
     )
 end
 
+local function native_shuffle_enabled()
+    return
+        queue.random and
+        type(queue.random.get) ==
+            "function" and
+        queue.random:get() == true or
+        false
+end
+
+local function sequential_source_order(count)
+    local order = {}
+
+    for position = 1, count do
+        table.insert(order, position)
+    end
+
+    return order
+end
+
+local function bump_queue_generation()
+    if not active then
+        return
+    end
+
+    queue_generation = queue_generation + 1
+    active.generation = queue_generation
+end
+
+local function display_index_of(order, source_position)
+    for index, position in ipairs(order or {}) do
+        if position == source_position then
+            return index
+        end
+    end
+
+    return nil
+end
+
+local function shuffle_unplayed_positions(positions)
+    local remaining = {}
+
+    for _, position in ipairs(positions) do
+        table.insert(remaining, position)
+    end
+
+    if #remaining <= 1 then
+        return remaining
+    end
+
+    local original = {}
+
+    for index, position in ipairs(remaining) do
+        original[index] = position
+    end
+
+    for index = #remaining, 2, -1 do
+        local swap_index =
+            math.random(1, index)
+
+        remaining[index],
+            remaining[swap_index] =
+            remaining[swap_index],
+            remaining[index]
+    end
+
+    -- Guaranteeing a visible mid-session shuffle avoids the false-"random"
+    -- case where Fisher-Yates reproduces the unplayed sequential tail.
+    local unchanged = true
+
+    for index = 1, #remaining do
+        if remaining[index] ~=
+            original[index] then
+            unchanged = false
+            break
+        end
+    end
+
+    if unchanged then
+        remaining[1],
+            remaining[#remaining] =
+            remaining[#remaining],
+            remaining[1]
+    end
+
+    return remaining
+end
+
+-- Mid-session Shuffle must keep history + current fixed and permute only the
+-- still-unplayed source positions. Native queue.random alone permutes the
+-- entire queue; merging that with a sequential display_order often rebuilds
+-- the original order after dedupe.
+local function apply_mid_session_shuffle()
+    local count = #active.tracks
+    local current =
+        math.max(
+            1,
+            math.min(
+                count,
+                math.floor(
+                    tonumber(active.position) or 1
+                )
+            )
+        )
+    local previous =
+        type(active.display_order) ==
+            "table" and
+        active.display_order or
+        sequential_source_order(count)
+    local history = {}
+    local seen = {}
+
+    for _, position in ipairs(previous) do
+        if position == current then
+            break
+        end
+
+        if position >= 1 and
+            position <= count and
+            not seen[position] then
+            table.insert(history, position)
+            seen[position] = true
+        end
+    end
+
+    seen[current] = true
+
+    local unplayed = {}
+
+    for _, position in ipairs(previous) do
+        if position >= 1 and
+            position <= count and
+            not seen[position] then
+            table.insert(unplayed, position)
+            seen[position] = true
+        end
+    end
+
+    for position = 1, count do
+        if not seen[position] then
+            table.insert(unplayed, position)
+        end
+    end
+
+    unplayed =
+        shuffle_unplayed_positions(unplayed)
+
+    local order = {}
+
+    for _, position in ipairs(history) do
+        table.insert(order, position)
+    end
+
+    table.insert(order, current)
+
+    for _, position in ipairs(unplayed) do
+        table.insert(order, position)
+    end
+
+    active.display_order = order
+    active.display_shuffle = true
+    bump_queue_generation()
+    return order
+end
+
+local function apply_unshuffle_display()
+    local order =
+        sequential_source_order(
+            #active.tracks
+        )
+
+    active.display_order = order
+    active.display_shuffle = false
+    bump_queue_generation()
+    return order
+end
+
+local function ensure_shuffle_display_state()
+    if not active then
+        return false
+    end
+
+    local shuffle = native_shuffle_enabled()
+
+    if shuffle and
+        not active.display_shuffle then
+        apply_mid_session_shuffle()
+        return true
+    end
+
+    if not shuffle and
+        active.display_shuffle then
+        apply_unshuffle_display()
+        return true
+    end
+
+    return false
+end
+
 function M.sync_position(position)
     sync_active_position(position)
+    ensure_shuffle_display_state()
+    return active_snapshot()
+end
+
+function M.set_shuffle(enabled)
+    enabled = enabled == true
+
+    if queue.random and
+        type(queue.random.set) ==
+            "function" then
+        queue.random:set(enabled)
+    end
+
+    if not active then
+        return nil
+    end
+
+    ensure_shuffle_display_state()
     return active_snapshot()
 end
 
 function M.next()
+    if not active then
+        return nil
+    end
+
+    ensure_shuffle_display_state()
+
+    if active.display_shuffle and
+        type(active.display_order) ==
+            "table" then
+        local index =
+            display_index_of(
+                active.display_order,
+                active.position
+            )
+        local next_source =
+            index and
+            active.display_order[index + 1]
+
+        if next_source then
+            queue.position:set(next_source)
+            sync_active_position(next_source)
+        end
+
+        return active_snapshot()
+    end
+
     queue.next()
     sync_active_position(
         queue.position:get()
@@ -549,6 +858,36 @@ function M.next()
 end
 
 function M.previous()
+    if not active then
+        return nil
+    end
+
+    ensure_shuffle_display_state()
+
+    if active.display_shuffle and
+        type(active.display_order) ==
+            "table" then
+        local index =
+            display_index_of(
+                active.display_order,
+                active.position
+            )
+        local previous_source =
+            index and
+            active.display_order[index - 1]
+
+        if previous_source then
+            queue.position:set(
+                previous_source
+            )
+            sync_active_position(
+                previous_source
+            )
+        end
+
+        return active_snapshot()
+    end
+
     queue.previous()
     sync_active_position(
         queue.position:get()
@@ -558,11 +897,12 @@ end
 
 function M.current()
     sync_active_position()
+    ensure_shuffle_display_state()
     return active_snapshot()
 end
 
 
-local function current_playback_order()
+current_playback_order = function()
     local count = #active.tracks
     local order = nil
 
@@ -611,6 +951,40 @@ local function current_playback_order()
     return order
 end
 
+local function display_playback_order()
+    local count = #active.tracks
+    local shuffle = native_shuffle_enabled()
+
+    if not shuffle then
+        if active.display_shuffle then
+            return apply_unshuffle_display(),
+                false
+        end
+
+        local order =
+            sequential_source_order(count)
+
+        active.display_order = order
+        active.display_shuffle = false
+        return order, false
+    end
+
+    if not active.display_shuffle then
+        return apply_mid_session_shuffle(), true
+    end
+
+    -- Stable shuffled display order. Do not re-merge with native remaining;
+    -- that path reconstructed the sequential queue after mid-session enable.
+    local order = active.display_order
+
+    if type(order) ~= "table" or
+        #order ~= count then
+        return apply_mid_session_shuffle(), true
+    end
+
+    return order, true
+end
+
 function M.queue_view()
     sync_active_position()
 
@@ -618,12 +992,13 @@ function M.queue_view()
         return nil
     end
 
-    local source_positions =
-        current_playback_order()
+    local source_positions, shuffle =
+        display_playback_order()
     local tracks = {}
     local items = {}
+    local display_position = 0
 
-    for _, source_position in ipairs(
+    for index, source_position in ipairs(
         source_positions
     ) do
         table.insert(
@@ -634,13 +1009,18 @@ function M.queue_view()
             items,
             active.items[source_position]
         )
+
+        if source_position ==
+            active.position then
+            display_position = index
+        end
     end
 
     return {
         tracks = tracks,
         items = items,
         source_positions = source_positions,
-        position = #tracks > 0 and 1 or 0,
+        position = display_position,
         source_position = active.position,
         size = #tracks,
         total_size = #active.tracks,
@@ -648,12 +1028,7 @@ function M.queue_view()
             active.playlist_path,
         generation =
             active.generation or 0,
-        shuffle =
-            queue.random and
-            type(queue.random.get) ==
-                "function" and
-            queue.random:get() == true or
-            false,
+        shuffle = shuffle,
     }
 end
 

@@ -63,7 +63,7 @@ assert(
         initial_state.actions[3] == "backspace" and
         initial_state.actions[4] == "confirm" and
         initial_state.action_icons.space ==
-            "underscore" and
+            "bounded_line" and
         initial_state.action_icons
                 .backspace_max_thickness == 1 and
         initial_state.action_icons
@@ -179,6 +179,25 @@ assert(
 )
 
 page:on_hide()
+
+local handled_page = text_entry.new {
+    title = "Search",
+    initial_value = "query",
+    on_submit = function()
+        return "handled"
+    end,
+}
+
+handled_page:create_ui()
+handled_page:on_show()
+handled_page.confirm_button.on_click()
+
+assert(
+    popped == 1,
+    "A submit callback that owns navigation was popped back to text entry"
+)
+
+handled_page:on_hide()
 
 print(
     "Rotary text entry defaults to lowercase and uses refined Caps, space, backspace, and confirm controls"

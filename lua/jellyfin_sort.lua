@@ -22,13 +22,39 @@ local function text_key(value)
 end
 
 local function date_key(item)
-    if type(item) ~= "table" or
-        type(item.date_created) ~=
-            "string" then
+    if type(item) ~= "table" then
         return ""
     end
 
-    return item.date_created
+    -- A durable companion download request records when the album was added
+    -- to this Tangara. Keep that device-side recency above Jellyfin's source
+    -- DateCreated so Local -> New means "new on this device".
+    local local_downloaded =
+        item.local_downloaded_at
+
+    if type(local_downloaded) == "number" then
+        return "2:" .. string.format(
+            "%020.0f",
+            local_downloaded
+        )
+    end
+
+    if type(local_downloaded) == "string" and
+        local_downloaded ~= "" then
+        return "2:" .. local_downloaded
+    end
+
+    local value =
+        item.local_added_at or
+        item.downloaded_at or
+        item.date_created
+
+    if type(value) ~= "string" or
+        value == "" then
+        return ""
+    end
+
+    return "1:" .. value
 end
 
 local function sort_kind(key, explicit)

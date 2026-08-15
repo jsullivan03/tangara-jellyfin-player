@@ -335,6 +335,19 @@ function M.plan(manifest, managed_paths, file_exists)
         end
     end
 
+    -- Download all media before artwork. This keeps the universal byte
+    -- progress bar monotonic across an album or offline-library sync instead
+    -- of alternating between known-size media and unknown-size artwork.
+    plan.actions = {}
+
+    for _, action in ipairs(plan.download) do
+        table.insert(plan.actions, action)
+    end
+
+    for _, action in ipairs(plan.artwork) do
+        table.insert(plan.actions, action)
+    end
+
     plan.counts = {
         keep = #plan.keep,
         download = #plan.download,

@@ -1,26 +1,11 @@
+local jellyfin_artist_identity =
+    require("jellyfin_artist_identity")
+
 local M = {}
 
 local function nonempty(value)
     return type(value) == "string" and
         value ~= ""
-end
-
-local function normalized_name(value)
-    if not nonempty(value) then
-        return nil
-    end
-
-    return value
-end
-
-local function normalized_key(value)
-    local name = normalized_name(value)
-
-    if not name then
-        return nil
-    end
-
-    return "name:" .. name:lower()
 end
 
 local function add_action(
@@ -71,31 +56,45 @@ function M.artist_target(
     fallback = fallback or {}
 
     local name =
-        normalized_name(track.artist) or
-        normalized_name(fallback.artist) or
-        normalized_name(
+        (
+            nonempty(track.artist) and
+            track.artist
+        ) or
+        (
+            nonempty(fallback.artist) and
+            fallback.artist
+        ) or
+        (
+            nonempty(fallback.album_artist) and
             fallback.album_artist
-        )
+        ) or
+        nil
 
-    local key = track.artist_key
-
-    if not nonempty(key) then
-        local artist_id =
-            normalized_name(
-                track.artist_id
-            ) or
-            normalized_name(
-                fallback.artist_id
-            ) or
-            normalized_name(
-                fallback.album_artist_id
+    local key, stable =
+        jellyfin_artist_identity
+            .canonical_key(
+                {
+                    artist_key =
+                        track.artist_key,
+                    artist_id =
+                        track.artist_id or
+                        fallback.artist_id,
+                    jellyfin_artist_id =
+                        track.jellyfin_artist_id or
+                        fallback.jellyfin_artist_id,
+                    album_artist_id =
+                        track.album_artist_id or
+                        fallback.album_artist_id,
+                    artist = name,
+                    album_artist =
+                        fallback.album_artist,
+                    name = name,
+                }
             )
 
-        if artist_id then
-            key = "id:" .. artist_id
-        else
-            key = normalized_key(name)
-        end
+    -- Without a stable artist id or display name, there is no artist target.
+    if not stable and not name then
+        return nil
     end
 
     if not nonempty(key) then

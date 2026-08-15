@@ -85,6 +85,27 @@ local loaded, load_error = cache.load()
 assert(loaded, load_error)
 assert(loaded.device.id == "cache-test-device")
 
+local loads = 0
+local original_load = package.loaded["sync_manifest"].load
+
+package.loaded["sync_manifest"].load =
+    function(path)
+        loads = loads + 1
+        return original_load(path)
+    end
+
+local loaded_again = assert(cache.load())
+assert(loaded_again == loaded)
+assert(
+    loads == 0,
+    "sync_manifest_cache.load re-read disk after a warm memory cache"
+)
+
+cache.invalidate_memory("test")
+local loaded_cold = assert(cache.load())
+assert(loads >= 1)
+assert(loaded_cold.device.id == "cache-test-device")
+
 print(
     "Manifest cache index invalidation passed"
 )

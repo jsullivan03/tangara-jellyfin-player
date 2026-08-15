@@ -28,6 +28,7 @@ add_executable(
     tangara-sim
     main.c
     firmware_backstack.c
+    sim_audio.c
     sim_metrics.c
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib/luavgl/src/luavgl.c"
 )
@@ -37,6 +38,7 @@ target_include_directories(
     PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib/luavgl/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/../lib/lvgl/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../lib/drflac"
 )
 
 target_compile_options(

@@ -6,13 +6,136 @@ local palette =
 
 local M = {}
 
-local COVER_X = 47
+local COVER_X = 44
 local COVER_Y = 19
-local COVER_ZOOM = 280
 local TITLE_Y = 90
 local ARTIST_Y = 100
 local MEDIA_TEXT_HEIGHT = 18
 local BACKGROUND_DIMMER_OPA = 118
+local COVER_DISPLAY_SIZE = 72
+
+local function bind_artwork(
+    image,
+    source,
+    options
+)
+    options = options or {}
+
+    -- Source assignment temporarily restores the decoded image's native
+    -- origin and dimensions. Hide the widget for the short rebind so an EOF
+    -- track transition cannot paint the new cover at (0, 0) for one frame.
+    image:add_flag(
+        lvgl.FLAG.HIDDEN
+    )
+    image:set {
+        src = lvgl.ImgData(source),
+    }
+
+    local decoded_width,
+        decoded_height =
+        image:get_img_size()
+
+    decoded_width =
+        tonumber(decoded_width) or
+        tonumber(options.width) or 1
+    decoded_height =
+        tonumber(decoded_height) or
+        tonumber(options.height) or 1
+
+    local width =
+        tonumber(options.width) or
+        decoded_width
+    local height =
+        tonumber(options.height) or
+        decoded_height
+    local scale_x = width / decoded_width
+    local scale_y = height / decoded_height
+    local scale =
+        options.fill and
+        math.max(scale_x, scale_y) or
+        math.min(scale_x, scale_y)
+    local zoom =
+        tonumber(options.zoom) or
+        math.max(
+            1,
+            math.floor(scale * 256 + 0.5)
+        )
+    local pivot = {
+        x = math.floor(decoded_width / 2),
+        y = math.floor(decoded_height / 2),
+    }
+    local object_x =
+        tonumber(options.x) or 0
+    local object_y =
+        tonumber(options.y) or 0
+    local fixed_object =
+        options.fixed_object == true
+    local object_width =
+        fixed_object and
+        width or decoded_width
+    local object_height =
+        fixed_object and
+        height or decoded_height
+
+    if options.fill then
+        object_x = object_x +
+            math.floor(width / 2) -
+            pivot.x
+        object_y = object_y +
+            math.floor(height / 2) -
+            pivot.y
+    end
+
+    image:set {
+        x = object_x,
+        y = object_y,
+        w = object_width,
+        h = object_height,
+        align = lvgl.ALIGN.TOP_LEFT,
+        offset_x = 0,
+        offset_y = 0,
+        angle = 0,
+        zoom = zoom,
+        antialias = true,
+        inner_align = lvgl.IMAGE_ALIGN.CENTER,
+        transform_width = 0,
+        transform_height = 0,
+        pivot = pivot,
+    }
+
+    if fixed_object then
+        -- Keep the image widget itself at the display-frame size. LVGL
+        -- otherwise clips a small decoded source before its zoomed pixels are
+        -- composed, which is why 28x28 Local artwork appeared tiny or shifted.
+        image:set {
+            x = object_x,
+            y = object_y,
+        }
+    end
+
+    image:clear_flag(
+        lvgl.FLAG.HIDDEN
+    )
+    image:invalidate()
+
+    return {
+        source = source,
+        decoded_width = decoded_width,
+        decoded_height = decoded_height,
+        object_width = object_width,
+        object_height = object_height,
+        x = object_x,
+        y = object_y,
+        zoom = zoom,
+        pivot = pivot,
+        alignment = lvgl.ALIGN.TOP_LEFT,
+        size_mode = lvgl.IMAGE_ALIGN.CENTER,
+        transform_width = 0,
+        transform_height = 0,
+        target_width = width,
+        target_height = height,
+    }
+end
 
 local function animate_y(
     object,
@@ -73,6 +196,19 @@ function M.create(options)
             ),
     }
 
+    local background_geometry =
+        bind_artwork(
+            background,
+            current_background,
+            {
+                x = 0,
+                y = 0,
+                width = 160,
+                height = 128,
+                fill = true,
+            }
+        )
+
     local background_dimmer =
         root:Object {
             x = 0,
@@ -103,9 +239,22 @@ function M.create(options)
             x = 33,
             y = 33,
         },
-        zoom = COVER_ZOOM,
+        zoom = 256,
         antialias = true,
     }
+
+    local cover_geometry =
+        bind_artwork(
+            cover,
+            current_cover,
+            {
+                x = COVER_X,
+                y = COVER_Y,
+                width = COVER_DISPLAY_SIZE,
+                height = COVER_DISPLAY_SIZE,
+                fixed_object = true,
+            }
+        )
 
     local title_marquee =
         jellyfin_marquee.create(
@@ -572,7 +721,8 @@ function M.create(options)
             artist = current_artist,
             cover_x = COVER_X,
             cover_y = COVER_Y,
-            cover_zoom = COVER_ZOOM,
+            cover_zoom =
+                cover_geometry.zoom,
             title_x = 6,
             title_y = TITLE_Y,
             artist_x = 6,
@@ -581,6 +731,22 @@ function M.create(options)
             background_y = 0,
             background_dimmer_opa =
                 BACKGROUND_DIMMER_OPA,
+        }
+    end
+
+    function screen:artwork_state()
+        local root_coordinates =
+            root:get_coords()
+
+        return {
+            foreground = cover_geometry,
+            background = background_geometry,
+            clip = {
+                x1 = root_coordinates.x1,
+                y1 = root_coordinates.y1,
+                x2 = root_coordinates.x2,
+                y2 = root_coordinates.y2,
+            },
         }
     end
 
@@ -625,6 +791,60 @@ function M.create(options)
         }
     end
 
+    function screen:media_marquee_state()
+        return {
+            title = {
+                measured =
+                    title_marquee.measured ==
+                    true,
+                overflow =
+                    title_marquee.overflow or 0,
+                active =
+                    title_marquee.active ==
+                    true,
+                uses_native_circular =
+                    title_marquee
+                        .uses_native_circular ==
+                    true,
+                has_anim =
+                    title_marquee.anim ~= nil,
+                destroyed =
+                    title_marquee.destroyed ==
+                    true,
+                short_x =
+                    title_marquee.short_x or 0,
+                text_width =
+                    title_marquee.text_width or
+                    0,
+            },
+            artist = {
+                measured =
+                    artist_marquee.measured ==
+                    true,
+                overflow =
+                    artist_marquee.overflow or
+                    0,
+                active =
+                    artist_marquee.active ==
+                    true,
+                uses_native_circular =
+                    artist_marquee
+                        .uses_native_circular ==
+                    true,
+                has_anim =
+                    artist_marquee.anim ~= nil,
+                destroyed =
+                    artist_marquee.destroyed ==
+                    true,
+                short_x =
+                    artist_marquee.short_x or 0,
+                text_width =
+                    artist_marquee.text_width or
+                    0,
+            },
+        }
+    end
+
     function screen:refresh_media_layout()
         -- create_ui runs before this root becomes the active firmware screen.
         -- Initial text measured there can use detached-tree coordinates, while
@@ -636,25 +856,83 @@ function M.create(options)
         artist_marquee:refresh(true)
     end
 
+    function screen:suspend()
+        pause_icon_generation =
+            pause_icon_generation + 1
+        pause_icon_pending = false
+        title_marquee:stop()
+        artist_marquee:stop()
+    end
+
+    function screen:resume()
+        title_marquee:rebind(
+            current_title,
+            true
+        )
+        artist_marquee:rebind(
+            current_artist,
+            true
+        )
+        title_marquee:start()
+        artist_marquee:start()
+        self:refresh_media_layout()
+    end
+
+    function screen:retire()
+        pause_icon_generation =
+            pause_icon_generation + 1
+        pause_icon_pending = false
+        title_marquee:destroy()
+        artist_marquee:destroy()
+    end
+
     function screen:update(values)
         values = values or {}
 
+        local title_changed =
+            values.title ~= nil
+        local artist_changed =
+            values.artist ~= nil
         local media_changed =
             values.background ~= nil or
             values.cover ~= nil or
-            values.title ~= nil or
-            values.artist ~= nil
+            title_changed or
+            artist_changed
+
+        -- Changing a marquee label briefly restores its default left-aligned
+        -- position before it is measured and centered again. Keep the text
+        -- views hidden through that rebind so an automatic queue advance never
+        -- paints the new title at the left edge for one frame.
+        if title_changed then
+            title_marquee.view:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
+            title_marquee:reset()
+        end
+
+        if artist_changed then
+            artist_marquee.view:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
+            artist_marquee:reset()
+        end
 
         if media_changed then
-            cover:set {
-                x = COVER_X,
-                y = COVER_Y,
-                pivot = {
-                    x = 33,
-                    y = 33,
-                },
-                zoom = COVER_ZOOM,
-            }
+            cover_geometry =
+                bind_artwork(
+                    cover,
+                    values.cover or
+                        current_cover,
+                    {
+                        x = COVER_X,
+                        y = COVER_Y,
+                        width =
+                            COVER_DISPLAY_SIZE,
+                        height =
+                            COVER_DISPLAY_SIZE,
+                        fixed_object = true,
+                    }
+                )
             title_marquee.view:set {
                 x = 6,
                 y = TITLE_Y,
@@ -672,40 +950,61 @@ function M.create(options)
         if values.background then
             current_background =
                 values.background
-            background:set {
-                src =
-                    lvgl.ImgData(
-                        values.background
-                    ),
-            }
+            background_geometry =
+                bind_artwork(
+                    background,
+                    values.background,
+                    {
+                        x = 0,
+                        y = 0,
+                        width = 160,
+                        height = 128,
+                        fill = true,
+                    }
+                )
         end
 
         if values.cover then
             current_cover = values.cover
-            cover:set {
-                src =
-                    lvgl.ImgData(
-                        values.cover
-                    ),
-            }
         end
 
-        if values.title ~= nil then
+        if title_changed then
             current_title = values.title
-            title_marquee:stop()
-            title_marquee:set(
-                current_title
-            )
-            title_marquee:start()
         end
 
-        if values.artist ~= nil then
+        if artist_changed then
             current_artist = values.artist
-            artist_marquee:stop()
-            artist_marquee:set(
-                current_artist
-            )
-            artist_marquee:start()
+        end
+
+        if title_changed or
+            artist_changed then
+            root:update_layout()
+
+            if title_changed then
+                -- Reveal before measuring so first painted frame is centered
+                -- or freshly marqueed from a clean baseline.
+                title_marquee.view:clear_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+                title_marquee:rebind(
+                    current_title,
+                    true
+                )
+                title_marquee.view:invalidate()
+                title_marquee:start()
+            end
+
+            if artist_changed then
+                artist_marquee.view:clear_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+                artist_marquee:rebind(
+                    current_artist,
+                    true
+                )
+                artist_marquee.view:invalidate()
+                artist_marquee:start()
+            end
         end
 
         if values.paused ~= nil then
@@ -793,6 +1092,10 @@ function M.create(options)
 
     layout_ready = true
     update_battery()
+
+    screen.root = root
+    screen.cover_image = cover
+    screen.background_image = background
 
     return screen
 end

@@ -21,6 +21,19 @@ local root =
 
 os.execute("rm -rf " .. root)
 os.execute("mkdir -p " .. root)
+os.execute(
+    "mkdir -p " ..
+    root ..
+    "/.tangara-artwork/albums"
+)
+
+local album_artwork_file =
+    root ..
+    "/.tangara-artwork/albums/album-a.png"
+local album_artwork_handle =
+    assert(io.open(album_artwork_file, "wb"))
+assert(album_artwork_handle:write("album-art"))
+album_artwork_handle:close()
 
 package.loaded["device"] = nil
 package.preload["device"] =
@@ -109,7 +122,7 @@ local synced_library = {
             items = tracks,
             artwork = {
                 cover =
-                    "//lua/img/favorites_playlist.png",
+                    "/.tangara-artwork/playlists/playlist-a.png",
             },
         },
     },
@@ -134,7 +147,7 @@ local albums = {
             "2026-01-01T00:00:00Z",
         artwork = {
             thumbnail =
-                "//lua/img/favorites_playlist.png",
+                "/.tangara-artwork/albums/album-a.png",
         },
     },
     {
@@ -224,6 +237,10 @@ package.loaded["jellyfin_playback"] = {
         function()
             return nil
         end,
+    local_item =
+        function(track)
+            return track
+        end,
 }
 
 package.loaded["jellyfin_now_playing"] = {
@@ -250,6 +267,11 @@ local playlist_module =
     dofile(
         "lua/jellyfin_library.lua"
     )
+
+local jellyfin_track_identity =
+    require("jellyfin_track_identity")
+local track_a_selection_id =
+    jellyfin_track_identity.key(tracks[1])
 
 package.loaded["jellyfin_library"] =
     playlist_module
@@ -357,13 +379,20 @@ simulator.backstack.push(
 )
 
 local first_artwork = nil
+local playlist_artwork = nil
 
 for _, row in ipairs(
     playlist_root.rows
 ) do
     if row.artwork then
-        first_artwork = row.artwork
-        break
+        first_artwork =
+            first_artwork or row.artwork
+
+        if row.artwork.current_source ==
+                root ..
+                "/.tangara-artwork/playlists/playlist-a.png" then
+            playlist_artwork = row.artwork
+        end
     end
 end
 
@@ -373,6 +402,11 @@ assert(
         first_artwork.image or
         first_artwork.star
     )
+)
+
+assert(
+    playlist_artwork ~= nil,
+    "Playlist artwork did not resolve through the simulator storage root"
 )
 
 simulator.backstack.pop()
@@ -416,6 +450,28 @@ for iteration = 1, 12 do
     simulator.backstack.push(
         playlist
     )
+
+    if iteration == 1 then
+        local resolved_track_artwork = nil
+
+        for _, row in ipairs(
+            playlist.media_rows or {}
+        ) do
+            if row.selection_id ==
+                    track_a_selection_id then
+                resolved_track_artwork =
+                    row.artwork and
+                    row.artwork.current_source
+                break
+            end
+        end
+
+        assert(
+            resolved_track_artwork ==
+                album_artwork_file,
+            "Playlist track did not reuse the existing resolved parent-album artwork"
+        )
+    end
 
     exercise_sort_screen(
         playlist,

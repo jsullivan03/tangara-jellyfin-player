@@ -33,6 +33,19 @@ function M.create(
                 item_id = options.item_id,
                 pool_size = options.pool_size,
                 anchor = options.anchor,
+                row_height = options.row_height,
+                row_gap = options.row_gap,
+                fixed_viewport =
+                    options.fixed_viewport,
+                viewport_height =
+                    options.viewport_height,
+                motion_duration =
+                    options.motion_duration,
+                total_count =
+                    options.total_count,
+                scroll_indicator =
+                    options.scroll_indicator,
+                on_focus = options.on_focus,
                 on_click = options.on_click,
                 on_long_press =
                     options.on_long_press,
@@ -52,6 +65,11 @@ function M.create(
                                         detail =
                                             resolve(
                                                 options.detail,
+                                                track
+                                            ),
+                                        available =
+                                            resolve(
+                                                options.available,
                                                 track
                                             ),
                                     }
@@ -74,6 +92,11 @@ function M.create(
                                 detail =
                                     resolve(
                                         options.detail,
+                                        track
+                                    ),
+                                available =
+                                    resolve(
+                                        options.available,
                                         track
                                     ),
                                 on_click =

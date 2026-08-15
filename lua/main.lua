@@ -54,7 +54,12 @@ GLOBAL_BINDINGS = {
     local input_method = hooks.wheel or hooks.dpad
     if input_method and input_method.right then
       input_method.right.long_press = function()
-        require("playing"):push_if_not_shown()
+        local local_session =
+          require("jellyfin_playback_session")
+
+        if not local_session.open_now_playing() then
+          require("playing"):push_if_not_shown()
+        end
       end
     end
   end),

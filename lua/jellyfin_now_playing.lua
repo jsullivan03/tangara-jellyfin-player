@@ -5,6 +5,10 @@ local jellyfin_navigation =
     require("jellyfin_navigation")
 local jellyfin_playback =
     require("jellyfin_playback")
+local jellyfin_local_artwork =
+    require("jellyfin_local_artwork")
+local jellyfin_playback_session =
+    require("jellyfin_playback_session")
 local jellyfin_track_actions =
     require("jellyfin_track_actions")
 local jellyfin_text_entry =
@@ -24,6 +28,23 @@ local sync_runtime = require("sync_runtime")
 local volume = require("volume")
 local palette =
     require("jellyfin_theme").current()
+
+local function retire_binding(owner, name)
+    local binding = owner[name]
+
+    if binding ~= nil then
+        pcall(
+            function()
+                if type(binding.unbind) ==
+                        "function" then
+                    binding:unbind()
+                end
+            end
+        )
+    end
+
+    owner[name] = nil
+end
 
 local function format_time(value)
     value =
@@ -107,6 +128,16 @@ local function artwork_value(
     name,
     fallback
 )
+    local resolved =
+        jellyfin_local_artwork.active(
+            active,
+            name
+        )
+
+    if resolved then
+        return resolved
+    end
+
     local item_artwork =
         active and
         active.item and
@@ -1097,15 +1128,22 @@ local NowPlaying =
             end
 
             local function toggle_shuffle()
-                if not queue.random or
-                    type(queue.random.set) ~=
+                if type(
+                    jellyfin_playback.set_shuffle
+                ) == "function" then
+                    jellyfin_playback.set_shuffle(
+                        not shuffle_enabled()
+                    )
+                elseif queue.random and
+                    type(queue.random.set) ==
                         "function" then
+                    queue.random:set(
+                        not shuffle_enabled()
+                    )
+                else
                     return
                 end
 
-                queue.random:set(
-                    not shuffle_enabled()
-                )
                 close_soon()
             end
 
@@ -2118,9 +2156,14 @@ local NowPlaying =
         end,
 
         on_show = function(self)
+            jellyfin_playback_session
+                .set_now_playing_visible(true)
             self.transport_active = true
 
             if self.view and
+                self.view.resume then
+                self.view:resume()
+            elseif self.view and
                 self.view.refresh_media_layout then
                 self.view:refresh_media_layout()
             end
@@ -2144,6 +2187,9 @@ local NowPlaying =
                         amount
                     )
                 end
+
+            self.previous_sim_transport_handler =
+                _G.tangara_sim_transport_event
 
             _G.tangara_sim_transport_event =
                 self.sim_transport_handler
@@ -2202,6 +2248,8 @@ local NowPlaying =
         end,
 
         on_hide = function(self)
+            jellyfin_playback_session
+                .set_now_playing_visible(false)
             self.transport_active = false
             self.seek_generation =
                 (self.seek_generation or 0) + 1
@@ -2213,9 +2261,11 @@ local NowPlaying =
             if _G.tangara_sim_transport_event ==
                     self.sim_transport_handler then
                 _G.tangara_sim_transport_event =
-                    nil
+                    self.previous_sim_transport_handler
             end
 
+            self.previous_sim_transport_handler =
+                nil
             self.sim_transport_handler = nil
 
             jellyfin_navigation.clear_back(
@@ -2264,6 +2314,38 @@ local NowPlaying =
             end
 
             self.input_method = nil
+
+            if self.view and
+                self.view.suspend then
+                self.view:suspend()
+            end
+        end,
+
+        on_destroy = function(self)
+            self.transport_active = false
+            self.seek_generation =
+                (self.seek_generation or 0) + 1
+
+            if self.status_timer then
+                self.status_timer:delete()
+                self.status_timer = nil
+            end
+
+            for _, name in ipairs({
+                "playing_binding",
+                "position_binding",
+                "queue_binding",
+                "battery_binding",
+                "charge_binding",
+                "plugged_binding",
+            }) do
+                retire_binding(self, name)
+            end
+
+            if self.view and
+                self.view.retire then
+                self.view:retire()
+            end
         end,
     }
 

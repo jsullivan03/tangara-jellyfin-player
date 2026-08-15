@@ -25,3 +25,6 @@ sdkconfig.bak
 /sdkconfig.local
 desktop-sim/sd/
 desktop-sim/runtime/
+desktop-sim/tangara-sim.env
+handoff/
+.cursor/

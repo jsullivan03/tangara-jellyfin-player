@@ -11,6 +11,7 @@
 #include <lvgl.h>
 #include "luavgl.h"
 #include "firmware_backstack.h"
+#include "sim_audio.h"
 #include "sim_metrics.h"
 
 #include "src/drivers/sdl/lv_sdl_keyboard.h"
@@ -28,6 +29,48 @@ static SDL_atomic_t pending_next;
 static SDL_atomic_t pending_toggle;
 static SDL_atomic_t pending_volume_up;
 static SDL_atomic_t pending_volume_down;
+static SDL_atomic_t right_hold_active;
+static SDL_atomic_t right_hold_fired;
+static SDL_atomic_t right_hold_started_ms;
+static SDL_atomic_t nav_up_last_repeat_ms;
+static SDL_atomic_t nav_down_last_repeat_ms;
+
+#define NOW_PLAYING_HOLD_MS 400
+#define NAV_REPEAT_MIN_MS 135
+
+static bool navigation_key_event_allowed(SDL_Event *event)
+{
+    if (event->type != SDL_KEYDOWN) {
+        return true;
+    }
+
+    SDL_atomic_t *last_repeat = NULL;
+
+    if (event->key.keysym.sym == SDLK_UP) {
+        last_repeat = &nav_up_last_repeat_ms;
+    } else if (event->key.keysym.sym == SDLK_DOWN) {
+        last_repeat = &nav_down_last_repeat_ms;
+    } else {
+        return true;
+    }
+
+    uint32_t now = SDL_GetTicks();
+
+    if (event->key.repeat == 0) {
+        SDL_AtomicSet(last_repeat, (int)now);
+        return true;
+    }
+
+    uint32_t previous =
+        (uint32_t)SDL_AtomicGet(last_repeat);
+
+    if (now - previous < NAV_REPEAT_MIN_MS) {
+        return false;
+    }
+
+    SDL_AtomicSet(last_repeat, (int)now);
+    return true;
+}
 
 static int lua_set_encoder_mode(lua_State *L)
 {
@@ -53,8 +96,8 @@ static int lua_set_transport_mode(lua_State *L)
         SDL_AtomicSet(&pending_previous, 0);
         SDL_AtomicSet(&pending_next, 0);
         SDL_AtomicSet(&pending_toggle, 0);
-        SDL_AtomicSet(&pending_volume_up, 0);
-        SDL_AtomicSet(&pending_volume_down, 0);
+        /* Keep pending volume events so leaving Now Playing never drops
+         * volume keypresses that arrived while transport mode was clearing. */
     }
 
     return 0;
@@ -72,7 +115,53 @@ static int SDLCALL filter_sdl_event(void *userdata, SDL_Event *event)
         SDL_AtomicSet(&back_requested, 1);
     }
 
+    if (!SDL_AtomicGet(&transport_mode) &&
+        (event->type == SDL_KEYDOWN ||
+         event->type == SDL_KEYUP) &&
+        event->key.keysym.sym == SDLK_RIGHT) {
+        if (event->type == SDL_KEYDOWN &&
+            event->key.repeat == 0) {
+            SDL_AtomicSet(&right_hold_active, 1);
+            SDL_AtomicSet(&right_hold_fired, 0);
+            SDL_AtomicSet(
+                &right_hold_started_ms,
+                (int)SDL_GetTicks()
+            );
+        } else if (event->type == SDL_KEYUP) {
+            SDL_AtomicSet(&right_hold_active, 0);
+            SDL_AtomicSet(&right_hold_fired, 0);
+        }
+    }
+
     if (!SDL_AtomicGet(&transport_mode)) {
+        if (
+            event->type == SDL_KEYDOWN &&
+            event->key.repeat == 0
+        ) {
+            switch (event->key.keysym.sym) {
+                case SDLK_EQUALS:
+                case SDLK_KP_PLUS:
+                    SDL_AtomicAdd(&pending_volume_up, 1);
+                    return 0;
+                case SDLK_MINUS:
+                case SDLK_KP_MINUS:
+                    SDL_AtomicAdd(&pending_volume_down, 1);
+                    return 0;
+                default:
+                    break;
+            }
+        }
+
+        if (event->type == SDL_TEXTINPUT) {
+            if (
+                event->text.text[0] == '=' ||
+                event->text.text[0] == '+' ||
+                event->text.text[0] == '-'
+            ) {
+                return 0;
+            }
+        }
+
         if (SDL_AtomicGet(&encoder_mode)) {
             if (event->type == SDL_MOUSEWHEEL) {
                 int wheel_y = event->wheel.y;
@@ -89,23 +178,29 @@ static int SDLCALL filter_sdl_event(void *userdata, SDL_Event *event)
             }
 
             if (event->type == SDL_KEYDOWN &&
-                event->key.repeat == 0) {
-                if (event->key.keysym.sym == SDLK_UP) {
-                    SDL_AtomicAdd(
-                        &pending_encoder_ticks,
-                        -1
-                    );
+                (
+                    event->key.keysym.sym == SDLK_UP ||
+                    event->key.keysym.sym == SDLK_DOWN
+                )) {
+                if (!navigation_key_event_allowed(event)) {
                     return 0;
                 }
 
-                if (event->key.keysym.sym == SDLK_DOWN) {
-                    SDL_AtomicAdd(
-                        &pending_encoder_ticks,
-                        1
-                    );
-                    return 0;
-                }
+                SDL_AtomicAdd(
+                    &pending_encoder_ticks,
+                    event->key.keysym.sym == SDLK_UP ? -1 : 1
+                );
+                return 0;
             }
+        }
+
+        if (event->type == SDL_KEYDOWN &&
+            (
+                event->key.keysym.sym == SDLK_UP ||
+                event->key.keysym.sym == SDLK_DOWN
+            ) &&
+            !navigation_key_event_allowed(event)) {
+            return 0;
         }
 
         return 1;
@@ -205,6 +300,41 @@ static void call_lua_back(lua_State *L)
             message != NULL ? message : "Unknown Lua error"
         );
 
+        lua_pop(L, 1);
+    }
+}
+
+static void service_now_playing_shortcut(lua_State *L)
+{
+    if (!SDL_AtomicGet(&right_hold_active) ||
+        SDL_AtomicGet(&right_hold_fired)) {
+        return;
+    }
+
+    uint32_t started = (uint32_t)SDL_AtomicGet(
+        &right_hold_started_ms
+    );
+
+    if (SDL_GetTicks() - started < NOW_PLAYING_HOLD_MS) {
+        return;
+    }
+
+    SDL_AtomicSet(&right_hold_fired, 1);
+    lua_getglobal(L, "tangara_sim_now_playing_event");
+
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+
+    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        const char *message = lua_tostring(L, -1);
+
+        fprintf(
+            stderr,
+            "Simulator Now Playing shortcut failed:\n%s\n",
+            message != NULL ? message : "Unknown Lua error"
+        );
         lua_pop(L, 1);
     }
 }
@@ -378,6 +508,9 @@ int main(int argc, char **argv)
     luaL_requiref(L, "sim_metrics", luaopen_sim_metrics, 1);
     lua_pop(L, 1);
 
+    luaL_requiref(L, "sim_audio", luaopen_sim_audio, 1);
+    lua_pop(L, 1);
+
     SDL_SetEventFilter(filter_sdl_event, NULL);
 
     if (run_lua_file(L, script) != 0) {
@@ -394,6 +527,7 @@ int main(int argc, char **argv)
         firmware_backstack_service();
         service_encoder(L);
         service_transport(L);
+        service_now_playing_shortcut(L);
         uint32_t delay_ms = lv_timer_handler();
 
         if (SDL_AtomicCAS(&back_requested, 1, 0)) {
@@ -411,6 +545,7 @@ int main(int argc, char **argv)
 
     SDL_SetEventFilter(NULL, NULL);
     firmware_backstack_shutdown();
+    sim_audio_shutdown();
     lua_close(L);
     return 0;
 }

@@ -11,7 +11,28 @@ local jellyfin_scroll_indicator =
     require("jellyfin_scroll_indicator")
 local jellyfin_theme =
     require("jellyfin_theme")
+local jellyfin_track_identity =
+    require("jellyfin_track_identity")
 local M = {}
+
+local resume_metrics = nil
+
+pcall(
+    function()
+        resume_metrics =
+            require("sim_metrics")
+    end
+)
+
+local function resume_trace(message)
+    if resume_metrics and
+        type(resume_metrics.trace) ==
+            "function" then
+        resume_metrics.trace(
+            "list-ui " .. tostring(message)
+        )
+    end
+end
 
 local palette = jellyfin_theme.current()
 local COLOR_KEYS = {
@@ -43,6 +64,22 @@ local function media_row_parent(self)
         self.list
 end
 
+local MEDIA_ROW_HEIGHT = 23
+local MEDIA_ARTWORK_SIZE = 19
+local MEDIA_TEXT_X = 24
+local MEDIA_TEXT_WIDTH = 127
+-- Fusion 10's visible glyphs sit about one pixel below the label box center.
+-- Keep one shared optical layout for every compact two-line media row.
+local MEDIA_TITLE_Y = -1
+local MEDIA_DETAIL_Y = 9
+local MEDIA_SINGLE_Y = 4
+
+-- Home and Local root rows are the same control and should use the same
+-- geometry instead of each screen supplying a slightly different y offset.
+local MENU_ROW_HEIGHT = 24
+local MENU_TEXT_Y = 4
+local MENU_TEXT_HEIGHT = 14
+
 local pending_initial_scrolls =
     setmetatable(
         {},
@@ -72,6 +109,25 @@ end
 local function item_selection_id(item)
     if type(item) ~= "table" then
         return nil
+    end
+
+    if item.kind == "track" or
+        item.track_key or
+        (
+            item.title and
+            (
+                item.jellyfin_id or
+                item.id
+            ) and
+            item.kind ~= "album" and
+            item.kind ~= "artist"
+        ) then
+        local track_key =
+            jellyfin_track_identity.key(item)
+
+        if track_key then
+            return track_key
+        end
     end
 
     for _, key in ipairs({
@@ -139,7 +195,12 @@ local function selected_row_object(self)
         self.rows or {}
     ) do
         if model.selection_id ==
-                selected_id then
+                selected_id or
+            jellyfin_track_identity
+                .matches_selection(
+                    selected_id,
+                    model.selection_id
+                ) then
             return model.object
         end
     end
@@ -196,6 +257,15 @@ local function apply_initial_scroll(self)
                 self.sort_row.object
         ) then
         return false
+    end
+
+    -- Fixed-viewport catalogs own motion-layer offset. Native list scroll here
+    -- on resume/back fights that restoration. First open may still settle Sort.
+    if self.controls_installed_once and
+        self.virtual_list_controller and
+        self.virtual_list_controller
+            .fixed_viewport == true then
+        return true
     end
 
     local leading_rows =
@@ -426,9 +496,263 @@ local function focus_object(
 
     pcall(
         function()
-            object:scroll_to_view_recursive(false)
+            object:scroll_to_view_recursive(true)
         end
     )
+end
+
+local function cancel_plain_list_scroll(owner)
+    if not owner then
+        return
+    end
+
+    owner.plain_list_scroll_generation =
+        (owner.plain_list_scroll_generation or 0) + 1
+
+    if owner.plain_list_scroll_anim and
+        type(
+            owner.plain_list_scroll_anim.delete
+        ) == "function" then
+        pcall(function()
+            owner.plain_list_scroll_anim:
+                delete()
+        end)
+    end
+
+    owner.plain_list_scroll_anim = nil
+end
+
+local function capture_plain_list_scroll(owner)
+    if not owner or
+        not owner.list or
+        owner.virtual_list_controller then
+        return false
+    end
+
+    local saved = nil
+    local scroll_to_y = nil
+    pcall(function()
+        owner.list:update_layout()
+        local list_coordinates =
+            owner.list:get_coords()
+        local anchor =
+            selected_row_object(owner) or
+            owner.first_row or
+            (
+                owner.rows[1] and
+                owner.rows[1].object
+            )
+
+        if not anchor then
+            return
+        end
+
+        local anchor_coordinates =
+            anchor:get_coords()
+        saved =
+            list_coordinates.y1 -
+            anchor_coordinates.y1
+
+        local first =
+            owner.rows[1] and
+            owner.rows[1].object
+        if first then
+            local first_coordinates =
+                first:get_coords()
+            scroll_to_y =
+                list_coordinates.y1 -
+                first_coordinates.y1
+        end
+    end)
+
+    owner.resume_plain_scroll_y = saved
+    owner.resume_plain_scroll_to_y =
+        scroll_to_y
+    owner.resume_plain_scroll_id =
+        owner.selected_item_id
+    return saved ~= nil
+end
+
+local function restore_plain_list_scroll(owner)
+    if not owner or
+        not owner.list or
+        owner.virtual_list_controller or
+        (
+            owner.resume_plain_scroll_y == nil and
+            owner.resume_plain_scroll_to_y == nil
+        ) then
+        return false
+    end
+
+    local restored = false
+
+    pcall(function()
+        cancel_plain_list_scroll(owner)
+        owner.list:update_layout()
+
+        if owner.resume_plain_scroll_to_y ~=
+                nil then
+            owner.list:scroll_to {
+                x = 0,
+                y = owner.resume_plain_scroll_to_y,
+                anim = false,
+            }
+            owner.list:update_layout()
+        end
+
+        local target_offset =
+            owner.resume_plain_scroll_y
+        if target_offset == nil then
+            restored = true
+            return
+        end
+
+        local anchor = nil
+        local preferred_id =
+            owner.resume_plain_scroll_id or
+            owner.selected_item_id
+
+        if preferred_id then
+            for _, model in ipairs(
+                owner.rows or {}
+            ) do
+                if model.selection_id ==
+                        preferred_id then
+                    anchor = model.object
+                    break
+                end
+            end
+        end
+
+        anchor =
+            anchor or
+            selected_row_object(owner) or
+            owner.first_row
+
+        if not anchor then
+            restored = true
+            return
+        end
+
+        local list_coordinates =
+            owner.list:get_coords()
+        local anchor_coordinates =
+            anchor:get_coords()
+        local current_offset =
+            list_coordinates.y1 -
+            anchor_coordinates.y1
+        local delta =
+            current_offset - target_offset
+
+        if delta ~= 0 then
+            if type(owner.list.scroll_by_bounded) ==
+                    "function" then
+                owner.list:scroll_by_bounded(
+                    0,
+                    delta,
+                    false
+                )
+            else
+                owner.list:scroll_by(
+                    0,
+                    delta,
+                    false
+                )
+            end
+            owner.list:update_layout()
+        end
+
+        restored = true
+    end)
+
+    return restored
+end
+
+local function animate_plain_list_reveal(
+    owner,
+    object
+)
+    if not owner or
+        not owner.list or
+        not object or
+        owner.suppress_focus_scroll then
+        return
+    end
+
+    local list = owner.list
+    local list_coords = list:get_coords()
+    local object_coords =
+        object:get_coords()
+    local delta = 0
+
+    if object_coords.y2 >
+            list_coords.y2 then
+        delta =
+            object_coords.y2 -
+            list_coords.y2
+    elseif object_coords.y1 <
+            list_coords.y1 then
+        delta =
+            object_coords.y1 -
+            list_coords.y1
+    else
+        return
+    end
+
+    -- One native LVGL Anim drives the reveal. Rapid input bumps the
+    -- generation so the previous animation is abandoned instead of queued.
+    cancel_plain_list_scroll(owner)
+
+    local generation =
+        owner.plain_list_scroll_generation
+    local scrolled = 0
+
+    local ok, anim = pcall(function()
+        return list:Anim {
+            run = true,
+            start_value = 0,
+            end_value = -delta,
+            duration = 150,
+            path = "linear",
+            exec_cb = function(
+                animated_object,
+                value
+            )
+                if owner.plain_list_scroll_generation ~=
+                        generation then
+                    return
+                end
+
+                local step =
+                    value - scrolled
+                scrolled = value
+
+                if step ~= 0 then
+                    animated_object:
+                        scroll_by(
+                            0,
+                            step,
+                            false
+                        )
+                end
+            end,
+            done_cb = function()
+                if owner.plain_list_scroll_generation ==
+                        generation then
+                    owner.plain_list_scroll_anim =
+                        nil
+                end
+            end,
+        }
+    end)
+
+    if ok then
+        owner.plain_list_scroll_anim = anim
+    else
+        pcall(function()
+            list:scroll_by(0, -delta, false)
+        end)
+    end
 end
 
 local function set_row_focus(
@@ -459,13 +783,23 @@ local function stop_marquees(model)
 end
 
 local function start_marquees(model)
-    for _, marquee in ipairs(
-        model.marquees or {}
-    ) do
+    -- Only the focused title marquees. Animating title and detail together
+    -- produced staggered stalls on long Sync rows.
+    local title =
+        model.marquees and
+        model.marquees[1]
+
+    if title and
+        type(title.start) == "function" then
+        title:start()
+    end
+
+    for index = 2, #(model.marquees or {}) do
+        local marquee = model.marquees[index]
         if marquee and
-            type(marquee.start) ==
+            type(marquee.stop) ==
                 "function" then
-            marquee:start()
+            marquee:stop()
         end
     end
 end
@@ -516,19 +850,48 @@ local function attach_row_events(model)
                 model.owner.ui_active and
                 not model.owner.suppress_selection_tracking and
                 model.selection_id then
-                model.owner.selected_item_id =
-                    model.selection_id
+                if model.owner
+                        .discography_selection_lock then
+                    model.owner.selected_item_id =
+                        model.owner
+                            .discography_selection_lock
+                else
+                    model.owner.selected_item_id =
+                        model.selection_id
+                end
             end
 
             set_row_focus(
                 object,
                 true
             )
+            if type(model.on_focus_style) ==
+                    "function" then
+                model.on_focus_style()
+            end
             start_marquees(model)
 
             if type(model.on_focus) ==
                     "function" then
                 model.on_focus()
+            end
+
+            -- Plain lists (Local root, menus) must bring the focused row into
+            -- the clipped viewport. Virtual lists manage their own window or
+            -- motion layer and must not use native parent scrolling here.
+            local controller =
+                model.owner and
+                model.owner
+                    .virtual_list_controller
+
+            if model.owner and
+                model.owner.ui_active and
+                not model.owner.suppress_focus_scroll and
+                not controller then
+                animate_plain_list_reveal(
+                    model.owner,
+                    object
+                )
             end
         end
     )
@@ -536,11 +899,36 @@ local function attach_row_events(model)
     object:onevent(
         lvgl.EVENT.DEFOCUSED,
         function()
+            if model.owner and
+                model.owner
+                    .discography_selection_lock and
+                model.selection_id and
+                tostring(
+                    model.owner
+                        .discography_selection_lock
+                ) == tostring(
+                    model.selection_id
+                ) then
+                -- Escape/discography resume briefly focuses chrome elsewhere
+                -- (sort control) before the locked row is reattached. Keep the
+                -- logical selection highlighted through that window.
+                model.focused = true
+                set_row_focus(
+                    object,
+                    true
+                )
+                return
+            end
+
             model.focused = false
             set_row_focus(
                 object,
                 false
             )
+            if type(model.on_defocus_style) ==
+                    "function" then
+                model.on_defocus_style()
+            end
             stop_marquees(model)
         end
     )
@@ -788,22 +1176,50 @@ end
 
 local function create_artwork(
     row,
-    source
+    source,
+    requested_size
 )
-    local model = {}
+    local thumbnail_size =
+        math.max(
+            1,
+            math.floor(
+                tonumber(requested_size) or 28
+            )
+        )
+    local model = {
+        current_source = source,
+        cache_key = source,
+        attached = true,
+        placeholder_visible = false,
+        bind_generation = 0,
+    }
+
+    local function is_placeholder(
+        value
+    )
+        return
+            type(value) ~= "string" or
+            value == "" or
+            value:find(
+                "cover_placeholder.png",
+                1,
+                true
+            ) ~= nil
+    end
 
     model.frame =
         row:Object {
             x = 2,
             y = 2,
-            w = 28,
-            h = 28,
+            w = thumbnail_size,
+            h = thumbnail_size,
             pad_all = 0,
             border_width = 0,
-            radius = 2,
+            shadow_width = 0,
+            radius = 0,
             bg_color =
                 COLORS.art_background,
-            bg_opa = 255,
+            bg_opa = 0,
             scrollbar_mode =
                 lvgl.SCROLLBAR_MODE.OFF,
         }
@@ -878,15 +1294,36 @@ local function create_artwork(
 
         model.star = {}
 
+        local scale =
+            thumbnail_size / 28
+
         for _, segment in ipairs(
             segments
         ) do
             local piece =
                 model.frame:Object {
-                    x = segment[1],
-                    y = segment[2],
-                    w = segment[3],
-                    h = segment[4],
+                    x = math.floor(
+                        segment[1] * scale +
+                            0.5
+                    ),
+                    y = math.floor(
+                        segment[2] * scale +
+                            0.5
+                    ),
+                    w = math.max(
+                        1,
+                        math.floor(
+                            segment[3] * scale +
+                                0.5
+                        )
+                    ),
+                    h = math.max(
+                        1,
+                        math.floor(
+                            segment[4] * scale +
+                                0.5
+                        )
+                    ),
                     pad_all = 0,
                     border_width = 0,
                     radius = 0,
@@ -916,25 +1353,255 @@ local function create_artwork(
         return model
     end
 
+    local placeholder_source =
+        "//lua/img/cover_placeholder.png"
+
+    local function bind_thumbnail(
+        image,
+        next_source
+    )
+        local decoded_source =
+            lvgl.ImgData(next_source)
+
+        -- Source assignment resets an LVGL image object's content dimensions
+        -- to the decoded file size. Always restore list-thumbnail geometry,
+        -- even when the cache key/path is unchanged.
+        image:set {
+            src = decoded_source,
+        }
+
+        local decoded_width,
+            decoded_height =
+            image:get_img_size()
+
+        if (not tonumber(decoded_width) or
+                not tonumber(decoded_height)) and
+            type(next_source) == "string" and
+            next_source:sub(1, 2) == "//" then
+            decoded_width,
+                decoded_height =
+                image:get_img_size(
+                    next_source:sub(3)
+                )
+        end
+        local zoom = 256
+
+        if tonumber(decoded_width) and
+            tonumber(decoded_height) and
+            decoded_width > 0 and
+            decoded_height > 0 then
+            zoom = math.max(
+                1,
+                math.floor(
+                    math.min(
+                        thumbnail_size /
+                            decoded_width,
+                        thumbnail_size /
+                            decoded_height
+                    ) * 256 + 0.5
+                )
+            )
+        else
+            decoded_width = thumbnail_size
+            decoded_height = thumbnail_size
+        end
+
+        image:set {
+            x = 0,
+            y = 0,
+            w = thumbnail_size,
+            h = thumbnail_size,
+            align = lvgl.ALIGN.TOP_LEFT,
+            offset_x = 0,
+            offset_y = 0,
+            angle = 0,
+            zoom = zoom,
+            antialias = true,
+            inner_align =
+                lvgl.IMAGE_ALIGN.CENTER,
+            transform_width = 0,
+            transform_height = 0,
+            pivot = {
+                x = math.floor(
+                    decoded_width / 2
+                ),
+                y = math.floor(
+                    decoded_height / 2
+                ),
+            },
+        }
+
+        return decoded_width,
+            decoded_height,
+            zoom
+    end
+
+    -- Keep the placeholder on a separate LVGL image object. Recycled rows can
+    -- then hide the old decoded cover immediately without leaving the artwork
+    -- area blank while the correct source is loading.
+    model.placeholder_image =
+        model.frame:Image {
+            x = 0,
+            y = 0,
+            w = thumbnail_size,
+            h = thumbnail_size,
+            pad_all = 0,
+            border_width = 0,
+            shadow_width = 0,
+            radius = 0,
+            bg_opa = 0,
+        }
+
+    bind_thumbnail(
+        model.placeholder_image,
+        placeholder_source
+    )
+
+    model.placeholder_image:clear_flag(
+        lvgl.FLAG.CLICKABLE
+    )
+    model.placeholder_image:add_flag(
+        lvgl.FLAG.HIDDEN
+    )
+
     model.image =
         model.frame:Image {
             x = 0,
             y = 0,
-            src =
-                lvgl.ImgData(source),
+            w = thumbnail_size,
+            h = thumbnail_size,
+            pad_all = 0,
+            border_width = 0,
+            shadow_width = 0,
+            radius = 0,
+            bg_opa = 0,
         }
 
     model.image:clear_flag(
         lvgl.FLAG.CLICKABLE
     )
 
-    function model:set(next_source)
-        model.image:set {
-            src =
-                lvgl.ImgData(
-                    next_source
-                ),
+    local function show_placeholder()
+        local decoded_width,
+            decoded_height,
+            zoom =
+            bind_thumbnail(
+                model.placeholder_image,
+                placeholder_source
+            )
+
+        model.cache_key =
+            placeholder_source
+        model.decoded_width =
+            decoded_width
+        model.decoded_height =
+            decoded_height
+        model.thumbnail_zoom = zoom
+        model.placeholder_visible = true
+        model.frame:set {
+            bg_color =
+                palette.placeholder_cover,
+            bg_opa = 255,
         }
+        model.image:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        model.placeholder_image:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        model.image:invalidate()
+        model.placeholder_image:invalidate()
+        model.frame:invalidate()
+    end
+
+    if is_placeholder(source) then
+        show_placeholder()
+    else
+        local decoded_width,
+            decoded_height,
+            zoom =
+            bind_thumbnail(
+                model.image,
+                source
+            )
+
+        model.decoded_width =
+            decoded_width
+        model.decoded_height =
+            decoded_height
+        model.thumbnail_zoom = zoom
+        model.frame:set {
+            bg_opa = 0,
+            shadow_width = 0,
+            radius = 0,
+        }
+    end
+
+    function model:is_valid()
+        return self.attached == true and
+            self.frame ~= nil and
+            self.image ~= nil and
+            self.placeholder_image ~= nil
+    end
+
+    function model:detach()
+        self.attached = false
+        self.image = nil
+        self.placeholder_image = nil
+        self.frame = nil
+    end
+
+    function model:set(next_source)
+        if not self:is_valid() then
+            return false
+        end
+
+        model.current_source = next_source
+        model.bind_generation =
+            model.bind_generation + 1
+
+        if is_placeholder(next_source) then
+            show_placeholder()
+            return true
+        end
+
+        -- Hide the recycled image until the new source has been rebound.
+        -- This prevents LVGL from painting the previous row's decoded image
+        -- for a frame while the source pointer and invalidation propagate.
+        model.image:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        model.placeholder_image:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        model.placeholder_visible = false
+        local decoded_width,
+            decoded_height,
+            zoom =
+            bind_thumbnail(
+                model.image,
+                next_source
+            )
+        model.cache_key = next_source
+        model.decoded_width =
+            decoded_width
+        model.decoded_height =
+            decoded_height
+        model.thumbnail_zoom = zoom
+        model.frame:set {
+            bg_color =
+                COLORS.art_background,
+            bg_opa = 0,
+            shadow_width = 0,
+            radius = 0,
+        }
+        model.image:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        model.image:invalidate()
+        model.frame:invalidate()
+
+        return true
     end
 
     return model
@@ -982,6 +1649,59 @@ function M.create_root(
                         background_path
                     ),
             }
+
+        local decoded_width,
+            decoded_height =
+            self.background_art:
+                get_img_size()
+
+        decoded_width =
+            tonumber(decoded_width) or 160
+        decoded_height =
+            tonumber(decoded_height) or 128
+
+        local zoom = math.max(
+            1,
+            math.floor(
+                math.max(
+                    160 / decoded_width,
+                    128 / decoded_height
+                ) * 256 + 0.5
+            )
+        )
+        local pivot = {
+            x = math.floor(decoded_width / 2),
+            y = math.floor(decoded_height / 2),
+        }
+
+        self.background_art:set {
+            x = 80 - pivot.x,
+            y = 64 - pivot.y,
+            w = decoded_width,
+            h = decoded_height,
+            align = lvgl.ALIGN.TOP_LEFT,
+            offset_x = 0,
+            offset_y = 0,
+            angle = 0,
+            zoom = zoom,
+            pivot = pivot,
+            inner_align =
+                lvgl.IMAGE_ALIGN.CENTER,
+            transform_width = 0,
+            transform_height = 0,
+            antialias = true,
+        }
+
+        self.background_geometry = {
+            decoded_width = decoded_width,
+            decoded_height = decoded_height,
+            zoom = zoom,
+            pivot = pivot,
+            x = 80 - pivot.x,
+            y = 64 - pivot.y,
+            target_width = 160,
+            target_height = 128,
+        }
 
         self.background_dimmer =
             self.root:Object {
@@ -1107,6 +1827,8 @@ function M.create_root(
             0 or 255,
         scrollbar_mode =
             lvgl.SCROLLBAR_MODE.OFF,
+        -- Native scroll-to-view duration for Local root and plain lists.
+        anim_time = 150,
     }
 
     self.rows = {}
@@ -1138,6 +1860,8 @@ function M.create_root(
                 ) or 0,
             list_transparent =
                 self.background_art ~= nil,
+            geometry =
+                self.background_geometry,
         }
     end
 end
@@ -1191,12 +1915,54 @@ local function add_modal_row_events(
     )
 end
 
-local function sort_method_title(method)
-    if method == "recent" then
-        return "Recently Added"
+local function sort_method_title(
+    method,
+    options
+)
+    if options and
+        type(options.method_labels) ==
+            "table" and
+        type(
+            options.method_labels[method]
+        ) == "string" then
+        return options.method_labels[
+            method
+        ]
     end
 
-    return "Alphabetical"
+    return ({
+        alpha = "Alphabetical",
+        recent = "Recently Added",
+        title = "Title",
+        artist = "Artist",
+        date_added = "Date added",
+        relevance = "Relevance",
+        year = "Year",
+        status = "Status",
+        newest = "Newest",
+    })[method] or tostring(method or "")
+end
+
+local function sort_method_badge(
+    method,
+    options
+)
+    return ({
+        recent =
+            options.recent_label or
+            "NEW",
+        title = "A-Z",
+        artist = "ART",
+        date_added = "NEW",
+        relevance = "REL",
+        year = "YEAR",
+        status = "STATE",
+        newest = "NEW",
+    })[method] or
+        (
+            options.alpha_label or
+            "A-Z"
+        )
 end
 
 function M.add_sort_control(
@@ -1265,6 +2031,8 @@ function M.add_sort_control(
     self.sort_selected_method =
         options.current_method or
         methods[1]
+    self.sort_committed_method =
+        self.sort_selected_method
     self.sort_order_labels = {}
 
     function self.update_sort_labels(
@@ -1310,7 +2078,8 @@ function M.add_sort_control(
 
     local function update_from(
         callback,
-        method
+        method,
+        mark_dirty
     )
         if type(callback) ~= "function" then
             return false
@@ -1322,7 +2091,9 @@ function M.add_sort_control(
             return false
         end
 
-        self.sort_dirty = true
+        if mark_dirty ~= false then
+            self.sort_dirty = true
+        end
         self.update_sort_labels(state)
 
         return true
@@ -1332,7 +2103,9 @@ function M.add_sort_control(
         return update_from(
             options.on_highlight or
                 options.on_select,
-            method
+            method,
+            options.highlight_is_preview ~=
+                true
         )
     end
 
@@ -1442,15 +2215,18 @@ function M.add_sort_control(
                 bg_opa = 0,
             }
 
+        local method_title =
+            sort_method_title(
+                method,
+                options
+            )
+
         option:Label {
             x = 6,
             y = 5,
             w = 104,
             h = 13,
-            text =
-                sort_method_title(
-                    method
-                ),
+            text = method_title,
             text_color =
                 COLORS.primary,
             text_font =
@@ -1460,15 +2236,10 @@ function M.add_sort_control(
         local order_badge =
             create_badge(
                 option,
-                method == "recent" and
-                    (
-                        options.recent_label or
-                        "NEW"
-                    ) or
-                    (
-                        options.alpha_label or
-                        "A-Z"
-                    ),
+                sort_method_badge(
+                    method,
+                    options
+                ),
                 3,
                 147
             )
@@ -1476,6 +2247,7 @@ function M.add_sort_control(
         local option_model = {
             object = option,
             method = method,
+            label_text = method_title,
             order_badge =
                 order_badge,
         }
@@ -1491,17 +2263,59 @@ function M.add_sort_control(
                 update_from(
                     options.on_highlight or
                         options.on_select,
-                    method
+                    method,
+                    options.highlight_is_preview ~=
+                        true
                 )
             end
 
         option_model.on_click =
             function()
-                update_from(
-                    options.on_toggle or
-                        options.on_select,
-                    method
+                for _, candidate in ipairs(
+                    self.sort_menu_models
+                ) do
+                    candidate.focused = false
+                    set_row_focus(
+                        candidate.object,
+                        false
+                    )
+                end
+
+                option_model.focused = true
+                focus_object(
+                    option_model.object,
+                    false
                 )
+                set_row_focus(
+                    option_model.object,
+                    true
+                )
+
+                local selecting_field =
+                    options
+                        .select_field_before_toggle ==
+                        true and
+                    self.sort_committed_method ~=
+                        method
+                local callback =
+                    selecting_field and
+                    (
+                        options.on_select or
+                        options.on_toggle
+                    ) or
+                    (
+                        options.on_toggle or
+                        options.on_select
+                    )
+
+                if update_from(
+                    callback,
+                    method,
+                    true
+                ) then
+                    self.sort_committed_method =
+                        method
+                end
             end
 
         add_modal_row_events(
@@ -1663,6 +2477,19 @@ function M.add_sort_control(
 
         if should_apply then
             options.on_apply()
+        elseif type(options.on_restore) ==
+                "function" then
+            local restored =
+                options.on_restore()
+            if type(restored) ==
+                    "table" then
+                self.update_sort_labels(
+                    restored
+                )
+                self.sort_committed_method =
+                    restored.method or
+                    self.sort_committed_method
+            end
         end
 
         if self.ui_active and
@@ -1962,8 +2789,122 @@ local function ensure_sort_scroll_room(self)
     )
 end
 
+local function cancel_resume_repaint(self)
+    if not self.resume_repaint_timer then
+        return
+    end
+
+    pcall(
+        function()
+            self.resume_repaint_timer:delete()
+        end
+    )
+    self.resume_repaint_timer = nil
+end
+
+local function schedule_resume_repaint(
+    self,
+    controller
+)
+    cancel_resume_repaint(self)
+
+    self.resume_repaint_generation =
+        (self.resume_repaint_generation or 0) + 1
+
+    local generation =
+        self.resume_repaint_generation
+
+    resume_trace(
+        "schedule post-pop repaint generation=" ..
+            tostring(generation)
+    )
+
+    self.resume_repaint_timer =
+        lvgl.Timer {
+            period = 1,
+            repeat_count = 1,
+            cb = function()
+                self.resume_repaint_timer = nil
+
+                resume_trace(
+                    "post-pop repaint tick generation=" ..
+                        tostring(generation) ..
+                        " active=" ..
+                        tostring(self.ui_active)
+                )
+
+                if not self.ui_active or
+                    self.virtual_list_controller ~= controller or
+                    self.resume_repaint_generation ~= generation then
+                    return
+                end
+
+                self.suppress_focus_scroll = true
+                self.suppress_selection_tracking =
+                    true
+
+                if type(
+                    controller
+                        .repair_resumed_viewport
+                ) == "function" and
+                    self.controls_installed_once then
+                    controller:
+                        repair_resumed_viewport()
+                elseif type(
+                    controller
+                        .invalidate_viewport
+                ) == "function" then
+                    controller:
+                        invalidate_viewport()
+                end
+
+                local focused_object =
+                    selected_row_object(self) or
+                    self.initial_focus_object or
+                    self.first_row
+
+                if focused_object then
+                    focus_object(
+                        focused_object,
+                        false
+                    )
+                end
+
+                for _, model in ipairs(
+                    self.rows or {}
+                ) do
+                    local focused =
+                        model.object ==
+                        focused_object
+                    set_row_focus(
+                        model.object,
+                        focused
+                    )
+                    model.focused = focused
+                    if focused then
+                        start_marquees(model)
+                    else
+                        stop_marquees(model)
+                    end
+                end
+
+                self.suppress_selection_tracking =
+                    false
+                self.suppress_focus_scroll = false
+            end,
+        }
+end
+
 function M.install_controls(self)
     self.ui_active = true
+
+    resume_trace(
+        "install-controls start resumed=" ..
+            tostring(
+                self.controls_installed_once ==
+                    true
+            )
+    )
 
     if self.header_marquee then
         self.header_marquee:refresh(true)
@@ -1999,12 +2940,55 @@ function M.install_controls(self)
         self.controls_installed_once ==
             true
 
-    local restored_object =
-        resuming and
-        selected_row_object(self) or
-        nil
+    local restored_object = nil
+    local restored_fixed_viewport = false
+
+    if resuming and
+        self.virtual_list_controller and
+        type(
+            self.virtual_list_controller
+                .resume_viewport
+        ) == "function" then
+        local restored_model =
+            self.virtual_list_controller:
+                resume_viewport()
+
+        restored_object =
+            restored_model and
+            restored_model.object or
+            nil
+        restored_fixed_viewport =
+            restored_model ~= nil and
+            self.virtual_list_controller
+                .fixed_viewport == true
+
+        resume_trace(
+            "resume-viewport returned=" ..
+                tostring(restored_model ~= nil)
+        )
+    end
+
+    restored_object =
+        restored_object or
+        (
+            resuming and
+            selected_row_object(self) or
+            nil
+        )
+
+    if resuming and
+        not self.virtual_list_controller then
+        restore_plain_list_scroll(self)
+    end
 
     self.suppress_selection_tracking = true
+    self.suppress_focus_scroll =
+        resuming == true or
+        (
+            self.virtual_list_controller and
+            self.virtual_list_controller
+                .fixed_viewport == true
+        )
 
     for _, model in ipairs(
         self.rows or {}
@@ -2027,9 +3011,107 @@ function M.install_controls(self)
             self.rows[1].object
         )
 
-    focus_object(initial_object)
+    -- Fixed-viewport catalogs must never use native animated scroll-to-view
+    -- during mount/resume. Only encoder selection may animate the motion layer.
+    -- Plain Sync root resume must also stay non-animated.
+    local allow_native_scroll =
+        not resuming and
+        not restored_fixed_viewport and
+        not (
+            self.virtual_list_controller and
+            self.virtual_list_controller
+                .fixed_viewport == true
+        )
 
-    self.suppress_selection_tracking = false
+    focus_object(
+        initial_object,
+        allow_native_scroll
+    )
+
+    -- Paint the restored/default selection on the first frame without waiting
+    -- for a wheel event. FOCUSED may already have fired; force the chrome.
+    for _, model in ipairs(
+        self.rows or {}
+    ) do
+        local focused =
+            model.object == initial_object
+
+        set_row_focus(
+            model.object,
+            focused
+        )
+        model.focused = focused
+
+        if focused then
+            start_marquees(model)
+            if type(model.on_focus_style) ==
+                    "function" then
+                model.on_focus_style()
+            end
+        else
+            stop_marquees(model)
+            if type(model.on_defocus_style) ==
+                    "function" then
+                model.on_defocus_style()
+            end
+        end
+    end
+
+    -- Keep resume scroll suppression through the next tick so a delayed
+    -- FOCUSED event cannot start animate_plain_list_reveal after Escape.
+    if resuming then
+        local generation =
+            (self.resume_scroll_suppress_generation or 0) + 1
+        self.resume_scroll_suppress_generation =
+            generation
+        self.suppress_focus_scroll = true
+        self.suppress_selection_tracking = false
+
+        lvgl.Timer {
+            period = 1,
+            repeat_count = 1,
+            cb = function()
+                if self.resume_scroll_suppress_generation ~=
+                        generation then
+                    return
+                end
+                if self.ui_active and
+                    not (
+                        self.virtual_list_controller and
+                        self.virtual_list_controller
+                            .fixed_viewport == true
+                    ) then
+                    restore_plain_list_scroll(self)
+                end
+                self.suppress_focus_scroll = false
+            end,
+        }
+    else
+        self.suppress_focus_scroll = false
+        self.suppress_selection_tracking = false
+    end
+
+    resume_trace(
+        "focus assigned native-scroll=" ..
+            tostring(allow_native_scroll)
+    )
+
+    if restored_fixed_viewport and
+        type(
+            self.virtual_list_controller
+                .invalidate_viewport
+        ) == "function" then
+        self.virtual_list_controller:
+            invalidate_viewport()
+
+        -- firmware_backstack.pop() invokes on_show before it loads the
+        -- restored native LVGL screen. Repair the painted viewport once, on
+        -- the following LVGL tick, after screen load and focus/layout work.
+        schedule_resume_repaint(
+            self,
+            self.virtual_list_controller
+        )
+    end
 
     if not resuming then
         schedule_initial_scroll(self)
@@ -2045,6 +3127,8 @@ function M.install_controls(self)
     jellyfin_navigation.set_back(
         self.go_back
     )
+
+    resume_trace("install-controls end")
 
     local hooks = controls.hooks()
 
@@ -2070,6 +3154,23 @@ end
 
 function M.restore_controls(self)
     self.ui_active = false
+
+    cancel_plain_list_scroll(self)
+
+    self.resume_repaint_generation =
+        (self.resume_repaint_generation or 0) + 1
+    cancel_resume_repaint(self)
+
+    if self.virtual_list_controller and
+        type(
+            self.virtual_list_controller
+                .capture_resume_viewport
+        ) == "function" then
+        self.virtual_list_controller:
+            capture_resume_viewport()
+    else
+        capture_plain_list_scroll(self)
+    end
 
     if self.header_marquee then
         self.header_marquee:stop()
@@ -2286,6 +3387,25 @@ function M.attach_scroll_indicator(
             )
     end
 
+    if indicator_options.height == nil and
+        self and self.list then
+        local list_height = nil
+
+        pcall(function()
+            local coordinates =
+                self.list:get_coords()
+            list_height =
+                coordinates.y2 -
+                coordinates.y1 + 1
+        end)
+
+        if type(list_height) == "number" and
+            list_height > 0 then
+            indicator_options.height =
+                math.max(1, list_height - 4)
+        end
+    end
+
     local indicator =
         jellyfin_scroll_indicator.create(
             self and self.list,
@@ -2297,11 +3417,21 @@ function M.attach_scroll_indicator(
     end
 
     indicator.models = models
-    indicator.item_count = #models
+    indicator.item_count =
+        math.max(
+            #models,
+            math.floor(
+                tonumber(
+                    indicator_options.total_count or
+                    indicator_options.item_count
+                ) or #models
+            )
+        )
 
-    for index, model in ipairs(models) do
-        local row_index = index
-
+    local function bind_focus(
+        model,
+        row_index
+    )
         if model then
             local previous_on_focus =
                 model.on_focus
@@ -2320,9 +3450,40 @@ function M.attach_scroll_indicator(
         end
     end
 
-    indicator:update(
+    for index, model in ipairs(models) do
+        bind_focus(model, index)
+    end
+
+    -- Several controls may share one logical scrollbar row (for example the
+    -- three horizontal Sync quick actions). Bind those focus aliases to the
+    -- same logical index without adding them to the item count.
+    for _, alias in ipairs(
+        indicator_options.focus_aliases or {}
+    ) do
+        bind_focus(
+            alias.model or alias[1],
+            math.max(
+                1,
+                math.floor(
+                    tonumber(
+                        alias.index or alias[2]
+                    ) or 1
+                )
+            )
+        )
+    end
+
+    indicator:initialize(
         indicator.item_count,
-        1
+        math.max(
+            1,
+            math.floor(
+                tonumber(
+                    indicator_options
+                        .initial_index
+                ) or 1
+            )
+        )
     )
 
     self.scroll_indicator = indicator
@@ -2340,7 +3501,7 @@ function M.add_action_row(
     local row =
         self.list:Button {
             w = lvgl.PCT(100),
-            h = tonumber(options.height) or 25,
+            h = tonumber(options.height) or MENU_ROW_HEIGHT,
             pad_all = 0,
             border_width = 0,
             outline_width = 0,
@@ -2354,9 +3515,9 @@ function M.add_action_row(
             row,
             {
                 x = tonumber(options.x) or 5,
-                y = tonumber(options.y) or 6,
+                y = tonumber(options.y) or MENU_TEXT_Y,
                 w = tonumber(options.width) or 150,
-                h = tonumber(options.text_height) or 14,
+                h = tonumber(options.text_height) or MENU_TEXT_HEIGHT,
                 text = label or "",
                 text_color =
                     options.text_color or
@@ -2391,6 +3552,409 @@ function M.add_action_row(
     return model
 end
 
+function M.add_quick_actions(
+    self,
+    actions
+)
+    local container =
+        self.list:Object {
+            w = lvgl.PCT(100),
+            h = 34,
+            pad_all = 0,
+            border_width = 0,
+            radius = 0,
+            bg_opa = 0,
+            scrollbar_mode =
+                lvgl.SCROLLBAR_MODE.OFF,
+        }
+
+    container:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+    container:clear_flag(
+        lvgl.FLAG.CLICKABLE
+    )
+    remove_from_group(container)
+
+    local models = {}
+    local count = math.max(
+        1,
+        #(actions or {})
+    )
+    local gap = 2
+    local width =
+        math.floor(
+            (154 - gap * (count - 1)) /
+            count
+        )
+
+    for index, action in ipairs(
+        actions or {}
+    ) do
+        local button =
+            container:Button {
+                x =
+                    (index - 1) *
+                    (width + gap),
+                y = 0,
+                w = width,
+                h = 32,
+                pad_all = 0,
+                border_width = 1,
+                border_color =
+                    palette.divider,
+                outline_width = 0,
+                shadow_width = 0,
+                radius = 3,
+                bg_color =
+                    COLORS.selected,
+                bg_opa = 0,
+            }
+
+        local icon
+        local icon_parts = {}
+        local icon_color = COLORS.primary
+
+        local function icon_part(properties)
+            properties.pad_all = 0
+            properties.shadow_width = 0
+            properties.bg_color =
+                properties.bg_color or
+                icon_color
+            properties.bg_opa =
+                properties.bg_opa or 255
+            local part =
+                button:Object(properties)
+            part:clear_flag(
+                lvgl.FLAG.CLICKABLE
+            )
+            part:clear_flag(
+                lvgl.FLAG.SCROLLABLE
+            )
+            remove_from_group(part)
+            table.insert(icon_parts, part)
+            return part
+        end
+
+        if action.icon_kind == "search" then
+            icon_part {
+                x = math.floor(width / 2) - 5,
+                y = 2,
+                w = 8,
+                h = 8,
+                radius = 4,
+                border_width = 1,
+                border_color = icon_color,
+                bg_opa = 0,
+            }
+            icon_part {
+                x = math.floor(width / 2) + 2,
+                y = 9,
+                w = 2,
+                h = 2,
+                radius = 0,
+                border_width = 0,
+            }
+            icon_part {
+                x = math.floor(width / 2) + 4,
+                y = 11,
+                w = 2,
+                h = 2,
+                radius = 0,
+                border_width = 0,
+            }
+        elseif action.icon_kind == "album" then
+            icon_part {
+                x = math.floor(width / 2) - 6,
+                y = 2,
+                w = 12,
+                h = 12,
+                radius = 2,
+                border_width = 1,
+                border_color = icon_color,
+                bg_opa = 0,
+            }
+            icon_part {
+                x = math.floor(width / 2) - 2,
+                y = 6,
+                w = 4,
+                h = 4,
+                radius = 2,
+                border_width = 0,
+            }
+        elseif action.icon_kind == "tracks" then
+            icon_part {
+                x = math.floor(width / 2),
+                y = 2,
+                w = 2,
+                h = 9,
+                radius = 0,
+                border_width = 0,
+            }
+            icon_part {
+                x = math.floor(width / 2),
+                y = 2,
+                w = 7,
+                h = 2,
+                radius = 0,
+                border_width = 0,
+            }
+            icon_part {
+                x = math.floor(width / 2) - 4,
+                y = 9,
+                w = 5,
+                h = 4,
+                radius = 2,
+                border_width = 0,
+            }
+        else
+            icon =
+                button:Label {
+                    x = 0,
+                    y = 2,
+                    w = width,
+                    h = 12,
+                    text = action.icon or "",
+                    text_align = 1,
+                    text_color =
+                        COLORS.primary,
+                    text_font =
+                        font.fusion_10,
+                }
+            icon:clear_flag(
+                lvgl.FLAG.CLICKABLE
+            )
+        end
+
+        local label =
+            button:Label {
+                x = 0,
+                y = 17,
+                w = width,
+                h = 12,
+                text = action.label or "",
+                text_align = 2,
+                text_color =
+                    COLORS.secondary,
+                text_font =
+                    font.fusion_10,
+            }
+
+        label:clear_flag(
+            lvgl.FLAG.CLICKABLE
+        )
+
+        local model = {
+            object = button,
+            icon = icon,
+            icon_parts = icon_parts,
+            label = label,
+            icon_text = action.icon or "",
+            label_text = action.label or "",
+            label_text_align = 2,
+            marquees = {},
+            on_click = action.on_click,
+            selection_id =
+                normalize_selection_id(
+                    action.selection_id
+                ),
+        }
+
+        attach_row_events(model)
+        register_model(self, model)
+        register_leading_row(
+            self,
+            model
+        )
+        table.insert(models, model)
+    end
+
+    return models, container
+end
+
+function M.add_toggle_actions(
+    self,
+    actions
+)
+    local container =
+        self.list:Object {
+            w = lvgl.PCT(100),
+            h = 27,
+            pad_all = 0,
+            border_width = 0,
+            radius = 0,
+            bg_opa = 0,
+            scrollbar_mode =
+                lvgl.SCROLLBAR_MODE.OFF,
+        }
+
+    container:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+    container:clear_flag(
+        lvgl.FLAG.CLICKABLE
+    )
+    remove_from_group(container)
+
+    local models = {}
+    local gap = 3
+    local count = math.max(
+        1,
+        #(actions or {})
+    )
+    local width =
+        math.floor(
+            (154 - gap * (count - 1)) /
+            count
+        )
+
+    for index, action in ipairs(
+        actions or {}
+    ) do
+        local button =
+            container:Button {
+                x = (index - 1) *
+                    (width + gap),
+                y = 1,
+                w = width,
+                h = 24,
+                pad_all = 0,
+                border_width = 1,
+                border_color =
+                    palette.divider,
+                outline_width = 0,
+                shadow_width = 0,
+                radius = 4,
+                bg_color =
+                    COLORS.selected,
+                bg_opa =
+                    action.active and
+                    150 or 0,
+            }
+        local label =
+            button:Label {
+                x = 0,
+                y = 6,
+                w = width,
+                h = 13,
+                text = action.label or "",
+                text_align = 2,
+                text_color =
+                    COLORS.primary,
+                text_font =
+                    font.fusion_10,
+            }
+        label:clear_flag(
+            lvgl.FLAG.CLICKABLE
+        )
+
+        local model = {
+            object = button,
+            label = label,
+            label_text_align = 2,
+            active = action.active == true,
+            marquees = {},
+            on_click = action.on_click,
+            selection_id =
+                normalize_selection_id(
+                    action.selection_id
+                ),
+        }
+
+        function model:set_active(active)
+            self.active = active == true
+            self.object:set {
+                bg_color =
+                    self.active and
+                    palette.accent_muted or
+                    COLORS.selected,
+                bg_opa =
+                    self.active and
+                    255 or 0,
+            }
+        end
+
+        model.on_focus_style =
+            function()
+                button:set {
+                    bg_color =
+                        model.active and
+                        palette.accent or
+                        COLORS.selected,
+                    bg_opa = 255,
+                }
+            end
+        model.on_defocus_style =
+            function()
+                button:set {
+                    bg_color =
+                        model.active and
+                        palette.accent_muted or
+                        COLORS.selected,
+                    bg_opa =
+                        model.active and
+                        255 or 0,
+                }
+            end
+        attach_row_events(model)
+        register_model(self, model)
+        model:set_active(model.active)
+        table.insert(models, model)
+    end
+
+    return models, container
+end
+
+function M.add_section_label(
+    self,
+    value
+)
+    local row =
+        self.list:Object {
+            w = lvgl.PCT(100),
+            h = 17,
+            pad_all = 0,
+            border_width = 0,
+            radius = 0,
+            bg_opa = 0,
+            scrollbar_mode =
+                lvgl.SCROLLBAR_MODE.OFF,
+        }
+
+    row:clear_flag(
+        lvgl.FLAG.SCROLLABLE
+    )
+    row:clear_flag(
+        lvgl.FLAG.CLICKABLE
+    )
+    remove_from_group(row)
+
+    local label =
+        row:Label {
+            x = 0,
+            y = 2,
+            w = 154,
+            h = 13,
+            text = value or "",
+            text_align = 2,
+            text_color =
+                COLORS.primary,
+            text_font =
+                font.fusion_10,
+        }
+
+    label:clear_flag(
+        lvgl.FLAG.CLICKABLE
+    )
+    remove_from_group(label)
+
+    return {
+        object = row,
+        label = label,
+        text = value or "",
+    }
+end
+
 function M.add_count_row(
     self,
     title,
@@ -2399,9 +3963,9 @@ function M.add_count_row(
     selection_id
 )
     local row =
-        self.list:Button {
+        media_row_parent(self):Button {
             w = lvgl.PCT(100),
-            h = 24,
+            h = MENU_ROW_HEIGHT,
             pad_all = 0,
             border_width = 0,
             outline_width = 0,
@@ -2423,9 +3987,9 @@ function M.add_count_row(
             row,
             {
                 x = 5,
-                y = 5,
+                y = MENU_TEXT_Y,
                 w = 139 - badge.width,
-                h = 14,
+                h = MENU_TEXT_HEIGHT,
                 text = title,
                 text_color =
                     COLORS.primary,
@@ -2479,16 +4043,81 @@ function M.add_count_row(
     )
 end
 
-function M.add_album_row(
+function M.add_compact_text_row(
     self,
-    album,
-    artwork_source,
-    callback
+    title,
+    callback,
+    selection_id,
+    width
 )
     local row =
         media_row_parent(self):Button {
             w = lvgl.PCT(100),
-            h = 32,
+            h = 13,
+            pad_all = 0,
+            border_width = 0,
+            outline_width = 0,
+            shadow_width = 0,
+            radius = 2,
+            bg_opa = 0,
+        }
+
+    local label = row:Label {
+        x = 4,
+        y = 1,
+        w = tonumber(width) or 146,
+        h = 11,
+        text = title or "",
+        text_color = COLORS.primary,
+        text_font = font.fusion_10,
+        long_mode = lvgl.LABEL.LONG_DOT,
+    }
+    label:clear_flag(lvgl.FLAG.CLICKABLE)
+    remove_from_group(label)
+
+    local model = {
+        object = row,
+        label = label,
+        on_click = callback,
+        selection_id =
+            normalize_selection_id(
+                selection_id
+            ),
+    }
+
+    function model:update(
+        next_title,
+        next_callback,
+        next_selection_id
+    )
+        label:set {text = next_title or ""}
+        model.on_click = next_callback
+        update_model_selection(
+            model,
+            next_selection_id
+        )
+    end
+
+    attach_row_events(model)
+    return register_model(self, model)
+end
+
+function M.add_album_row(
+    self,
+    album,
+    artwork_source,
+    callback_or_options
+)
+    local options =
+        type(callback_or_options) == "table" and
+        callback_or_options or
+        {
+            on_click = callback_or_options,
+        }
+    local row =
+        media_row_parent(self):Button {
+            w = lvgl.PCT(100),
+            h = MEDIA_ROW_HEIGHT,
             pad_all = 0,
             border_width = 0,
             outline_width = 0,
@@ -2500,33 +4129,67 @@ function M.add_album_row(
     local artwork =
         create_artwork(
             row,
-            artwork_source
+            artwork_source,
+            MEDIA_ARTWORK_SIZE
         )
 
+    local badge_hidden =
+        options.hide_trailing_badge == true
+    local badge_value =
+        badge_hidden and "" or
+        (
+            options.trailing_status or
+            album.track_count or 0
+        )
     local badge =
         create_badge(
             row,
-            album.track_count or 0,
-            7,
+            badge_value,
+            2,
             151
         )
 
+    if badge_hidden then
+        badge.object:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        pcall(function()
+            badge.label:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
+        end)
+    elseif options.trailing_status then
+        -- Status badges use secondary styling so they do not look like
+        -- ordinary completed track-count chips.
+        pcall(function()
+            badge.object:set {
+                bg_color = COLORS.secondary,
+            }
+            badge.label:set {
+                text_color = COLORS.primary,
+            }
+        end)
+    end
+
     local width =
-        114 - badge.width
+        badge_hidden and MEDIA_TEXT_WIDTH or
+        (MEDIA_TEXT_WIDTH - badge.width)
 
     local title =
         jellyfin_marquee.create(
             row,
             {
-                x = 35,
-                y = 1,
+                x = MEDIA_TEXT_X,
+                y = MEDIA_TITLE_Y,
                 w = width,
-                h = 14,
+                h = 13,
                 text =
                     album.name or
                     "Unknown Album",
                 text_color =
                     COLORS.primary,
+                text_font =
+                    font.fusion_10,
             }
         )
 
@@ -2534,15 +4197,17 @@ function M.add_album_row(
         jellyfin_marquee.create(
             row,
             {
-                x = 35,
-                y = 16,
+                x = MEDIA_TEXT_X,
+                y = MEDIA_DETAIL_Y,
                 w = width,
-                h = 14,
+                h = 13,
                 text =
                     album.artist or
                     "Unknown Artist",
                 text_color =
                     COLORS.secondary,
+                text_font =
+                    font.fusion_10,
             }
         )
 
@@ -2556,28 +4221,138 @@ function M.add_album_row(
         title = title,
         artist = artist,
         badge = badge,
-        on_click = callback,
+        on_click = options.on_click,
+        on_long_press = options.on_long_press,
         selection_id =
             item_selection_id(album),
+        available =
+            options.available ~= false,
     }
+
+    local function apply_availability(
+        available,
+        click_handler,
+        long_press_handler,
+        dimmed
+    )
+        model.available =
+            available ~= false
+        model.on_click =
+            model.available and
+            click_handler or nil
+        model.on_long_press =
+            model.available and
+            long_press_handler or nil
+
+        title.view:set {
+            text_color =
+                model.available and
+                COLORS.primary or
+                COLORS.secondary,
+        }
+        artist.view:set {
+            text_color = COLORS.secondary,
+        }
+        row:set {
+            opa = dimmed == true and 128 or 255,
+        }
+
+        if model.available then
+            add_to_group(
+                self.focus_group or
+                lvgl.group.get_default(),
+                row
+            )
+            row:add_flag(lvgl.FLAG.CLICKABLE)
+        else
+            remove_from_group(row)
+            row:clear_flag(lvgl.FLAG.CLICKABLE)
+        end
+    end
+
+    apply_availability(
+        options.available,
+        options.on_click,
+        options.on_long_press,
+        options.dimmed
+    )
 
     function model:update(
         next_album,
         next_artwork,
-        next_callback
+        next_callback_or_options
     )
-        next_album =
-            next_album or {}
+        local next_options =
+            type(next_callback_or_options) ==
+                "table" and
+            next_callback_or_options or
+            {
+                on_click =
+                    next_callback_or_options,
+            }
+        next_album = next_album or {}
 
         artwork:set(
             next_artwork
         )
 
-        local next_width =
-            114 -
-            badge:set(
+        local badge_hidden =
+            next_options.hide_trailing_badge ==
+            true
+        local next_badge =
+            badge_hidden and "" or
+            (
+                next_options.trailing_status or
                 next_album.track_count or 0
             )
+        local next_width =
+            badge_hidden and MEDIA_TEXT_WIDTH or
+            (
+                MEDIA_TEXT_WIDTH -
+                badge:set(next_badge)
+            )
+
+        if badge_hidden then
+            badge.object:add_flag(
+                lvgl.FLAG.HIDDEN
+            )
+            pcall(function()
+                badge.label:add_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+            end)
+        else
+            badge.object:clear_flag(
+                lvgl.FLAG.HIDDEN
+            )
+            pcall(function()
+                badge.label:clear_flag(
+                    lvgl.FLAG.HIDDEN
+                )
+            end)
+            if next_options.trailing_status then
+                pcall(function()
+                    badge.object:set {
+                        bg_color =
+                            COLORS.secondary,
+                    }
+                    badge.label:set {
+                        text_color =
+                            COLORS.primary,
+                    }
+                end)
+            else
+                pcall(function()
+                    badge.object:set {
+                        bg_color = COLORS.badge,
+                    }
+                    badge.label:set {
+                        text_color =
+                            COLORS.badge_text,
+                    }
+                end)
+            end
+        end
 
         title:set_width(
             next_width
@@ -2595,8 +4370,12 @@ function M.add_album_row(
             "Unknown Artist"
         )
 
-        model.on_click =
-            next_callback
+        apply_availability(
+            next_options.available,
+            next_options.on_click,
+            next_options.on_long_press,
+            next_options.dimmed
+        )
         update_model_selection(
             model,
             item_selection_id(
@@ -2626,9 +4405,9 @@ function M.add_playlist_row(
             on_click = callback_or_options,
         }
     local row =
-        self.list:Button {
+        media_row_parent(self):Button {
             w = lvgl.PCT(100),
-            h = 32,
+            h = MEDIA_ROW_HEIGHT,
             pad_all = 0,
             border_width = 0,
             outline_width = 0,
@@ -2640,7 +4419,8 @@ function M.add_playlist_row(
     local artwork =
         create_artwork(
             row,
-            artwork_source
+            artwork_source,
+            MEDIA_ARTWORK_SIZE
         )
 
     local count =
@@ -2651,7 +4431,7 @@ function M.add_playlist_row(
         create_badge(
             row,
             count,
-            7,
+            2,
             151
         )
 
@@ -2659,15 +4439,19 @@ function M.add_playlist_row(
         jellyfin_marquee.create(
             row,
             {
-                x = 35,
-                y = 9,
-                w = 114 - badge.width,
-                h = 14,
+                x = MEDIA_TEXT_X,
+                y = MEDIA_SINGLE_Y,
+                w =
+                    MEDIA_TEXT_WIDTH -
+                    badge.width,
+                h = 11,
                 text =
                     collection.name or
                     "Playlist",
                 text_color =
                     COLORS.primary,
+                text_font =
+                    font.fusion_10,
             }
         )
 
@@ -2719,7 +4503,7 @@ function M.add_playlist_row(
             )
 
         name:set_width(
-            114 - width
+            MEDIA_TEXT_WIDTH - width
         )
         name:set(
             next_collection.name or
@@ -2764,7 +4548,7 @@ function M.add_track_row(
     local row =
         media_row_parent(self):Button {
             w = lvgl.PCT(100),
-            h = 32,
+            h = MEDIA_ROW_HEIGHT,
             pad_all = 0,
             border_width = 0,
             outline_width = 0,
@@ -2781,10 +4565,11 @@ function M.add_track_row(
         artwork =
             create_artwork(
                 row,
-                artwork_source
+                artwork_source,
+                MEDIA_ARTWORK_SIZE
             )
-        x = 35
-        width = 116
+        x = MEDIA_TEXT_X
+        width = MEDIA_TEXT_WIDTH
     end
 
     local title =
@@ -2792,14 +4577,19 @@ function M.add_track_row(
             row,
             {
                 x = x,
-                y = 1,
-                w = width,
-                h = 14,
+                y = MEDIA_TITLE_Y,
+                w =
+                    tonumber(
+                        options.text_width
+                    ) or width,
+                h = 13,
                 text =
                     track.title or
                     "Unknown Track",
                 text_color =
                     COLORS.primary,
+                text_font =
+                    font.fusion_10,
             }
         )
 
@@ -2808,15 +4598,24 @@ function M.add_track_row(
             row,
             {
                 x = x,
-                y = 16,
-                w = width,
-                h = 14,
+                y = MEDIA_DETAIL_Y,
+                w =
+                    tonumber(
+                        options.detail_width
+                    ) or
+                    tonumber(
+                        options.text_width
+                    ) or
+                    width,
+                h = 13,
                 text =
                     options.detail or
                     track.artist or
                     track.album or "",
                 text_color =
                     COLORS.secondary,
+                text_font =
+                    font.fusion_10,
             }
         )
 
@@ -2834,7 +4633,36 @@ function M.add_track_row(
             options.on_long_press,
         selection_id =
             item_selection_id(track),
+        available =
+            options.available ~= false,
     }
+
+    local function apply_availability(
+        available,
+        click_handler
+    )
+        model.available =
+            available ~= false
+        model.on_click =
+            model.available and
+            click_handler or nil
+
+        title.view:set {
+            text_color =
+                model.available and
+                COLORS.primary or
+                COLORS.secondary,
+        }
+        detail.view:set {
+            text_color =
+                COLORS.secondary,
+        }
+    end
+
+    apply_availability(
+        options.available,
+        options.on_click
+    )
 
     function model:update(
         next_track,
@@ -2864,8 +4692,29 @@ function M.add_track_row(
             next_track.album or ""
         )
 
-        model.on_click =
+        local next_text_width =
+            tonumber(
+                next_options.text_width
+            )
+        local next_detail_width =
+            tonumber(
+                next_options.detail_width
+            ) or next_text_width
+
+        if next_text_width then
+            title:set_width(next_text_width)
+        end
+
+        if next_detail_width then
+            detail:set_width(
+                next_detail_width
+            )
+        end
+
+        apply_availability(
+            next_options.available,
             next_options.on_click
+        )
         model.on_long_press =
             next_options.on_long_press
         update_model_selection(
@@ -2939,5 +4788,12 @@ function M.add_message(
 end
 
 M.colors = COLORS
+
+M.cancel_plain_list_scroll =
+    cancel_plain_list_scroll
+M.capture_list_scroll =
+    capture_plain_list_scroll
+M.restore_list_scroll =
+    restore_plain_list_scroll
 
 return M

@@ -434,10 +434,15 @@ local function controller_for(owner)
         end
 
         if owner.ui_active then
+            local previous_suppress =
+                owner.suppress_focus_scroll
+            owner.suppress_focus_scroll = true
             focus_object(
                 controller.previous_focus or
                 owner.first_row
             )
+            owner.suppress_focus_scroll =
+                previous_suppress
         end
 
         controller.group = nil
@@ -1110,6 +1115,120 @@ local function controller_for(owner)
         controller.main_list:set {
             h = controller.main_height - 4,
         }
+    end
+
+    local function rebuild_custom_actions(
+        actions
+    )
+        for _, button in ipairs(
+            controller.main_buttons
+        ) do
+            remove_from_group(button)
+        end
+
+        controller.main_list:clean()
+        controller.main_buttons = {}
+        controller.main_action_ids = {}
+        controller.main_actions_by_id = {}
+        controller.favorite_button = nil
+        controller.remove_button = nil
+
+        for _, action in ipairs(
+            actions or {}
+        ) do
+            local action_copy = action
+            local activate = function()
+                controller:close(true)
+                if type(
+                    action_copy.activate
+                ) == "function" then
+                    action_copy.activate()
+                end
+            end
+            local button =
+                add_sheet_button(
+                    controller.main_list,
+                    action_copy.label,
+                    activate,
+                    refresh_highlight
+                )
+
+            table.insert(
+                controller.main_buttons,
+                button
+            )
+            table.insert(
+                controller.main_action_ids,
+                action_copy.id
+            )
+            controller.main_actions_by_id[
+                action_copy.id
+            ] = activate
+        end
+
+        local content_height =
+            #controller.main_buttons *
+            BUTTON_HEIGHT
+        controller.main_height =
+            math.min(
+                MAX_MAIN_HEIGHT,
+                content_height + 4
+            )
+        controller.main_target_y =
+            SCREEN_HEIGHT -
+            controller.main_height
+        controller.main_sheet:set {
+            h = controller.main_height,
+        }
+        controller.main_list:set {
+            h = controller.main_height - 4,
+        }
+    end
+
+    function controller:open_custom(actions)
+        if self.is_open or self.animating or
+            type(actions) ~= "table" or
+            #actions == 0 then
+            return false
+        end
+
+        ensure_ui()
+        rebuild_custom_actions(actions)
+        self.playlist_sheet:add_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        self.main_sheet:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        self.overlay:clear_flag(
+            lvgl.FLAG.HIDDEN
+        )
+        self.is_open = true
+        self.page = "main"
+        self.animating = true
+
+        if owner.virtual_list_controller then
+            owner.virtual_list_controller
+                :suspend_continuous_input()
+        end
+
+        prepare_focus()
+        jellyfin_navigation.set_back(
+            owner.go_back
+        )
+        animate_y(
+            self.main_sheet,
+            SCREEN_HEIGHT,
+            self.main_target_y,
+            function()
+                self.animating = false
+                activate_buttons(
+                    self.main_buttons,
+                    self.main_buttons[1]
+                )
+            end
+        )
+        return true
     end
 
     function controller:open(

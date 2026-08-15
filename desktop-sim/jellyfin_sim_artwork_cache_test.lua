@@ -1,146 +1,109 @@
-local file = assert(
-    io.open(
-        "desktop-sim/jellyfin_library.lua",
-        "rb"
-    )
-)
-local source = file:read("*a")
-file:close()
+package.path =
+    "desktop-sim/?.lua;lua/?.lua;" ..
+    package.path
 
-local playlist_start = assert(
-    source:find(
-        "local function cache_collection_artwork",
-        1,
-        true
-    )
+local json = require("json")
+local root =
+    "desktop-sim/sd/jellyfin-library-ui"
+local manifest_file = assert(io.open(
+    root .. "/.tangara_sync_manifest.json",
+    "rb"
+))
+local manifest = json.decode(
+    manifest_file:read("*a")
 )
-local playlist_end = assert(
-    source:find(
-        "cache_collection_artwork(\n    result.library.favorites",
-        playlist_start + 1,
-        true
-    )
-)
-local playlist_source =
-    source:sub(
-        playlist_start,
-        playlist_end - 1
-    )
+manifest_file:close()
 
-assert(
-    playlist_source:find(
-        "playlist_file_exists(destination)",
-        1,
-        true
-    ) and
-        playlist_source:find(
-            "return true",
-            1,
-            true
-        ),
-    "Simulator playlist artwork does not reuse an existing cached file"
-)
+local track_id =
+    "ce1c15cfac374bfa95508510ec994096"
+local item
 
-local track_start = assert(
-    source:find(
-        "local function cache_track_artwork",
-        1,
-        true
-    )
-)
-local track_end = assert(
-    source:find(
-        "local function refreshed_active",
-        track_start,
-        true
-    )
-)
-local track_source =
-    source:sub(track_start, track_end - 1)
+for _, candidate in ipairs(manifest.items) do
+    if (candidate.jellyfin_id or
+            candidate.id) == track_id then
+        item = candidate
+        break
+    end
+end
 
-local guard_at = assert(
-    track_source:find(
-        "cached_artwork_by_track[track_id]",
-        1,
-        true
-    )
-)
-local manifest_at = assert(
-    track_source:find(
-        "manifest_cache.load()",
-        1,
-        true
-    )
-)
+assert(item, "Star Wars Samba is absent from the real manifest")
 
-assert(
-    guard_at < manifest_at,
-    "Simulator track artwork cache guard runs after the manifest is reloaded"
-)
+local cache =
+    require("local_artwork_cache")
+        .new(root)
+local track = {
+    id = track_id,
+    album_id = item.album_id,
+    artwork = {
+        -- A stale per-track miss must not override valid parent-album files.
+        thumbnail =
+            "/sim-artwork/missing-track-cover.png",
+    },
+}
+local first = assert(cache.resolve(item, track))
 
-assert(
-    track_source:find(
-        "if manifest_changed then",
-        1,
-        true
-    ) and
-        track_source:find(
-            "if cover_downloaded or",
-            1,
-            true
-        ),
-    "Simulator track artwork still saves or logs unchanged cached artwork"
-)
+assert(first.thumbnail:match("%-sq28%.png$"))
+assert(first.cover:match("%-sq66%.png$"))
+assert(first.background:match("%-bg160x128%-v3%.png$"))
+assert(first.cache_key:find("|28x28|", 1, true))
+assert(first.cache_key:find("|66x66|", 1, true))
+assert(first.cache_key:find("|160x128", 1, true))
 
-assert(
-    source:find(
-        "-background-v3.png",
-        1,
-        true
-    ) and
-        source:find(
-            "tangara_sim_cache_track_background",
-            1,
-            true
-        ),
-    "Simulator album backgrounds do not use the refreshed uniform-blur cache"
-)
+for _, path in pairs(first.full_paths) do
+    local file = assert(io.open(path, "rb"))
+    assert(file:seek("end") > 0)
+    file:close()
+end
 
-local server_file = assert(
-    io.open(
-        "server/tangara-sync/app.py",
-        "rb"
-    )
-)
-local server_source =
-    server_file:read("*a")
-server_file:close()
+-- Favorites, playlists, albums, Tracks, and Now Playing all resolve the same
+-- album identity. A different sibling track ID must not cause another disk
+-- derivative or network operation.
+for index = 1, 5 do
+    local sibling = assert(cache.resolve(
+        item,
+        {
+            id = "sibling-" .. index,
+            album_id = item.album_id,
+            artwork = {},
+        }
+    ))
+    assert(sibling.cache_key == first.cache_key)
+    assert(sibling.thumbnail == first.thumbnail)
+    assert(sibling.cover == first.cover)
+end
 
-assert(
-    server_source:find(
-        "ImageFilter.GaussianBlur",
-        1,
-        true
-    ) and
-        server_source:find(
-            "bleed = 24",
-            1,
-            true
-        ) and
-        server_source:find(
-            "radius=16",
-            1,
-            true
-        ) and
-        not server_source:find(
-            '"blur": "8"',
-            1,
-            true
-        ),
-    "Artwork server still delegates background blur to Jellyfin's vignetted renderer"
-)
+assert(cache.trace.disk_hits == 1)
+assert(cache.trace.memory_hits == 5)
+assert(cache.trace.network_requests == 0)
+assert(cache.trace.generated == 0)
+assert(cache.trace.last.network == false)
+assert(cache.trace.last.generated == false)
+
+local source_file = assert(io.open(
+    "desktop-sim/jellyfin_library.lua",
+    "rb"
+))
+local source = source_file:read("*a")
+source_file:close()
+
+local cache_start = assert(source:find(
+    "local function cache_track_artwork",
+    1,
+    true
+))
+local cache_end = assert(source:find(
+    "local function refreshed_active",
+    cache_start,
+    true
+))
+local cache_source = source:sub(cache_start, cache_end - 1)
+
+assert(not cache_source:find("curl", 1, true))
+assert(not cache_source:find("/artwork/", 1, true))
+assert(not cache_source:find("Artwork cached", 1, true))
 
 print(
-    "Simulator artwork reuses cached files without repeated manifest saves or cache logs"
+    "Local artwork reused real 28x28, 66x66, and 160x128 " ..
+    "album files across six surfaces with zero network/generation"
 )
 os.exit(0)

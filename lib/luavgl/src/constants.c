@@ -148,6 +148,24 @@ static void luavgl_align_init(lua_State* L)
   lua_pushstring(L, "OUT_RIGHT_BOTTOM"); lua_pushinteger(L, LV_ALIGN_OUT_RIGHT_BOTTOM); lua_settable(L, -3);
 }
 
+static void luavgl_image_align_init(lua_State* L)
+{
+  lua_newtable(L);
+
+  lua_pushstring(L, "DEFAULT"); lua_pushinteger(L, LV_IMAGE_ALIGN_DEFAULT); lua_settable(L, -3);
+  lua_pushstring(L, "TOP_LEFT"); lua_pushinteger(L, LV_IMAGE_ALIGN_TOP_LEFT); lua_settable(L, -3);
+  lua_pushstring(L, "TOP_MID"); lua_pushinteger(L, LV_IMAGE_ALIGN_TOP_MID); lua_settable(L, -3);
+  lua_pushstring(L, "TOP_RIGHT"); lua_pushinteger(L, LV_IMAGE_ALIGN_TOP_RIGHT); lua_settable(L, -3);
+  lua_pushstring(L, "BOTTOM_LEFT"); lua_pushinteger(L, LV_IMAGE_ALIGN_BOTTOM_LEFT); lua_settable(L, -3);
+  lua_pushstring(L, "BOTTOM_MID"); lua_pushinteger(L, LV_IMAGE_ALIGN_BOTTOM_MID); lua_settable(L, -3);
+  lua_pushstring(L, "BOTTOM_RIGHT"); lua_pushinteger(L, LV_IMAGE_ALIGN_BOTTOM_RIGHT); lua_settable(L, -3);
+  lua_pushstring(L, "LEFT_MID"); lua_pushinteger(L, LV_IMAGE_ALIGN_LEFT_MID); lua_settable(L, -3);
+  lua_pushstring(L, "RIGHT_MID"); lua_pushinteger(L, LV_IMAGE_ALIGN_RIGHT_MID); lua_settable(L, -3);
+  lua_pushstring(L, "CENTER"); lua_pushinteger(L, LV_IMAGE_ALIGN_CENTER); lua_settable(L, -3);
+  lua_pushstring(L, "STRETCH"); lua_pushinteger(L, LV_IMAGE_ALIGN_STRETCH); lua_settable(L, -3);
+  lua_pushstring(L, "TILE"); lua_pushinteger(L, LV_IMAGE_ALIGN_TILE); lua_settable(L, -3);
+}
+
 static void luavgl_label_const_init(lua_State* L)
 {
   lua_newtable(L);
@@ -472,6 +490,8 @@ static void luavgl_constants_init(lua_State *L)
   lua_setfield(L, -2, "PART");
   luavgl_align_init(L);
   lua_setfield(L, -2, "ALIGN");
+  luavgl_image_align_init(L);
+  lua_setfield(L, -2, "IMAGE_ALIGN");
   luavgl_builtin_font_init(L);
   lua_setfield(L, -2, "BUILTIN_FONT");
   luavgl_label_const_init(L);

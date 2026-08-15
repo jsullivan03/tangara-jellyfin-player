@@ -43,6 +43,9 @@ package.loaded["jellyfin_playback"] = {
     current = function()
         return nil
     end,
+    local_item = function(track)
+        return track
+    end,
 }
 
 package.loaded["jellyfin_now_playing"] = {
