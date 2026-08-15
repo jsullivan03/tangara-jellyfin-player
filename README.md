@@ -1,3 +1,19 @@
+# Tangara Jellyfin Player
+
+This GitHub repository is the **Tangara Jellyfin Player**.
+It is an active, unfinished firmware project that browses a Jellyfin library, downloads albums onto a Tangara, and plays those downloaded files locally.
+
+A **desktop simulator** is included so another Tangara owner can build, run, and evaluate the current Local/Sync UI without flashing hardware.
+
+- Build and run instructions: [desktop-sim/SIMULATOR_SHARE_README.md](desktop-sim/SIMULATOR_SHARE_README.md)
+- Companion URL and device ID are configurable (`TANGARA_SIM_SERVER_URL`, `TANGARA_SIM_DEVICE_ID`).
+- **Playback is Local-only** from files already downloaded to the device or simulator library.
+- **Sync is acquisition/download**, not HTTP music streaming.
+
+The original Tangara firmware project information follows.
+
+---
+
 # Tangara
 
 Tangara is a portable music player. It outputs high-quality sound through a 3.5-mm headphone jack, lasts a full day on a charge, and includes a processor that’s powerful enough to support any audio format you can throw at it. It’s also 100% open hardware running open-source software, which makes it easy to customize, repair, and upgrade. Tangara plays what you want to hear, however you want to hear it.
